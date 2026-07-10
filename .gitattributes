@@ -1,0 +1,10 @@
+# Line endings: LF in the repo, CRLF in the Windows working tree
+* text=auto eol=crlf
+
+# Binary files (never normalize)
+*.ico binary
+*.png binary
+*.jpg binary
+*.svg binary
+*.db  binary
+*.exe binary

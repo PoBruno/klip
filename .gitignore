@@ -1,0 +1,14 @@
+# Build
+bin/
+obj/
+*.user
+.vs/
+publish/
+dist/
+
+# Dados locais / artefatos de teste
+*.db
+*.db-wal
+*.db-shm
+TestResults/
+screenshots-teste/
