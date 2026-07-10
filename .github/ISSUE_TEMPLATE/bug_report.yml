@@ -1,0 +1,51 @@
+name: Bug report
+description: Something is broken or not working as expected
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report this. The more detail you give, the
+        faster it gets fixed.
+  - type: textarea
+    id: what-happened
+    attributes:
+      label: What happened
+      description: What went wrong, and what did you expect instead?
+      placeholder: I pressed Win+V while typing in Explorer and the caret jumped away.
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: How can I make it happen?
+      placeholder: |
+        1. Open Explorer
+        2. Click the address bar and start typing
+        3. Press Win+V
+        4. ...
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Klip version
+      description: You can see it in the tray tooltip or in Add/Remove Programs.
+      placeholder: 1.1.0
+    validations:
+      required: true
+  - type: input
+    id: windows
+    attributes:
+      label: Windows version
+      placeholder: Windows 11 23H2
+    validations:
+      required: false
+  - type: textarea
+    id: extra
+    attributes:
+      label: Anything else
+      description: Logs, screenshots, or anything that helps. The startup log lives in %LocalAppData%\Klip.
+    validations:
+      required: false

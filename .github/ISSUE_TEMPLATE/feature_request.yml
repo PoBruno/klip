@@ -1,0 +1,31 @@
+name: Feature request
+description: Suggest an idea or an improvement
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Got an idea for Klip? Nice. Tell me what you are trying to do, not just
+        the feature itself, it usually leads to a better solution.
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do
+      description: The problem or the annoyance behind the idea.
+      placeholder: I copy a lot of code snippets and lose track of which is which.
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: Your idea
+      description: How do you imagine it working?
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Anything you already tried
+      description: Other apps, workarounds, or ways you handle it today.
+    validations:
+      required: false
