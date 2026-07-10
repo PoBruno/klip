@@ -1,0 +1,48 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <UseWPF>true</UseWPF>
+    <AssemblyName>Klip</AssemblyName>
+    <RootNamespace>Klip.App</RootNamespace>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <ApplicationIcon>Assets\Klip.ico</ApplicationIcon>
+    <!-- Hosting 10.x pulls a newer System.Text.Json than the net9 inbox one -->
+    <NoWarn>$(NoWarn)</NoWarn>
+
+    <!-- exe metadata -->
+    <Version>1.1.0</Version>
+    <FileVersion>1.1.0.0</FileVersion>
+    <Product>Klip</Product>
+    <Company>PoBruno</Company>
+    <Description>Clipboard history and screen capture for Windows 11</Description>
+    <Copyright>Copyright 2026</Copyright>
+
+    <!-- publish options (self-contained, single-file) live in the build scripts,
+         not here, so the debug build keeps the default output path (no RID subfolder). -->
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Klip.Core\Klip.Core.csproj" />
+    <ProjectReference Include="..\Klip.Interop\Klip.Interop.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- Twemoji PNGs (CC-BY 4.0) + the search index, embedded so it all works offline -->
+    <Resource Include="Assets\Emoji\*.png" />
+    <Resource Include="Assets\Emoji\emoji-index.json" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.0" />
+    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+    <PackageReference Include="WPF-UI" Version="4.3.0" />
+  </ItemGroup>
+
+</Project>
