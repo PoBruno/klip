@@ -78,7 +78,9 @@ jobs:
       # e que o pacote pobruno.Klip ja exista no winget (primeiro envio e manual).
       # So roda se o token estiver configurado, entao nao quebra releases sem ele.
       - name: Atualizar winget
-        if: ${{ secrets.WINGET_TOKEN != '' }}
+        env:
+          WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
+        if: ${{ env.WINGET_TOKEN != '' }}
         shell: pwsh
         run: |
           $installerUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Klip-Setup-${{ steps.version.outputs.version }}.exe"
@@ -89,4 +91,4 @@ jobs:
             --version ${{ steps.version.outputs.version }} `
             --urls "$installerUrl" "$portableUrl" `
             --submit `
-            --token "${{ secrets.WINGET_TOKEN }}"
+            --token "$env:WINGET_TOKEN"
