@@ -817,11 +817,29 @@ public partial class HistoryFlyoutWindow
         if (mods == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
         {
             _viewModel.CopyOnlyCommand.Execute(item);
+            // the click stole focus (MOUSEACTIVATE dropped NOACTIVATE); since we
+            // stay open, hand focus back to the app and re-arm no-activate so the
+            // flyout is still usable without sitting on top of the user's caret
+            ReleaseFocusButStayOpen();
             return;
         }
 
         // plain click pastes (or queues, if multi-select is active)
         _viewModel.PasteCommand.Execute(item);
+    }
+
+    /// <summary>
+    /// Re-arms WS_EX_NOACTIVATE and hands the foreground back to the app the user
+    /// came from, without hiding the flyout. Used after Ctrl+click (copy) so the
+    /// panel stays open but doesn't hold the user's focus.
+    /// </summary>
+    private void ReleaseFocusButStayOpen()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+        _viewModel.RestoreTargetFocus();
     }
 
     private void OnPinClick(object sender, RoutedEventArgs e)

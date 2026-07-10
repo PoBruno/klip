@@ -194,65 +194,8 @@
             </StackPanel>
         </Border>
 
-        <!-- Barra do modo seleção múltipla -->
-        <Border
-            Grid.Row="2"
-            Margin="4,0,4,8"
-            Padding="10,6"
-            Background="{DynamicResource AccentFillColorDefaultBrush}"
-            CornerRadius="6"
-            Visibility="{Binding IsMultiSelectMode, Converter={StaticResource BoolToVisibility}}">
-            <Grid>
-                <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
-                    <TextBlock
-                        FontFamily="Segoe Fluent Icons"
-                        FontSize="14"
-                        Margin="0,0,8,0"
-                        VerticalAlignment="Center"
-                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                        Text="&#xE762;" />
-                    <TextBlock
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                        Text="{DynamicResource Loc.MultiPasteOrder}" />
-                    <Border
-                        Margin="8,0,0,0"
-                        Padding="6,1"
-                        Background="#40000000"
-                        CornerRadius="8">
-                        <TextBlock
-                            FontSize="11"
-                            FontWeight="SemiBold"
-                            Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                            Text="{Binding MultiSelectStatus}" />
-                    </Border>
-                </StackPanel>
-                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                    <Button
-                        Padding="8,3"
-                        Margin="0,0,4,0"
-                        Background="#40FFFFFF"
-                        BorderThickness="0"
-                        Command="{Binding ConfirmMultiSelectCommand}"
-                        Cursor="Hand">
-                        <TextBlock FontSize="11" FontWeight="SemiBold"
-                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                   Text="{DynamicResource Loc.MultiPasteConfirm}" />
-                    </Button>
-                    <Button
-                        Padding="6,3"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Command="{Binding CancelMultiSelectCommand}"
-                        Cursor="Hand">
-                        <TextBlock FontFamily="Segoe Fluent Icons" FontSize="10"
-                                   Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                   Text="&#xE711;" />
-                    </Button>
-                </StackPanel>
-            </Grid>
-        </Border>
+        <!-- Modo seleção múltipla: só as bolinhas numeradas nos cards indicam a ordem;
+             fechar ou Enter confirma, Esc cancela. Sem barra nem botões. -->
 
         <!-- Lista de cards -->
         <ListBox
@@ -363,17 +306,17 @@
                             <Border
                                 Grid.Row="0"
                                 Panel.ZIndex="10"
-                                Width="26" Height="26"
+                                Width="20" Height="20"
                                 Margin="0,-2,-2,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
                                 Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                CornerRadius="13"
+                                CornerRadius="10"
                                 Visibility="{Binding IsQueued, Converter={StaticResource BoolToVisibility}}">
                                 <TextBlock
                                     HorizontalAlignment="Center"
                                     VerticalAlignment="Center"
-                                    FontSize="13"
+                                    FontSize="11"
                                     FontWeight="Bold"
                                     Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
                                     Text="{Binding QueueOrder}" />
