@@ -69,6 +69,17 @@ public sealed class ClipboardWriteGuard
     /// <summary>Images go out as PNG + bitmap (DIB) for wider compatibility.</summary>
     public void WriteImageFromPngFile(string absolutePngPath)
     {
+        var (bytes, bitmap) = DecodeImageFile(absolutePngPath);
+        WriteImageFromPng(bytes, bitmap);
+    }
+
+    /// <summary>
+    /// Reads the file and decodes the bitmap. This is the heavy part (disk read +
+    /// full-size decode), so it can run on a background thread; the actual
+    /// clipboard write (SetImage) still has to happen on the UI thread.
+    /// </summary>
+    public static (byte[] bytes, BitmapSource bitmap) DecodeImageFile(string absolutePngPath)
+    {
         var bytes = File.ReadAllBytes(absolutePngPath);
         var bitmap = new BitmapImage();
         bitmap.BeginInit();
@@ -76,7 +87,7 @@ public sealed class ClipboardWriteGuard
         bitmap.StreamSource = new MemoryStream(bytes);
         bitmap.EndInit();
         bitmap.Freeze();
-        WriteImageFromPng(bytes, bitmap);
+        return (bytes, bitmap);
     }
 
     /// <summary>Writes PNG bytes + an already decoded bitmap (used after a capture).</summary>
@@ -137,7 +148,7 @@ public sealed class ClipboardWriteGuard
             return;
         try
         {
-            System.Windows.Clipboard.SetDataObject(snapshot, copy: true);
+            TrySetDataObject(snapshot);
             RecordSequence(); // counts as our own write (anti-loop)
         }
         catch (Exception)
@@ -148,8 +159,28 @@ public sealed class ClipboardWriteGuard
 
     private void SetAndRecord(DataObject data)
     {
-        System.Windows.Clipboard.SetDataObject(data, copy: true);
+        TrySetDataObject(data);
         RecordSequence();
+    }
+
+    /// <summary>
+    /// SetDataObject can throw CLIPBRD_E_CANT_OPEN when another app is holding the
+    /// clipboard. A couple of short retries handle that without a long WPF stall.
+    /// </summary>
+    private static void TrySetDataObject(object data)
+    {
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            try
+            {
+                System.Windows.Clipboard.SetDataObject(data, copy: true);
+                return;
+            }
+            catch (Exception) when (attempt < 2)
+            {
+                System.Threading.Thread.Sleep(20);
+            }
+        }
     }
 
     private void RecordSequence() => _lastOwnSequence = NativeMethods.GetClipboardSequenceNumber();

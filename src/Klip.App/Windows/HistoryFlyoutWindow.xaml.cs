@@ -54,7 +54,9 @@ public partial class HistoryFlyoutWindow
         _keys.Install();
 
         // click outside the flyout closes it (screen point in physical px)
-        _mouse.OnButtonDown = (x, y) => Dispatcher.Invoke(() => OnGlobalClick(x, y));
+        // click outside the flyout closes it. BeginInvoke (async) so the mouse
+        // hook returns instantly and never stalls the whole system's input.
+        _mouse.OnButtonDown = (x, y) => Dispatcher.BeginInvoke(() => OnGlobalClick(x, y));
         _mouse.Install();
 
         // switching language rebuilds the date menu right away
@@ -195,14 +197,21 @@ public partial class HistoryFlyoutWindow
         }
     }
 
+    // small cache so re-opening the emoji panel or searching doesn't re-decode
+    private static readonly Dictionary<string, System.Windows.Media.Imaging.BitmapImage> _emojiCache = new();
+
     private static System.Windows.Media.Imaging.BitmapImage LoadEmojiImage(string code)
     {
+        if (_emojiCache.TryGetValue(code, out var cached))
+            return cached;
         var img = new System.Windows.Media.Imaging.BitmapImage();
         img.BeginInit();
         img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        img.DecodePixelWidth = 24; // shown at 20px, decode small instead of full 72px
         img.UriSource = new Uri(Controls.EmojiRepository.ImageUri(code));
         img.EndInit();
         img.Freeze();
+        _emojiCache[code] = img;
         return img;
     }
 

@@ -625,14 +625,20 @@ public partial class EditorWindow
         MarkChanged();
     }
 
+    // cache the decoded emoji so the picker and stamping don't re-read the file
+    private static readonly Dictionary<string, BitmapImage> _emojiCache = new();
+
     private static BitmapImage LoadEmojiImage(string code)
     {
+        if (_emojiCache.TryGetValue(code, out var cached))
+            return cached;
         var img = new BitmapImage();
         img.BeginInit();
         img.CacheOption = BitmapCacheOption.OnLoad;
         img.UriSource = new Uri(Controls.EmojiRepository.ImageUri(code));
         img.EndInit();
         img.Freeze();
+        _emojiCache[code] = img;
         return img;
     }
 

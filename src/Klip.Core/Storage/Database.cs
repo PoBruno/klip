@@ -111,6 +111,8 @@ public sealed class Database : IDisposable
         CREATE INDEX IF NOT EXISTS ix_items_recency ON items(last_copied_at DESC);
         CREATE INDEX IF NOT EXISTS ix_items_type_recency ON items(type, last_copied_at DESC);
         CREATE INDEX IF NOT EXISTS ix_items_fav ON items(favorite) WHERE favorite = 1;
+        -- the default history sort is pinned first, then recency
+        CREATE INDEX IF NOT EXISTS ix_items_pinned_recency ON items(pinned DESC, last_copied_at DESC);
 
         CREATE VIRTUAL TABLE IF NOT EXISTS items_fts USING fts5(
             text_content, source_app, source_title, ocr_text,
