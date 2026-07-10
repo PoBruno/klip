@@ -224,7 +224,9 @@ public static class Loc
     public static string OpenHistoryHotkey => Get(nameof(OpenHistoryHotkey));
     public static string NewCaptureHotkey => Get(nameof(NewCaptureHotkey));
     public static string HotkeyHint => Get(nameof(HotkeyHint));
+    public static string HotkeyPressKeys => Get(nameof(HotkeyPressKeys));
     public static string SectionFlyoutShortcuts => Get(nameof(SectionFlyoutShortcuts));
+    public static string KeyMouse => Get(nameof(KeyMouse));
     public static string ShortcutClick => Get(nameof(ShortcutClick));
     public static string ShortcutClickDesc => Get(nameof(ShortcutClickDesc));
     public static string ShortcutCtrlClick => Get(nameof(ShortcutCtrlClick));
@@ -457,8 +459,10 @@ public static class Loc
         [nameof(SectionAppHotkeys)] = "Atalhos do Klip",
         [nameof(OpenHistoryHotkey)] = "Abrir histórico",
         [nameof(NewCaptureHotkey)] = "Nova captura",
-        [nameof(HotkeyHint)] = "Clique no campo e pressione a combinação",
+        [nameof(HotkeyHint)] = "Clique nas teclas e pressione a nova combinação",
+        [nameof(HotkeyPressKeys)] = "pressione as teclas",
         [nameof(SectionFlyoutShortcuts)] = "Atalhos do painel (Win+V)",
+        [nameof(KeyMouse)] = "clique",
         [nameof(ShortcutClick)] = "Clique",
         [nameof(ShortcutClickDesc)] = "Cola o item no app de onde você veio.",
         [nameof(ShortcutCtrlClick)] = "Ctrl + clique",
@@ -689,8 +693,10 @@ public static class Loc
         [nameof(SectionAppHotkeys)] = "Klip shortcuts",
         [nameof(OpenHistoryHotkey)] = "Open history",
         [nameof(NewCaptureHotkey)] = "New capture",
-        [nameof(HotkeyHint)] = "Click the field and press the combination",
+        [nameof(HotkeyHint)] = "Click the keys and press the new combination",
+        [nameof(HotkeyPressKeys)] = "press the keys",
         [nameof(SectionFlyoutShortcuts)] = "Panel shortcuts (Win+V)",
+        [nameof(KeyMouse)] = "click",
         [nameof(ShortcutClick)] = "Click",
         [nameof(ShortcutClickDesc)] = "Pastes the item into the app you came from.",
         [nameof(ShortcutCtrlClick)] = "Ctrl + click",
