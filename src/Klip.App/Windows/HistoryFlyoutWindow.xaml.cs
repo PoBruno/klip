@@ -489,6 +489,12 @@ public partial class HistoryFlyoutWindow
         _keys.Active = false;  // stop routing keys once hidden
         _mouse.Active = false; // stop watching clicks
 
+        // if we're still in multi-select here, the flyout is closing with a
+        // pending selection (click outside, alt-tab, etc). that arms the queue,
+        // same as pressing Enter. only Esc cancels (it clears the mode first).
+        if (_viewModel.IsMultiSelectMode)
+            _viewModel.ConfirmMultiSelectCommand.Execute(null);
+
         // if we grabbed focus (search box click), hand it back to the app the
         // user came from, so their caret returns where it was
         var ourHwnd = new WindowInteropHelper(this).Handle;
@@ -620,7 +626,9 @@ public partial class HistoryFlyoutWindow
                 return true;
 
             case VK_RETURN:
-                if (ctrl)
+                if (_viewModel.IsMultiSelectMode)
+                    _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
+                else if (ctrl)
                     _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
                 else if (shift)
                     _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
@@ -683,6 +691,10 @@ public partial class HistoryFlyoutWindow
                     SearchBox.Text = "";
                 else
                     HideFlyout();
+                e.Handled = true;
+                return;
+            case Key.Enter when _viewModel.IsMultiSelectMode:
+                _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
                 e.Handled = true;
                 return;
             case Key.Enter when Keyboard.Modifiers == ModifierKeys.Control:

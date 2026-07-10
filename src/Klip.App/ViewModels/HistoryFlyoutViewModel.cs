@@ -335,7 +335,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         if (item is null)
             return;
         _pasteService.CopyItemToClipboard(item.Item);
-        CloseRequested?.Invoke();
+        // copying keeps the flyout open on purpose, so you can grab more
     }
 
     /// <summary>Clicking an emoji in the picker: paste it and close.</summary>
