@@ -8,6 +8,11 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    # one PR for all nuget bumps instead of one per package
+    groups:
+      nuget:
+        patterns:
+          - "*"
   # github actions used in the workflows
   - package-ecosystem: github-actions
     directory: "/"
@@ -15,3 +20,8 @@ updates:
       interval: weekly
     commit-message:
       prefix: ci
+    # one PR for all action bumps
+    groups:
+      actions:
+        patterns:
+          - "*"
