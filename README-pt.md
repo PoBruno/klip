@@ -5,82 +5,61 @@
 
 # Klip
 
-**Um histórico de clipboard e ferramenta de captura melhores para o Windows 11.**
-
-Tudo que o painel Win+V e a Ferramenta de Captura nativos deveriam ter sido, num app pequeno que fica na bandeja.
+**Histórico de clipboard e captura de tela para o Windows 11, sem os limites do nativo.**
 
 [![Build](https://github.com/PoBruno/klip/actions/workflows/ci.yml/badge.svg)](https://github.com/PoBruno/klip/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/PoBruno/klip?display_name=tag&sort=semver)](https://github.com/PoBruno/klip/releases/latest)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white)](#)
 
-[Download](#download) - [Recursos](#recursos) - [Compilar](#compilar-do-código-fonte) - [Contribuindo](#contribuindo)
+### Instalar
+
+```powershell
+winget install pobruno.Klip
+```
+
+ou **[baixe o instalador](https://github.com/PoBruno/klip/releases/latest)** (ou o exe portátil) na última release.
+
+[Instalar](https://github.com/PoBruno/klip/releases/latest) - [Recursos](#recursos) - [Compilar](#compilar-do-código-fonte)
 
 </div>
 
 ---
 
-## Por que o Klip
-
-O Klip começou como um remendo pra duas coisas que me irritam no Windows todo santo dia.
-
-O painel de clipboard do **Win+V** é bonito e gostoso de usar, a interface é fluida e nativa, mas o histórico por trás dele é fraco: curto, sem busca de verdade, esquece as coisas, e você não consegue organizar nada. A experiência é boa, o recurso não.
-
-A captura do **Win+Shift+S** é o outro tipo de frustração: tirar o print funciona bem, mas o editorzinho que abre depois não tem metade das ferramentas que você quer de verdade, então você acaba colando em outro app só pra desenhar uma seta.
-
-Então a ideia é simples: manter a cara e o jeito nativo que a Microsoft já acertou, e consertar tudo que está por trás. Mesmo painel, mesmo overlay, nada dos limites.
-
 ## O que é o Klip
 
-O Klip faz duas coisas e tenta fazer as duas muito bem:
+O painel Win+V e a Ferramenta de Captura nativos são bonitos, mas te seguram: o histórico de clipboard é curto e sem busca de verdade, e o editor de captura não tem metade das ferramentas que você quer.
 
-- **Histórico de clipboard** com a mesma cara e o mesmo jeito do flyout nativo do Win+V, menos os limites. Histórico ilimitado, busca de verdade, filtro por data, favoritos, abas por tipo de conteúdo.
-- **Captura de tela** que replica o overlay do Win+Shift+S, mais o que falta na ferramenta nativa: captura com rolagem e um editor de verdade.
+O Klip mantém essa mesma cara e jeito nativo, e tira os limites. Duas coisas, bem feitas:
 
-Roda como app WPF nativo, usa Fluent Design e Mica, e pode assumir os atalhos `Win+V` e `Win+Shift+S` se você deixar. Sem Electron, sem navegador, sem telemetria.
+- **Histórico de clipboard** como o Win+V, mas ilimitado, com busca de verdade, filtro por data, favoritos, abas e um seletor de emoji colorido.
+- **Captura de tela** como o Win+Shift+S, mais captura com rolagem e um editor de verdade.
+
+App WPF nativo, Fluent Design e Mica, mora na bandeja. Sem Electron, sem navegador, sem telemetria. Pode assumir os atalhos `Win+V` e `Win+Shift+S` se você deixar.
 
 ## Recursos
 
-### Histórico de clipboard
-- Histórico ilimitado guardado num banco SQLite local (com busca full text).
-- Mesma aparência do painel nativo do Win+V, então não tem nada novo pra aprender.
-- Busca enquanto você digita, filtro por data, favoritos fixados.
-- Abas por tipo: texto, imagens, arquivos, links.
-- Imagens salvas em disco com thumbnails reais e cache LRU, pra rolagem continuar leve.
-- Colar mantém a formatação original (HTML e RTF), ou cole como texto puro quando quiser.
-- Detector de segredos embutido que sinaliza coisas tipo tokens e senhas pra não ficarem largadas no histórico.
-- Respeita os formatos de clipboard que os gerenciadores de senha usam pra pedir exclusão.
+**Histórico de clipboard**
+- Ilimitado, guardado em SQLite local com busca full text.
+- Busca enquanto digita, filtro por data, favoritos, abas por tipo.
+- Mantém a formatação HTML/RTF, ou cola como texto puro.
+- Seletor de emoji e símbolos colorido, buscável em vários idiomas.
+- Detector de segredos embutido pra tokens e senhas não ficarem largados.
 
-### Captura de tela
-- Cópia fiel do overlay do Win+Shift+S: escurecido, toolbar, borda pontilhada, a área selecionada fica acesa.
+**Captura de tela**
+- Cópia fiel do overlay do Win+Shift+S.
 - Modos: retângulo, janela, tela cheia, forma livre.
-- **Captura com rolagem** pra pegar uma página inteira que não cabe na tela (o stitching é inspirado no ShareX, veja os [créditos](#créditos)).
-- Ciente de múltiplos monitores, geometria sempre em pixels físicos pra nada sair torto em setups com DPI misto.
+- Captura com rolagem pra pegar uma página inteira que não cabe na tela.
+- Ciente de múltiplos monitores, geometria em pixels físicos.
 
-### Editor rápido
-- Editor pós-captura no estilo Ferramenta de Captura: caneta, marca-texto, formas, seta, recorte.
-- Texto livre por cima da imagem, estilo Excalidraw.
-- Cópia automática pro clipboard a cada edição, então a última versão está sempre pronta pra colar.
+**Editor**
+- Caneta, marca-texto, formas, seta, texto livre, recorte, girar.
+- Desfocar/tapar, mais tapar automático de emails/telefones/cartões via OCR local.
+- Remover fundo, desfazer/refazer, cópia automática a cada edição.
 
-### Integração com o sistema
-- Takeover opcional do `Win+V` e do `Win+Shift+S`. O Klip cuida das chaves de registro pra você e reverte tudo direitinho na desinstalação.
-- Instância única, inicia com o Windows (opcional), fica quietinho na bandeja.
-- Importa e exporta seu histórico como `.zip`.
-
-## Download
-
-> Aviso: a primeira versão pública está sendo preparada. Os links abaixo passam a funcionar quando ela sair.
-
-### winget (recomendado)
-```powershell
-winget install pobruno.Klip
-```
-
-### Instalador
-Pegue o `Klip-Setup-<versao>.exe` na [última release](https://github.com/PoBruno/klip/releases/latest). Instala por usuário (não precisa de admin), cria atalhos no menu Iniciar e opcionalmente na área de trabalho, e o desinstalador devolve seus atalhos de teclado do jeito que estavam.
-
-### Portátil
-Prefere não instalar? Pegue o `Klip-<versao>-portable.exe`. É um único arquivo self contained, então dá pra jogar em qualquer lugar e rodar. Não precisa ter o .NET instalado.
+**Sistema**
+- Takeover opcional do `Win+V` e do `Win+Shift+S`, revertido direitinho na desinstalação.
+- Instância única, inicia com o Windows (opcional), importa/exporta o histórico como `.zip`.
 
 ## Compilar do código fonte
 
@@ -95,40 +74,37 @@ dotnet test Klip.sln             # roda os testes (xunit)
 dotnet run --project src/Klip.App   # roda o app (aparece na bandeja)
 ```
 
-### Empacotamento
+Empacotamento:
 
 ```powershell
 .\tools\build-exe.ps1          # exe único self contained -> publish\Klip.exe
 .\tools\build-installer.ps1    # instalador Inno Setup -> dist\Klip-Setup-<versao>.exe
 ```
 
-O script do instalador precisa do [Inno Setup 6](https://jrsoftware.org/isdl.php) (`winget install JRSoftware.InnoSetup`).
-
-> O Klip não é distribuído como MSIX de propósito: o sandbox bloqueia o takeover de atalhos (Win+V) e o hook global de teclado de que o Klip depende.
-
-## Releases
-
-O CI roda o build e os testes em todo push e pull request. Ao enviar uma tag `vX.Y.Z`, tudo é compilado, os testes rodam, e uma Release do GitHub é publicada com o instalador e o exe portátil anexados.
-
-```powershell
-git tag v1.0.0
-git push origin v1.0.0
-```
+O script do instalador precisa do [Inno Setup 6](https://jrsoftware.org/isdl.php). O Klip não é distribuído como MSIX de propósito: o sandbox bloqueia o takeover de atalhos e o hook global de teclado de que ele depende.
 
 ## Tecnologia
 
-- WPF no .NET 9 (`net9.0-windows`), C# 13.
-- Separação limpa: `Klip.Core` (domínio puro, sem WPF), `Klip.Interop` (todo o P/Invoke Win32), `Klip.App` (WPF, MVVM).
-- [WPF-UI](https://github.com/lepoco/wpfui) pro tema Fluent e Mica, [CommunityToolkit.Mvvm](https://github.com/CommunityToolkit/dotnet) pro MVVM, [H.NotifyIcon](https://github.com/HavenDV/H.NotifyIcon) pra bandeja.
+- WPF no .NET 9 (`net9.0-windows`), C# 13, MVVM.
+- Separação limpa: `Klip.Core` (domínio puro), `Klip.Interop` (P/Invoke Win32), `Klip.App` (WPF).
 - SQLite com FTS5 pro histórico e a busca.
 
 ## Contribuindo
 
-Issues e pull requests são bem vindos. Se for fazer algo maior, abre uma issue antes pra gente conversar antes de você escrever muito código.
+Issues e pull requests são bem vindos. Vai fazer algo maior? Abre uma issue antes pra gente conversar.
 
 ## Créditos
 
-- O stitching da captura com rolagem é inspirado no algoritmo usado no [ShareX](https://github.com/ShareX/ShareX). O Klip só usa a ideia, não reaproveita o código deles.
+- O stitching da captura com rolagem é inspirado no [ShareX](https://github.com/ShareX/ShareX) (só a ideia, sem reaproveitar código).
+- Emojis do [Twemoji](https://github.com/jdecked/twemoji), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/). Nomes dos emojis do [Unicode CLDR](https://cldr.unicode.org/).
+
+## Política de assinatura de código
+
+Assinatura de código gratuita provida pelo [SignPath.io](https://signpath.io), certificado do [SignPath Foundation](https://signpath.org).
+
+- Committer, revisor e aprovador: [PoBruno](https://github.com/PoBruno)
+
+Privacidade: o Klip roda 100% na sua máquina e não transfere nenhuma informação pra outros sistemas em rede a não ser quando você pedir. Sem telemetria.
 
 ## Licença
 
