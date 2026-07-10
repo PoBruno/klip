@@ -23,6 +23,9 @@ public partial class HistoryFlyoutWindow
     // keyboard hook: the flyout never takes focus (so the app below keeps its
     // caret), so we drive its navigation keys through a global hook instead
     private readonly Klip.Interop.GlobalKeyboardListener _keys = new();
+    // mouse hook: same reason. no-activate windows don't get Deactivated, so we
+    // watch for a click outside the flyout to close it
+    private readonly Klip.Interop.GlobalMouseListener _mouse = new();
 
     public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel)
     {
@@ -49,6 +52,10 @@ public partial class HistoryFlyoutWindow
         // route hooked keys onto the UI thread; returns true when we consumed it
         _keys.OnKeyDown = vk => Dispatcher.Invoke(() => HandleHookedKey(vk));
         _keys.Install();
+
+        // click outside the flyout closes it (screen point in physical px)
+        _mouse.OnButtonDown = (x, y) => Dispatcher.Invoke(() => OnGlobalClick(x, y));
+        _mouse.Install();
 
         // switching language rebuilds the date menu right away
         Localization.Loc.LanguageChanged += () =>
@@ -324,7 +331,8 @@ public partial class HistoryFlyoutWindow
         Show();
         if (ItemsList.Items.Count > 0)
             ItemsList.SelectedIndex = 0;
-        _keys.Active = true; // start routing keys to the flyout
+        _keys.Active = true;  // start routing keys to the flyout
+        _mouse.Active = true; // start watching for outside clicks
     }
 
     public void HideFlyout()
@@ -332,7 +340,8 @@ public partial class HistoryFlyoutWindow
         if (_closing)
             return;
         _closing = true;
-        _keys.Active = false; // stop routing keys once hidden
+        _keys.Active = false;  // stop routing keys once hidden
+        _mouse.Active = false; // stop watching clicks
 
         // if we grabbed focus (search box click), hand it back to the app the
         // user came from, so their caret returns where it was
@@ -348,6 +357,23 @@ public partial class HistoryFlyoutWindow
     }
 
     public new bool IsVisible => base.IsVisible;
+
+    /// <summary>A click outside the flyout closes it (screen point, physical px).</summary>
+    private void OnGlobalClick(int screenX, int screenY)
+    {
+        if (!IsVisible || _closing)
+            return;
+
+        // real window rect in physical pixels
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (!NativeMethods.GetWindowRect(hwnd, out var rect))
+            return;
+
+        var inside = screenX >= rect.left && screenX < rect.right &&
+                     screenY >= rect.top && screenY < rect.bottom;
+        if (!inside)
+            HideFlyout();
+    }
 
     // ----- Keyboard -----
 
