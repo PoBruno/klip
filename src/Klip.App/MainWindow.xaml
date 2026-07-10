@@ -136,6 +136,45 @@
                     </Grid>
                 </Border>
 
+                <!-- ===== Atalhos do painel (referencia) ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionFlyoutShortcuts}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShortcutClick}" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutClickDesc}" />
+                        </Grid>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShortcutCtrlClick}" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutCtrlClickDesc}" />
+                        </Grid>
+                        <Grid Margin="0,0,0,6">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShortcutAltClick}" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutAltClickDesc}" />
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="200" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShortcutShiftClick}" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutShiftClickDesc}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+
                 <!-- ===== Geral ===== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionGeneral}" />
                 <Border Style="{StaticResource Card}">

@@ -776,17 +776,40 @@ public partial class HistoryFlyoutWindow
 
     private void OnListClick(object sender, MouseButtonEventArgs e)
     {
-        // plain click pastes, Ctrl+click only copies.
-        // in multi-select any click just queues it up (PasteCommand handles that).
-        if (e.OriginalSource is DependencyObject source &&
-            FindItem(source) is { } item &&
-            e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
+        // clicks on the card's action buttons (pin/fav/more) are handled there
+        if (e.OriginalSource is not DependencyObject source ||
+            FindItem(source) is not { } item ||
+            e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase)
+            return;
+
+        var mods = Keyboard.Modifiers;
+
+        // Alt+click on an image jumps straight into the editor
+        if (mods == ModifierKeys.Alt && item.IsImage)
         {
-            if (Keyboard.Modifiers == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
-                _viewModel.CopyOnlyCommand.Execute(item);
-            else
-                _viewModel.PasteCommand.Execute(item);
+            _viewModel.OpenInEditorCommand.Execute(item);
+            return;
         }
+
+        // Shift+click builds the sequential paste queue: the first one arms
+        // multi-select on its own, and each click adds in the order clicked
+        if (mods == ModifierKeys.Shift)
+        {
+            if (!_viewModel.IsMultiSelectMode)
+                _viewModel.StartMultiSelectCommand.Execute(5);
+            _viewModel.PasteCommand.Execute(item); // routes to queue while in multi-select
+            return;
+        }
+
+        // Ctrl+click copies without pasting (unless we're already queueing)
+        if (mods == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
+        {
+            _viewModel.CopyOnlyCommand.Execute(item);
+            return;
+        }
+
+        // plain click pastes (or queues, if multi-select is active)
+        _viewModel.PasteCommand.Execute(item);
     }
 
     private void OnPinClick(object sender, RoutedEventArgs e)
