@@ -170,6 +170,11 @@ public partial class App : Application
 
         RunRetentionInBackground(settings);
 
+        // warm up the flyout at idle so the first Win+V opens instantly (pre-pays
+        // the first layout and the Mica composition without the user seeing it)
+        Dispatcher.BeginInvoke(new Action(() => _flyout?.WarmUp()),
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+
         // onboarding na primeira execucao (passa por cima do start minimizado)
         if (!settings.Current.OnboardingCompleted)
         {

@@ -367,6 +367,32 @@ public partial class HistoryFlyoutWindow
 
     public new bool IsVisible => base.IsVisible;
 
+    /// <summary>
+    /// Pre-pays the first layout and the Mica composition by showing the window
+    /// off-screen once and hiding it, so the real first open is instant. Call at
+    /// idle after startup. The hooks and query are NOT touched here.
+    /// </summary>
+    public void WarmUp()
+    {
+        try
+        {
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+            exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+            NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+            // park it far off-screen so nothing flashes
+            NativeMethods.SetWindowPos(hwnd, nint.Zero, -32000, -32000, 1, 1,
+                NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+            Show();
+            UpdateLayout();
+            Hide();
+        }
+        catch
+        {
+            // warm-up is best effort, never let it break startup
+        }
+    }
+
     /// <summary>A click outside the flyout closes it (screen point, physical px).</summary>
     private void OnGlobalClick(int screenX, int screenY)
     {
