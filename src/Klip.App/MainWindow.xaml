@@ -1,0 +1,358 @@
+<ui:FluentWindow
+    x:Class="Klip.App.MainWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:loc="clr-namespace:Klip.App.Localization"
+    Title="{DynamicResource Loc.SettingsTitle}"
+    Width="760"
+    Height="720"
+    MinWidth="600"
+    MinHeight="480"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen">
+    <ui:FluentWindow.Resources>
+        <Style x:Key="SectionHeader" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="16" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="Margin" Value="4,20,0,8" />
+        </Style>
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="Padding" Value="16,12" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+        <Style x:Key="CardTitle" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="14" />
+        </Style>
+        <Style x:Key="CardCaption" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+            <Setter Property="TextWrapping" Value="Wrap" />
+            <Setter Property="Margin" Value="0,2,0,0" />
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="{DynamicResource Loc.SettingsTitle}" />
+
+        <ScrollViewer Grid.Row="1" Padding="24,0,24,24" VerticalScrollBarVisibility="Auto">
+            <StackPanel MaxWidth="680">
+
+                <!-- ===== Atalhos do Windows ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionNativeHotkeys}" />
+
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.CardWinVTitle}" />
+                            <TextBlock
+                                Style="{StaticResource CardCaption}"
+                                Text="{DynamicResource Loc.CardWinVCaption}" />
+                            <TextBlock x:Name="WinVStatus" Style="{StaticResource CardCaption}" Margin="0,6,0,0" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Orientation="Horizontal">
+                            <ui:Button x:Name="TakeWinVButton" Appearance="Primary" Content="{DynamicResource Loc.TakeWinV}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.CardCaptureKeyTitle}" />
+                            <TextBlock
+                                Style="{StaticResource CardCaption}"
+                                Text="{DynamicResource Loc.CardCaptureKeyCaption}" />
+                            <TextBlock x:Name="CaptureKeyStatus" Style="{StaticResource CardCaption}" Margin="0,6,0,0" FontWeight="SemiBold" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" VerticalAlignment="Center">
+                            <ui:Button x:Name="TakePrtScButton" Appearance="Primary" Content="{DynamicResource Loc.UsePrintScreen}" Margin="0,0,0,6" />
+                            <ui:Button x:Name="TakeWinShiftSButton" Content="{DynamicResource Loc.UseWinShiftS}" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Grid.Column="0" Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.CardRevertTitle}" />
+                            <TextBlock
+                                Style="{StaticResource CardCaption}"
+                                Text="{DynamicResource Loc.CardRevertCaption}" />
+                        </StackPanel>
+                        <ui:Button x:Name="RevertButton" Grid.Column="1" VerticalAlignment="Center" Content="{DynamicResource Loc.Revert}" />
+                    </Grid>
+                </Border>
+
+                <!-- ===== Atalhos do app ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionAppHotkeys}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.OpenHistoryHotkey}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HotkeyHint}" />
+                        </StackPanel>
+                        <ui:TextBox x:Name="HistoryHotkeyBox" Grid.Column="1" IsReadOnly="True" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.NewCaptureHotkey}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HotkeyHint}" />
+                        </StackPanel>
+                        <ui:TextBox x:Name="CaptureHotkeyBox" Grid.Column="1" IsReadOnly="True" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- ===== Geral ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionGeneral}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource CardTitle}" VerticalAlignment="Center" Text="{DynamicResource Loc.StartWithWindows}" />
+                        <ui:ToggleSwitch x:Name="AutostartToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.LanguageTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.LanguageCaption}" />
+                        </StackPanel>
+                        <ComboBox x:Name="LanguageCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <TextBlock Style="{StaticResource CardTitle}" VerticalAlignment="Center" Text="{DynamicResource Loc.ThemeTitle}" />
+                        <ComboBox x:Name="ThemeCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+
+                <!-- ===== Clipboard ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionClipboard}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="140" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.MaxItemsTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.MaxItemsCaption}" />
+                        </StackPanel>
+                        <ui:NumberBox x:Name="MaxItemsBox" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="1000000" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="140" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.MaxAgeTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.MaxAgeCaption}" />
+                        </StackPanel>
+                        <ui:NumberBox x:Name="MaxAgeBox" Grid.Column="1" VerticalAlignment="Center" Minimum="0" Maximum="3650" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ExcludedAppsTitle}" />
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.ExcludedAppsCaption}" />
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox x:Name="ExcludeAppBox" VerticalAlignment="Center" PlaceholderText="processo.exe" />
+                            <ui:Button x:Name="AddExcludeButton" Grid.Column="1" Margin="8,0,0,0" Content="{DynamicResource Loc.AddApp}" />
+                        </Grid>
+                        <ItemsControl x:Name="ExcludedAppsList" Margin="0,8,0,0">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate>
+                                    <Border Margin="0,0,0,4" Padding="10,6" Background="{DynamicResource SubtleFillColorSecondaryBrush}" CornerRadius="4">
+                                        <Grid>
+                                            <TextBlock VerticalAlignment="Center" Text="{Binding}" />
+                                            <Button HorizontalAlignment="Right" Padding="6,2" Background="Transparent" BorderThickness="0"
+                                                    Cursor="Hand" Tag="{Binding}" Click="OnRemoveExcludedApp">
+                                                <TextBlock FontFamily="Segoe Fluent Icons" FontSize="12" Text="&#xE74D;" />
+                                            </Button>
+                                        </Grid>
+                                    </Border>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Captura ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionCapture}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.AutoSaveTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.AutoSaveCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="AutoSaveToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ScreenshotFolderTitle}" />
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.ScreenshotFolderCaption}" />
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox x:Name="ScreenshotFolderBox" VerticalAlignment="Center" IsReadOnly="True" />
+                            <ui:Button x:Name="ChooseFolderButton" Grid.Column="1" Margin="8,0,0,0" Content="{DynamicResource Loc.ChooseFolder}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.CadenceTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.CadenceCaption}" />
+                        </StackPanel>
+                        <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                            <Slider x:Name="ScrollDelaySlider" Width="140" Minimum="100" Maximum="2000" TickFrequency="100" IsSnapToTickEnabled="True" />
+                            <TextBlock x:Name="ScrollDelayLabel" Margin="8,0,0,0" VerticalAlignment="Center" FontSize="12" />
+                        </StackPanel>
+                    </Grid>
+                </Border>
+
+                <!-- ===== Privacidade ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionPrivacy}" />
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.SkipSecretsTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.SkipSecretsCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="SkipSecretsToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.RestoreClipboardTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.RestoreClipboardCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="RestoreClipboardToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ClearOnExitTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.ClearOnExitCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="ClearOnExitToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+
+                <!-- ===== Manutenção e backup ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionMaintenance}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.BackupTitle}" />
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.BackupCaption}" />
+                        <StackPanel Margin="0,10,0,0" Orientation="Horizontal">
+                            <ui:Button x:Name="ExportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ExportHistory}" />
+                            <ui:Button x:Name="ImportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ImportHistory}" />
+                            <ui:Button x:Name="CompactButton" Margin="0,0,8,0" Content="{DynamicResource Loc.CompactDb}" />
+                            <ui:Button x:Name="OpenDataFolderButton" Content="{DynamicResource Loc.OpenDataFolder}" />
+                        </StackPanel>
+                        <TextBlock x:Name="MaintenanceStatus" Style="{StaticResource CardCaption}" Margin="0,8,0,0" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Diagnóstico ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionDiagnostics}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.DiagnosticsCaption}" />
+                        <ui:Button x:Name="DiagnosticsButton" Margin="0,10,0,8" Content="{DynamicResource Loc.RunDiagnostics}" />
+                        <TextBlock x:Name="DiagnosticsText" Style="{StaticResource CardCaption}" FontFamily="Consolas" TextWrapping="Wrap" />
+                    </StackPanel>
+                </Border>
+
+                <!-- ===== Sobre ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionAbout}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock x:Name="AboutText" Style="{StaticResource CardCaption}" />
+                        <TextBlock x:Name="StatusText" Style="{StaticResource CardCaption}" Margin="0,6,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+        </ScrollViewer>
+    </Grid>
+</ui:FluentWindow>
