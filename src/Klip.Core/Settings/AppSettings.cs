@@ -36,6 +36,10 @@ public sealed class AppSettings
     // Editor
     public bool EditorAutoCopy { get; set; } = true;
 
+    // Flyout size (the user can resize the Win+V window; it sticks)
+    public double FlyoutWidth { get; set; } = 360;
+    public double FlyoutHeight { get; set; } = 460;
+
     // backup do registro, escrito uma vez so antes de mexer nas chaves
     public string? RegistryBackupDisabledHotkeys { get; set; }
     public bool RegistryBackupTaken { get; set; }

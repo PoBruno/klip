@@ -18,6 +18,7 @@ namespace Klip.App.Windows;
 public partial class HistoryFlyoutWindow
 {
     private readonly HistoryFlyoutViewModel _viewModel;
+    private readonly Klip.Core.Settings.SettingsService _settings;
     private bool _closing;
     private bool _suppressTabEvents;
     // keyboard hook: the flyout never takes focus (so the app below keeps its
@@ -27,9 +28,14 @@ public partial class HistoryFlyoutWindow
     // watch for a click outside the flyout to close it
     private readonly Klip.Interop.GlobalMouseListener _mouse = new();
 
-    public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel)
+    // true while we're warming the window up off-screen at startup, so the
+    // size-changed handler ignores those layout passes
+    private bool _warmingUp;
+
+    public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel, Klip.Core.Settings.SettingsService settings)
     {
         _viewModel = viewModel;
+        _settings = settings;
         DataContext = viewModel;
         Resources["BoolToVisibility"] = new BooleanToVisibilityConverter();
         Resources["InverseBoolToVisibility"] = new InverseBooleanToVisibilityConverter();
@@ -83,6 +89,49 @@ public partial class HistoryFlyoutWindow
         // even though it opens as a no-activate window
         HwndSource.FromHwnd(helper.Handle)?.AddHook(WndProc);
         ApplyGrouping();
+
+        // start at the saved size (the user can resize, and it sticks)
+        ApplySavedSize();
+        // remember the new size when the user drags the borders (debounced)
+        _saveSizeDebounce = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(400),
+        };
+        _saveSizeDebounce.Tick += (_, _) => { _saveSizeDebounce.Stop(); SaveSize(); };
+        SizeChanged += OnFlyoutSizeChanged;
+    }
+
+    private readonly System.Windows.Threading.DispatcherTimer _saveSizeDebounce;
+
+    private void ApplySavedSize()
+    {
+        var s = _settings.Current;
+        // clamp to the minimums declared in xaml so a bad saved value can't shrink it
+        Width = Math.Max(360, s.FlyoutWidth);
+        Height = Math.Max(460, s.FlyoutHeight);
+    }
+
+    private void OnFlyoutSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // ignore the layout passes that happen while we warm the window up
+        // off-screen; those aren't real user resizes
+        if (_warmingUp)
+            return;
+        // while shown, keep the flyout pinned to the bottom-right corner as it
+        // grows up and to the left, and debounce saving the new size
+        if (IsVisible && !_closing)
+            RepositionBottomRight();
+        _saveSizeDebounce.Stop();
+        _saveSizeDebounce.Start();
+    }
+
+    private void SaveSize()
+    {
+        var w = Width;
+        var h = Height;
+        if (w < 360 || h < 460)
+            return;
+        _settings.Update(x => { x.FlyoutWidth = w; x.FlyoutHeight = h; });
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
@@ -313,6 +362,32 @@ public partial class HistoryFlyoutWindow
 
         var hwnd = new WindowInteropHelper(this).Handle;
 
+        // no-activate: the window shows WITHOUT stealing foreground, so the app
+        // you were typing in keeps its caret. keyboard comes via the global hook.
+        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+
+        RepositionBottomRight();
+
+        Show();
+        if (ItemsList.Items.Count > 0)
+            ItemsList.SelectedIndex = 0;
+        _keys.Active = true;  // start routing keys to the flyout
+        _mouse.Active = true; // start watching for outside clicks
+    }
+
+    /// <summary>
+    /// Pins the flyout to the bottom-right of the work area (16px margin, like the
+    /// native panel). Resizing grows it up and to the left, since this corner
+    /// stays put. Uses the monitor under the cursor.
+    /// </summary>
+    private void RepositionBottomRight()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == nint.Zero)
+            return;
+
         NativeMethods.GetCursorPos(out var cursor);
         var monitor = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
         var info = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
@@ -324,24 +399,11 @@ public partial class HistoryFlyoutWindow
         var widthPx = (int)(Width * dpi / 96.0);
         var heightPx = (int)(Height * dpi / 96.0);
 
-        // bottom right of the work area, 16px physical margin to match the native panel
         var x = info.rcWork.right - widthPx - 16;
         var y = info.rcWork.bottom - heightPx - 16;
 
-        // no-activate: the window shows WITHOUT stealing foreground, so the app
-        // you were typing in keeps its caret. keyboard comes via the global hook.
-        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
-        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
-        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
-
         NativeMethods.SetWindowPos(hwnd, nint.Zero, x, y, widthPx, heightPx,
             NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
-
-        Show();
-        if (ItemsList.Items.Count > 0)
-            ItemsList.SelectedIndex = 0;
-        _keys.Active = true;  // start routing keys to the flyout
-        _mouse.Active = true; // start watching for outside clicks
     }
 
     public void HideFlyout()
@@ -376,6 +438,7 @@ public partial class HistoryFlyoutWindow
     {
         try
         {
+            _warmingUp = true;
             var hwnd = new WindowInteropHelper(this).Handle;
             var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
             exStyle |= NativeMethods.WS_EX_NOACTIVATE;
@@ -390,6 +453,10 @@ public partial class HistoryFlyoutWindow
         catch
         {
             // warm-up is best effort, never let it break startup
+        }
+        finally
+        {
+            _warmingUp = false;
         }
     }
 
