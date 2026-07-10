@@ -261,6 +261,8 @@ public static class Loc
     public static string RestoreClipboardCaption => Get(nameof(RestoreClipboardCaption));
     public static string ClearOnExitTitle => Get(nameof(ClearOnExitTitle));
     public static string ClearOnExitCaption => Get(nameof(ClearOnExitCaption));
+    public static string ShowEmojiTabTitle => Get(nameof(ShowEmojiTabTitle));
+    public static string ShowEmojiTabCaption => Get(nameof(ShowEmojiTabCaption));
     public static string BackupTitle => Get(nameof(BackupTitle));
     public static string BackupCaption => Get(nameof(BackupCaption));
     public static string ExportHistory => Get(nameof(ExportHistory));
@@ -484,6 +486,8 @@ public static class Loc
         [nameof(RestoreClipboardCaption)] = "Depois de colar um item, devolve o conteúdo que estava antes (colar sem poluir).",
         [nameof(ClearOnExitTitle)] = "Limpar histórico ao sair",
         [nameof(ClearOnExitCaption)] = "Ao fechar o Klip, apaga o histórico (mantém fixados e favoritos).",
+        [nameof(ShowEmojiTabTitle)] = "Mostrar aba de emoji",
+        [nameof(ShowEmojiTabCaption)] = "Exibe a aba de emojis no painel de histórico (Win+V).",
         [nameof(BackupTitle)] = "Backup do histórico",
         [nameof(BackupCaption)] = "Exporte todo o histórico (itens e imagens) para um arquivo, ou importe de volta em outra máquina.",
         [nameof(ExportHistory)] = "Exportar",
@@ -705,6 +709,8 @@ public static class Loc
         [nameof(RestoreClipboardCaption)] = "After pasting an item, puts back what was there before (paste without polluting).",
         [nameof(ClearOnExitTitle)] = "Clear history on exit",
         [nameof(ClearOnExitCaption)] = "When Klip closes, clears the history (keeps pinned and favorites).",
+        [nameof(ShowEmojiTabTitle)] = "Show emoji tab",
+        [nameof(ShowEmojiTabCaption)] = "Shows the emoji tab in the history panel (Win+V).",
         [nameof(BackupTitle)] = "History backup",
         [nameof(BackupCaption)] = "Export the whole history (items and images) to a file, or import it back on another machine.",
         [nameof(ExportHistory)] = "Export",

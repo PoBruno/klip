@@ -136,6 +136,9 @@ public partial class MainWindow
         RestoreClipboardToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.RestoreClipboardAfterPaste = RestoreClipboardToggle.IsChecked == true); };
         ClearOnExitToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.ClearHistoryOnExit = ClearOnExitToggle.IsChecked == true); };
 
+        // Flyout: show/hide the emoji tab (takes effect on the next open)
+        ShowEmojiTabToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.ShowEmojiTab = ShowEmojiTabToggle.IsChecked == true); };
+
         // Maintenance and backup
         ExportButton.Click += (_, _) => OnExport();
         ImportButton.Click += (_, _) => OnImport();
@@ -293,6 +296,7 @@ public partial class MainWindow
         SkipSecretsToggle.IsChecked = s.SkipSecrets;
         RestoreClipboardToggle.IsChecked = s.RestoreClipboardAfterPaste;
         ClearOnExitToggle.IsChecked = s.ClearHistoryOnExit;
+        ShowEmojiTabToggle.IsChecked = s.ShowEmojiTab;
         MaxItemsBox.Value = s.RetentionMaxItems;
         MaxAgeBox.Value = s.RetentionMaxAgeDays;
         ScreenshotFolderBox.Text = s.ScreenshotsFolder

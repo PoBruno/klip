@@ -171,6 +171,19 @@
                         <ComboBox x:Name="ThemeCombo" Grid.Column="1" VerticalAlignment="Center" />
                     </Grid>
                 </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShowEmojiTabTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.ShowEmojiTabCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
 
                 <!-- ===== Clipboard ===== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionClipboard}" />

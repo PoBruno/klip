@@ -92,6 +92,8 @@ public partial class HistoryFlyoutWindow
 
         // start at the saved size (the user can resize, and it sticks)
         ApplySavedSize();
+        // hide the emoji tab if the user turned it off in settings
+        ApplyEmojiTabVisibility();
         // remember the new size when the user drags the borders (debounced)
         _saveSizeDebounce = new System.Windows.Threading.DispatcherTimer
         {
@@ -109,6 +111,16 @@ public partial class HistoryFlyoutWindow
         // clamp to the minimums declared in xaml so a bad saved value can't shrink it
         Width = Math.Max(360, s.FlyoutWidth);
         Height = Math.Max(460, s.FlyoutHeight);
+    }
+
+    /// <summary>Shows or hides the emoji tab based on the ShowEmojiTab setting.</summary>
+    private void ApplyEmojiTabVisibility()
+    {
+        var show = _settings.Current.ShowEmojiTab;
+        TabEmoji.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // if emoji got turned off while it was the active tab, fall back to history
+        if (!show && _viewModel.SelectedTab == HistoryTab.Emoji)
+            _viewModel.SelectedTab = HistoryTab.Recent;
     }
 
     private void OnFlyoutSizeChanged(object sender, SizeChangedEventArgs e)
@@ -224,26 +236,72 @@ public partial class HistoryFlyoutWindow
 
     private void FillEmojis(IReadOnlyList<Controls.EmojiRepository.Emoji> emojis)
     {
+        // bump the token so any pending lazy-decode from a previous fill stops
+        // touching images that no longer belong to the current view
+        var token = ++_emojiFillToken;
+
         EmojiWrap.Items.Clear();
         var style = (Style)Resources["EmojiButton"];
+        var pending = new List<(string Code, System.Windows.Controls.Image Image)>(emojis.Count);
         foreach (var emoji in emojis)
         {
+            var image = new System.Windows.Controls.Image
+            {
+                Width = 20,
+                Height = 20,
+                Stretch = System.Windows.Media.Stretch.Uniform,
+            };
+            // if it's already decoded, use it now; otherwise decode later off the
+            // critical path so opening the tab stays instant
+            if (_emojiCache.TryGetValue(emoji.Code, out var cached))
+                image.Source = cached;
+            else
+                pending.Add((emoji.Code, image));
+
             var button = new Button
             {
                 Style = style,
-                Content = new System.Windows.Controls.Image
-                {
-                    Source = LoadEmojiImage(emoji.Code),
-                    Width = 20,
-                    Height = 20,
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                },
+                Content = image,
                 ToolTip = emoji.Name,
             };
             var glyph = emoji.Char;
             button.Click += (_, _) => _viewModel.PasteEmoji(glyph);
             EmojiWrap.Items.Add(button);
         }
+
+        if (pending.Count > 0)
+            DecodeEmojisLazily(pending, token);
+    }
+
+    // token so a rapid category/search switch cancels stale lazy decodes
+    private int _emojiFillToken;
+
+    /// <summary>
+    /// Decodes the emoji PNGs one at a time at background priority and drops each
+    /// into its image as it becomes ready, so the panel shows up instantly and the
+    /// glyphs fill in over the next few frames instead of blocking the open.
+    /// </summary>
+    private void DecodeEmojisLazily(List<(string Code, System.Windows.Controls.Image Image)> pending, int token)
+    {
+        var index = 0;
+
+        void Step()
+        {
+            // a newer fill happened, so this batch is stale; stop
+            if (token != _emojiFillToken)
+                return;
+            // decode a small chunk per tick to keep the ui smooth
+            var end = Math.Min(index + 12, pending.Count);
+            for (; index < end; index++)
+            {
+                var (code, image) = pending[index];
+                image.Source = LoadEmojiImage(code);
+            }
+            if (index < pending.Count)
+                Dispatcher.BeginInvoke(Step, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        Dispatcher.BeginInvoke(Step, System.Windows.Threading.DispatcherPriority.Background);
     }
 
     // small cache so re-opening the emoji panel or searching doesn't re-decode
@@ -447,6 +505,9 @@ public partial class HistoryFlyoutWindow
             NativeMethods.SetWindowPos(hwnd, nint.Zero, -32000, -32000, 1, 1,
                 NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
             Show();
+            // warm the sqlite side too: first query pays connection + plan + page
+            // cache, so we take that hit here instead of on the first real Win+V
+            _viewModel.LoadFirstPage();
             UpdateLayout();
             Hide();
         }

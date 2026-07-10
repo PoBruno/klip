@@ -40,6 +40,9 @@ public sealed class AppSettings
     public double FlyoutWidth { get; set; } = 360;
     public double FlyoutHeight { get; set; } = 460;
 
+    // show the emoji tab in the flyout; off hides it entirely (no emoji cost)
+    public bool ShowEmojiTab { get; set; } = true;
+
     // backup do registro, escrito uma vez so antes de mexer nas chaves
     public string? RegistryBackupDisabledHotkeys { get; set; }
     public bool RegistryBackupTaken { get; set; }
