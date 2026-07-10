@@ -32,6 +32,9 @@ public partial class HistoryFlyoutWindow
     // size-changed handler ignores those layout passes
     private bool _warmingUp;
 
+    // set once the warm-up has run, so we don't pay it twice
+    private bool _warmedUp;
+
     public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel, Klip.Core.Settings.SettingsService settings)
     {
         _viewModel = viewModel;
@@ -94,6 +97,8 @@ public partial class HistoryFlyoutWindow
         ApplySavedSize();
         // hide the emoji tab if the user turned it off in settings
         ApplyEmojiTabVisibility();
+        // react live when the setting is toggled in the settings window
+        _settings.Changed += _ => Dispatcher.BeginInvoke(ApplyEmojiTabVisibility);
         // remember the new size when the user drags the borders (debounced)
         _saveSizeDebounce = new System.Windows.Threading.DispatcherTimer
         {
@@ -120,7 +125,13 @@ public partial class HistoryFlyoutWindow
         TabEmoji.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
         // if emoji got turned off while it was the active tab, fall back to history
         if (!show && _viewModel.SelectedTab == HistoryTab.Emoji)
+        {
             _viewModel.SelectedTab = HistoryTab.Recent;
+            // swap the panel and tab strip right away so it doesn't sit on the
+            // now-hidden emoji view
+            ShowEmojiPanel(false);
+            SyncTabButtons();
+        }
     }
 
     private void OnFlyoutSizeChanged(object sender, SizeChangedEventArgs e)
@@ -411,6 +422,12 @@ public partial class HistoryFlyoutWindow
     /// <summary>Shows the flyout on the monitor under the cursor (physical px).</summary>
     public void ShowFlyout()
     {
+        // if the idle warm-up didn't get to run yet (user hit Win+V right after
+        // launch), pay it now so the very first open still comes up prepared
+        // instead of flashing an empty dark window
+        if (!_warmedUp)
+            WarmUp();
+
         // reopen on the last tab used (the view model is a singleton, so it sticks)
         var onEmoji = _viewModel.SelectedTab == HistoryTab.Emoji;
         if (!onEmoji)
@@ -494,6 +511,9 @@ public partial class HistoryFlyoutWindow
     /// </summary>
     public void WarmUp()
     {
+        // only pays off once; a second call (idle timer after a manual open) is a no-op
+        if (_warmedUp)
+            return;
         try
         {
             _warmingUp = true;
@@ -518,6 +538,7 @@ public partial class HistoryFlyoutWindow
         finally
         {
             _warmingUp = false;
+            _warmedUp = true;
         }
     }
 
