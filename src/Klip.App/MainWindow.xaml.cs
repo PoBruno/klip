@@ -53,9 +53,14 @@ public partial class MainWindow
         TakeWinShiftSButton.Click += async (_, _) => await OnTakeWinShiftS();
         RevertButton.Click += async (_, _) => await OnRevert();
 
-        // hotkey editor
-        HistoryHotkeyBox.PreviewKeyDown += (s, e) => CaptureHotkey(e, isHistory: true);
-        CaptureHotkeyBox.PreviewKeyDown += (s, e) => CaptureHotkey(e, isHistory: false);
+        // hotkey editor: click the keycap button to start capturing, then the
+        // keys you press show up live as keycaps
+        HistoryHotkeyButton.Click += (_, _) => BeginCapture(isHistory: true);
+        CaptureHotkeyButton.Click += (_, _) => BeginCapture(isHistory: false);
+        HistoryHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, isHistory: true);
+        CaptureHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, isHistory: false);
+        HistoryHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(isHistory: true);
+        CaptureHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(isHistory: false);
 
         // settings applied on the spot
         AutostartToggle.Click += (_, _) =>
@@ -135,6 +140,9 @@ public partial class MainWindow
         SkipSecretsToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.SkipSecrets = SkipSecretsToggle.IsChecked == true); };
         RestoreClipboardToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.RestoreClipboardAfterPaste = RestoreClipboardToggle.IsChecked == true); };
         ClearOnExitToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.ClearHistoryOnExit = ClearOnExitToggle.IsChecked == true); };
+
+        // Flyout: show/hide the emoji tab (takes effect on the next open)
+        ShowEmojiTabToggle.Click += (_, _) => { if (!_loading) _settings.Update(s => s.ShowEmojiTab = ShowEmojiTabToggle.IsChecked == true); };
 
         // Maintenance and backup
         ExportButton.Click += (_, _) => OnExport();
@@ -286,13 +294,14 @@ public partial class MainWindow
         _loading = true;
 
         var s = _settings.Current;
-        HistoryHotkeyBox.Text = s.HotkeyHistory;
-        CaptureHotkeyBox.Text = s.HotkeyCapture;
+        HistoryHotkeyChord.Chord = s.HotkeyHistory;
+        CaptureHotkeyChord.Chord = s.HotkeyCapture;
         AutostartToggle.IsChecked = s.StartWithWindows;
         AutoSaveToggle.IsChecked = s.AutoSaveScreenshots;
         SkipSecretsToggle.IsChecked = s.SkipSecrets;
         RestoreClipboardToggle.IsChecked = s.RestoreClipboardAfterPaste;
         ClearOnExitToggle.IsChecked = s.ClearHistoryOnExit;
+        ShowEmojiTabToggle.IsChecked = s.ShowEmojiTab;
         MaxItemsBox.Value = s.RetentionMaxItems;
         MaxAgeBox.Value = s.RetentionMaxAgeDays;
         ScreenshotFolderBox.Text = s.ScreenshotsFolder
@@ -435,23 +444,58 @@ public partial class MainWindow
 
     // ----- Hotkey editor -----
 
+    private bool _capturing;
+
+    /// <summary>Enter capture mode for a hotkey button: prompt for keys.</summary>
+    private void BeginCapture(bool isHistory)
+    {
+        _capturing = true;
+        (isHistory ? HistoryHotkeyChord : CaptureHotkeyChord).Visibility = Visibility.Collapsed;
+        (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Visible;
+        (isHistory ? HistoryHotkeyButton : CaptureHotkeyButton).Focus();
+    }
+
+    /// <summary>Leave capture mode, showing the saved chord again.</summary>
+    private void EndCapture(bool isHistory)
+    {
+        _capturing = false;
+        var saved = isHistory ? _settings.Current.HotkeyHistory : _settings.Current.HotkeyCapture;
+        var chord = isHistory ? HistoryHotkeyChord : CaptureHotkeyChord;
+        chord.Chord = saved;
+        chord.Visibility = Visibility.Visible;
+        (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Collapsed;
+    }
+
     private void CaptureHotkey(KeyEventArgs e, bool isHistory)
     {
+        if (!_capturing)
+            return;
         e.Handled = true;
         var key = e.Key == Key.System ? e.SystemKey : e.Key;
 
-        // just a modifier: wait for the real key
-        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
-            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
-            return;
+        // Esc bails out of capture without changing anything
         if (key == Key.Escape)
+        {
+            EndCapture(isHistory);
             return;
+        }
 
         var parts = new List<string>();
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
         if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
+
+        // just modifiers so far: preview them live as keycaps and keep waiting
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
+            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
+        {
+            var live = isHistory ? HistoryHotkeyChord : CaptureHotkeyChord;
+            live.Visibility = Visibility.Visible;
+            (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Collapsed;
+            live.Chord = string.Join("+", parts);
+            return;
+        }
 
         string keyName;
         if (key is >= Key.A and <= Key.Z)
@@ -481,7 +525,7 @@ public partial class MainWindow
 
         // try to register right away; a conflict shows up as a notification
         var ok = ((App)Application.Current).ApplyHotkeys(_settings);
-        (isHistory ? HistoryHotkeyBox : CaptureHotkeyBox).Text = gesture;
+        EndCapture(isHistory); // shows the freshly saved chord as keycaps
         StatusText.Text = ok
             ? string.Format(Loc.HotkeyUpdated, gesture)
             : string.Format(Loc.HotkeyConflict, gesture);

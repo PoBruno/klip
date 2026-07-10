@@ -18,15 +18,27 @@ namespace Klip.App.Windows;
 public partial class HistoryFlyoutWindow
 {
     private readonly HistoryFlyoutViewModel _viewModel;
+    private readonly Klip.Core.Settings.SettingsService _settings;
     private bool _closing;
     private bool _suppressTabEvents;
     // keyboard hook: the flyout never takes focus (so the app below keeps its
     // caret), so we drive its navigation keys through a global hook instead
     private readonly Klip.Interop.GlobalKeyboardListener _keys = new();
+    // mouse hook: same reason. no-activate windows don't get Deactivated, so we
+    // watch for a click outside the flyout to close it
+    private readonly Klip.Interop.GlobalMouseListener _mouse = new();
 
-    public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel)
+    // true while we're warming the window up off-screen at startup, so the
+    // size-changed handler ignores those layout passes
+    private bool _warmingUp;
+
+    // set once the warm-up has run, so we don't pay it twice
+    private bool _warmedUp;
+
+    public HistoryFlyoutWindow(HistoryFlyoutViewModel viewModel, Klip.Core.Settings.SettingsService settings)
     {
         _viewModel = viewModel;
+        _settings = settings;
         DataContext = viewModel;
         Resources["BoolToVisibility"] = new BooleanToVisibilityConverter();
         Resources["InverseBoolToVisibility"] = new InverseBooleanToVisibilityConverter();
@@ -47,8 +59,22 @@ public partial class HistoryFlyoutWindow
         ItemsList.PreviewMouseLeftButtonUp += OnListClick;
 
         // route hooked keys onto the UI thread; returns true when we consumed it
-        _keys.OnKeyDown = vk => Dispatcher.Invoke(() => HandleHookedKey(vk));
+        _keys.OnKeyDown = vk =>
+        {
+            // when a click gave us focus, WPF handles typing; skip the UI-thread
+            // round trip entirely so typing in the search box never stalls on the
+            // hook thread. read a volatile bool, no dispatcher hop.
+            if (System.Threading.Volatile.Read(ref _hasFocus))
+                return false;
+            return Dispatcher.Invoke(() => HandleHookedKey(vk));
+        };
         _keys.Install();
+
+        // click outside the flyout closes it (screen point in physical px)
+        // click outside the flyout closes it. BeginInvoke (async) so the mouse
+        // hook returns instantly and never stalls the whole system's input.
+        _mouse.OnButtonDown = (x, y) => Dispatcher.BeginInvoke(() => OnGlobalClick(x, y));
+        _mouse.Install();
 
         // switching language rebuilds the date menu right away
         Localization.Loc.LanguageChanged += () =>
@@ -74,6 +100,69 @@ public partial class HistoryFlyoutWindow
         // even though it opens as a no-activate window
         HwndSource.FromHwnd(helper.Handle)?.AddHook(WndProc);
         ApplyGrouping();
+
+        // start at the saved size (the user can resize, and it sticks)
+        ApplySavedSize();
+        // hide the emoji tab if the user turned it off in settings
+        ApplyEmojiTabVisibility();
+        // react live when the setting is toggled in the settings window
+        _settings.Changed += _ => Dispatcher.BeginInvoke(ApplyEmojiTabVisibility);
+        // remember the new size when the user drags the borders (debounced)
+        _saveSizeDebounce = new System.Windows.Threading.DispatcherTimer
+        {
+            Interval = TimeSpan.FromMilliseconds(400),
+        };
+        _saveSizeDebounce.Tick += (_, _) => { _saveSizeDebounce.Stop(); SaveSize(); };
+        SizeChanged += OnFlyoutSizeChanged;
+    }
+
+    private readonly System.Windows.Threading.DispatcherTimer _saveSizeDebounce;
+
+    private void ApplySavedSize()
+    {
+        var s = _settings.Current;
+        // clamp to the minimums declared in xaml so a bad saved value can't shrink it
+        Width = Math.Max(360, s.FlyoutWidth);
+        Height = Math.Max(460, s.FlyoutHeight);
+    }
+
+    /// <summary>Shows or hides the emoji tab based on the ShowEmojiTab setting.</summary>
+    private void ApplyEmojiTabVisibility()
+    {
+        var show = _settings.Current.ShowEmojiTab;
+        TabEmoji.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
+        // if emoji got turned off while it was the active tab, fall back to history
+        if (!show && _viewModel.SelectedTab == HistoryTab.Emoji)
+        {
+            _viewModel.SelectedTab = HistoryTab.Recent;
+            // swap the panel and tab strip right away so it doesn't sit on the
+            // now-hidden emoji view
+            ShowEmojiPanel(false);
+            SyncTabButtons();
+        }
+    }
+
+    private void OnFlyoutSizeChanged(object sender, SizeChangedEventArgs e)
+    {
+        // ignore the layout passes that happen while we warm the window up
+        // off-screen; those aren't real user resizes
+        if (_warmingUp)
+            return;
+        // while shown, keep the flyout pinned to the bottom-right corner as it
+        // grows up and to the left, and debounce saving the new size
+        if (IsVisible && !_closing)
+            RepositionBottomRight();
+        _saveSizeDebounce.Stop();
+        _saveSizeDebounce.Start();
+    }
+
+    private void SaveSize()
+    {
+        var w = Width;
+        var h = Height;
+        if (w < 360 || h < 460)
+            return;
+        _settings.Update(x => { x.FlyoutWidth = w; x.FlyoutHeight = h; });
     }
 
     private nint WndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
@@ -89,11 +178,29 @@ public partial class HistoryFlyoutWindow
                 exStyle &= ~NativeMethods.WS_EX_NOACTIVATE;
                 NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
             }
+            // we own the keyboard from here: the WPF side handles typing now.
+            // tracking this explicitly (instead of polling GetForegroundWindow)
+            // avoids the race where the hook and WPF fight over the first keys.
+            System.Threading.Volatile.Write(ref _hasFocus, true);
             handled = true;
             return NativeMethods.MA_ACTIVATE;
         }
+        // lost activation (clicked elsewhere): hand the keyboard back to the hook
+        if (msg == NativeMethods.WM_ACTIVATE)
+        {
+            const int WA_INACTIVE = 0;
+            if ((wParam & 0xFFFF) == WA_INACTIVE)
+                System.Threading.Volatile.Write(ref _hasFocus, false);
+        }
         return nint.Zero;
     }
+
+    // true once a click activated the flyout, so typing goes through WPF. set in
+    // WndProc synchronously with the activation, cleared when we lose it or hide.
+    private bool _hasFocus;
+
+    /// <summary>This window's native handle (for the paste target guard).</summary>
+    public nint Hwnd => new WindowInteropHelper(this).Handle;
 
     // ----- Tabs -----
 
@@ -166,36 +273,89 @@ public partial class HistoryFlyoutWindow
 
     private void FillEmojis(IReadOnlyList<Controls.EmojiRepository.Emoji> emojis)
     {
+        // bump the token so any pending lazy-decode from a previous fill stops
+        // touching images that no longer belong to the current view
+        var token = ++_emojiFillToken;
+
         EmojiWrap.Items.Clear();
         var style = (Style)Resources["EmojiButton"];
+        var pending = new List<(string Code, System.Windows.Controls.Image Image)>(emojis.Count);
         foreach (var emoji in emojis)
         {
+            var image = new System.Windows.Controls.Image
+            {
+                Width = 20,
+                Height = 20,
+                Stretch = System.Windows.Media.Stretch.Uniform,
+            };
+            // if it's already decoded, use it now; otherwise decode later off the
+            // critical path so opening the tab stays instant
+            if (_emojiCache.TryGetValue(emoji.Code, out var cached))
+                image.Source = cached;
+            else
+                pending.Add((emoji.Code, image));
+
             var button = new Button
             {
                 Style = style,
-                Content = new System.Windows.Controls.Image
-                {
-                    Source = LoadEmojiImage(emoji.Code),
-                    Width = 20,
-                    Height = 20,
-                    Stretch = System.Windows.Media.Stretch.Uniform,
-                },
+                Content = image,
                 ToolTip = emoji.Name,
             };
             var glyph = emoji.Char;
             button.Click += (_, _) => _viewModel.PasteEmoji(glyph);
             EmojiWrap.Items.Add(button);
         }
+
+        if (pending.Count > 0)
+            DecodeEmojisLazily(pending, token);
     }
+
+    // token so a rapid category/search switch cancels stale lazy decodes
+    private int _emojiFillToken;
+
+    /// <summary>
+    /// Decodes the emoji PNGs one at a time at background priority and drops each
+    /// into its image as it becomes ready, so the panel shows up instantly and the
+    /// glyphs fill in over the next few frames instead of blocking the open.
+    /// </summary>
+    private void DecodeEmojisLazily(List<(string Code, System.Windows.Controls.Image Image)> pending, int token)
+    {
+        var index = 0;
+
+        void Step()
+        {
+            // a newer fill happened, so this batch is stale; stop
+            if (token != _emojiFillToken)
+                return;
+            // decode a small chunk per tick to keep the ui smooth
+            var end = Math.Min(index + 12, pending.Count);
+            for (; index < end; index++)
+            {
+                var (code, image) = pending[index];
+                image.Source = LoadEmojiImage(code);
+            }
+            if (index < pending.Count)
+                Dispatcher.BeginInvoke(Step, System.Windows.Threading.DispatcherPriority.Background);
+        }
+
+        Dispatcher.BeginInvoke(Step, System.Windows.Threading.DispatcherPriority.Background);
+    }
+
+    // small cache so re-opening the emoji panel or searching doesn't re-decode
+    private static readonly Dictionary<string, System.Windows.Media.Imaging.BitmapImage> _emojiCache = new();
 
     private static System.Windows.Media.Imaging.BitmapImage LoadEmojiImage(string code)
     {
+        if (_emojiCache.TryGetValue(code, out var cached))
+            return cached;
         var img = new System.Windows.Media.Imaging.BitmapImage();
         img.BeginInit();
         img.CacheOption = System.Windows.Media.Imaging.BitmapCacheOption.OnLoad;
+        img.DecodePixelWidth = 24; // shown at 20px, decode small instead of full 72px
         img.UriSource = new Uri(Controls.EmojiRepository.ImageUri(code));
         img.EndInit();
         img.Freeze();
+        _emojiCache[code] = img;
         return img;
     }
 
@@ -288,6 +448,12 @@ public partial class HistoryFlyoutWindow
     /// <summary>Shows the flyout on the monitor under the cursor (physical px).</summary>
     public void ShowFlyout()
     {
+        // if the idle warm-up didn't get to run yet (user hit Win+V right after
+        // launch), pay it now so the very first open still comes up prepared
+        // instead of flashing an empty dark window
+        if (!_warmedUp)
+            WarmUp();
+
         // reopen on the last tab used (the view model is a singleton, so it sticks)
         var onEmoji = _viewModel.SelectedTab == HistoryTab.Emoji;
         if (!onEmoji)
@@ -296,6 +462,33 @@ public partial class HistoryFlyoutWindow
         SyncTabButtons(); // keep the tab strip in sync with the active tab
 
         var hwnd = new WindowInteropHelper(this).Handle;
+
+        // no-activate: the window shows WITHOUT stealing foreground, so the app
+        // you were typing in keeps its caret. keyboard comes via the global hook.
+        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+
+        RepositionBottomRight();
+
+        System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
+        Show();
+        if (ItemsList.Items.Count > 0)
+            ItemsList.SelectedIndex = 0;
+        _keys.Active = true;  // start routing keys to the flyout
+        _mouse.Active = true; // start watching for outside clicks
+    }
+
+    /// <summary>
+    /// Pins the flyout to the bottom-right of the work area (16px margin, like the
+    /// native panel). Resizing grows it up and to the left, since this corner
+    /// stays put. Uses the monitor under the cursor.
+    /// </summary>
+    private void RepositionBottomRight()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == nint.Zero)
+            return;
 
         NativeMethods.GetCursorPos(out var cursor);
         var monitor = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
@@ -308,46 +501,98 @@ public partial class HistoryFlyoutWindow
         var widthPx = (int)(Width * dpi / 96.0);
         var heightPx = (int)(Height * dpi / 96.0);
 
-        // bottom right of the work area, 16px physical margin to match the native panel
         var x = info.rcWork.right - widthPx - 16;
         var y = info.rcWork.bottom - heightPx - 16;
 
-        // no-activate: the window shows WITHOUT stealing foreground, so the app
-        // you were typing in keeps its caret. keyboard comes via the global hook.
-        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
-        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
-        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
-
         NativeMethods.SetWindowPos(hwnd, nint.Zero, x, y, widthPx, heightPx,
             NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
-
-        Show();
-        if (ItemsList.Items.Count > 0)
-            ItemsList.SelectedIndex = 0;
-        _keys.Active = true; // start routing keys to the flyout
     }
 
-    public void HideFlyout()
+    public void HideFlyout(bool restoreFocus = true)
     {
         if (_closing)
             return;
         _closing = true;
-        _keys.Active = false; // stop routing keys once hidden
+        _keys.Active = false;  // stop routing keys once hidden
+        _mouse.Active = false; // stop watching clicks
+
+        // if we're still in multi-select here, the flyout is closing with a
+        // pending selection (click outside, alt-tab, etc). that arms the queue,
+        // same as pressing Enter. only Esc cancels (it clears the mode first).
+        if (_viewModel.IsMultiSelectMode)
+            _viewModel.ConfirmMultiSelectCommand.Execute(null);
 
         // if we grabbed focus (search box click), hand it back to the app the
-        // user came from, so their caret returns where it was
-        var ourHwnd = new WindowInteropHelper(this).Handle;
-        var weHadFocus = NativeMethods.GetForegroundWindow() == ourHwnd;
+        // user came from, so their caret returns where it was. skip this when a
+        // paste is about to run: that flow restores focus and fires Ctrl+V on its
+        // own, and a second restore here would race it and paste in the wrong spot.
+        var weHadFocus = System.Threading.Volatile.Read(ref _hasFocus);
+        System.Threading.Volatile.Write(ref _hasFocus, false);
 
         Hide();
         SearchBox.Text = "";
         _closing = false;
 
-        if (weHadFocus)
+        if (restoreFocus && weHadFocus)
             _viewModel.RestoreTargetFocus();
     }
 
     public new bool IsVisible => base.IsVisible;
+
+    /// <summary>
+    /// Pre-pays the first layout and the Mica composition by showing the window
+    /// off-screen once and hiding it, so the real first open is instant. Call at
+    /// idle after startup. The hooks and query are NOT touched here.
+    /// </summary>
+    public void WarmUp()
+    {
+        // only pays off once; a second call (idle timer after a manual open) is a no-op
+        if (_warmedUp)
+            return;
+        try
+        {
+            _warmingUp = true;
+            var hwnd = new WindowInteropHelper(this).Handle;
+            var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+            exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+            NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+            // park it far off-screen so nothing flashes
+            NativeMethods.SetWindowPos(hwnd, nint.Zero, -32000, -32000, 1, 1,
+                NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
+            Show();
+            // warm the sqlite side too: first query pays connection + plan + page
+            // cache, so we take that hit here instead of on the first real Win+V
+            _viewModel.LoadFirstPage();
+            UpdateLayout();
+            Hide();
+        }
+        catch
+        {
+            // warm-up is best effort, never let it break startup
+        }
+        finally
+        {
+            _warmingUp = false;
+            _warmedUp = true;
+        }
+    }
+
+    /// <summary>A click outside the flyout closes it (screen point, physical px).</summary>
+    private void OnGlobalClick(int screenX, int screenY)
+    {
+        if (!IsVisible || _closing)
+            return;
+
+        // real window rect in physical pixels
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (!NativeMethods.GetWindowRect(hwnd, out var rect))
+            return;
+
+        var inside = screenX >= rect.left && screenX < rect.right &&
+                     screenY >= rect.top && screenY < rect.bottom;
+        if (!inside)
+            HideFlyout();
+    }
 
     // ----- Keyboard -----
 
@@ -374,17 +619,17 @@ public partial class HistoryFlyoutWindow
         if (!IsVisible)
             return false;
 
-        // if the flyout itself is the foreground window (user clicked into it),
-        // let WPF's normal keyboard handling do the work, don't double-handle
-        var ourHwnd = new WindowInteropHelper(this).Handle;
-        if (NativeMethods.GetForegroundWindow() == ourHwnd)
+        // if a click already activated the flyout, WPF owns the keyboard. use the
+        // flag we set synchronously in WndProc, not GetForegroundWindow, so there's
+        // no race window right after the click where both sides grab the keys.
+        if (_hasFocus)
             return false;
 
         var ctrl = NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
         var shift = NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
 
-        // if the search box has focus (user clicked it), let typing flow normally
-        // and only steal the navigation keys
+        // the search box only has focus after a click, which sets _hasFocus above,
+        // so at this point typing is always false; keep the check for clarity
         var typing = SearchBox.IsKeyboardFocusWithin || EmojiSearchBox.IsKeyboardFocusWithin;
 
         // emoji panel open: only Esc matters, back to history
@@ -410,7 +655,9 @@ public partial class HistoryFlyoutWindow
                 return true;
 
             case VK_RETURN:
-                if (ctrl)
+                if (_viewModel.IsMultiSelectMode)
+                    _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
+                else if (ctrl)
                     _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
                 else if (shift)
                     _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
@@ -475,6 +722,10 @@ public partial class HistoryFlyoutWindow
                     HideFlyout();
                 e.Handled = true;
                 return;
+            case Key.Enter when _viewModel.IsMultiSelectMode:
+                _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
+                e.Handled = true;
+                return;
             case Key.Enter when Keyboard.Modifiers == ModifierKeys.Control:
                 _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
@@ -533,7 +784,17 @@ public partial class HistoryFlyoutWindow
     {
         if (EmojiPanel.Visibility == Visibility.Visible)
             return; // no search box while the emoji picker is up
-        if (!SearchBox.IsKeyboardFocusWithin && e.Text.Length > 0 && !char.IsControl(e.Text[0]))
+
+        // only redirect when the search box is neither focused nor about to be.
+        // during the click that focuses it, the focused element is already the
+        // text box, so appending here would double the first character.
+        if (SearchBox.IsKeyboardFocusWithin || Keyboard.FocusedElement == SearchBox)
+        {
+            base.OnPreviewTextInput(e);
+            return;
+        }
+
+        if (e.Text.Length > 0 && !char.IsControl(e.Text[0]))
         {
             SearchBox.Focus();
             SearchBox.Text += e.Text;
@@ -566,17 +827,58 @@ public partial class HistoryFlyoutWindow
 
     private void OnListClick(object sender, MouseButtonEventArgs e)
     {
-        // plain click pastes, Ctrl+click only copies.
-        // in multi-select any click just queues it up (PasteCommand handles that).
-        if (e.OriginalSource is DependencyObject source &&
-            FindItem(source) is { } item &&
-            e.OriginalSource is not System.Windows.Controls.Primitives.ButtonBase)
+        // clicks on the card's action buttons (pin/fav/more) are handled there
+        if (e.OriginalSource is not DependencyObject source ||
+            FindItem(source) is not { } item ||
+            e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase)
+            return;
+
+        var mods = Keyboard.Modifiers;
+
+        // Alt+click on an image jumps straight into the editor
+        if (mods == ModifierKeys.Alt && item.IsImage)
         {
-            if (Keyboard.Modifiers == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
-                _viewModel.CopyOnlyCommand.Execute(item);
-            else
-                _viewModel.PasteCommand.Execute(item);
+            _viewModel.OpenInEditorCommand.Execute(item);
+            return;
         }
+
+        // Shift+click builds the sequential paste queue: the first one arms
+        // multi-select on its own, and each click adds in the order clicked
+        if (mods == ModifierKeys.Shift)
+        {
+            if (!_viewModel.IsMultiSelectMode)
+                _viewModel.StartMultiSelectCommand.Execute(5);
+            _viewModel.PasteCommand.Execute(item); // routes to queue while in multi-select
+            return;
+        }
+
+        // Ctrl+click copies without pasting (unless we're already queueing)
+        if (mods == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
+        {
+            _viewModel.CopyOnlyCommand.Execute(item);
+            // the click stole focus (MOUSEACTIVATE dropped NOACTIVATE); since we
+            // stay open, hand focus back to the app and re-arm no-activate so the
+            // flyout is still usable without sitting on top of the user's caret
+            ReleaseFocusButStayOpen();
+            return;
+        }
+
+        // plain click pastes (or queues, if multi-select is active)
+        _viewModel.PasteCommand.Execute(item);
+    }
+
+    /// <summary>
+    /// Re-arms WS_EX_NOACTIVATE and hands the foreground back to the app the user
+    /// came from, without hiding the flyout. Used after Ctrl+click (copy) so the
+    /// panel stays open but doesn't hold the user's focus.
+    /// </summary>
+    private void ReleaseFocusButStayOpen()
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
+        exStyle |= NativeMethods.WS_EX_NOACTIVATE;
+        NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
+        _viewModel.RestoreTargetFocus();
     }
 
     private void OnPinClick(object sender, RoutedEventArgs e)

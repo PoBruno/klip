@@ -106,10 +106,12 @@ public sealed class ClipboardMonitorService : IDisposable
     }
 
     /// <summary>Whole read runs under retry, any GetData can blow up with
-    /// CLIPBRD_E_CANT_OPEN while the source app still holds the clipboard.</summary>
+    /// CLIPBRD_E_CANT_OPEN while the source app still holds the clipboard.
+    /// Reading needs the UI thread (STA), so keep the waits tiny: the clipboard
+    /// usually frees within a few ms, and long sleeps here freeze the UI.</summary>
     private ClipboardSnapshot? ReadSnapshotWithRetry()
     {
-        for (var attempt = 0; attempt < 5; attempt++)
+        for (var attempt = 0; attempt < 6; attempt++)
         {
             try
             {
@@ -117,10 +119,10 @@ public sealed class ClipboardMonitorService : IDisposable
             }
             catch (System.Runtime.InteropServices.ExternalException)
             {
-                Thread.Sleep(50 + attempt * 50);
+                Thread.Sleep(15); // short and flat, total worst case ~90ms
             }
         }
-        StartupLog.Write("[AVISO] Clipboard ocupado após 5 tentativas; item perdido");
+        StartupLog.Write("[AVISO] Clipboard ocupado após 6 tentativas; item perdido");
         return null;
     }
 

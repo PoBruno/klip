@@ -19,6 +19,10 @@ public static partial class NativeMethods
     [LibraryImport("user32.dll")]
     public static partial nint GetShellWindow();
 
+    [LibraryImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool GetWindowRect(nint hWnd, out RECT lpRect);
+
     // ----- Focus fallback for pasting -----
 
     [LibraryImport("user32.dll", SetLastError = true)]

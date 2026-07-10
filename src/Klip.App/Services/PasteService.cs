@@ -1,3 +1,4 @@
+using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Klip.Core.Settings;
 using Klip.Core.Storage;
@@ -22,8 +23,18 @@ public sealed class PasteService(
     /// <summary>Fires when the paste fails, so we can show a fallback toast.</summary>
     public event Action? PasteFailed;
 
-    public void CaptureForegroundTarget() =>
-        SavedTargetWindow = NativeMethods.GetForegroundWindow();
+    /// <summary>
+    /// Saves the app that currently has focus, so we can paste back into it. If the
+    /// foreground is one of our own windows (a fast reopen where focus hasn't
+    /// settled yet), we keep the previous target instead of grabbing ourselves.
+    /// </summary>
+    public void CaptureForegroundTarget(nint ignoreHwnd = 0)
+    {
+        var fg = NativeMethods.GetForegroundWindow();
+        if (fg == nint.Zero || fg == ignoreHwnd)
+            return; // don't overwrite a good target with our own window
+        SavedTargetWindow = fg;
+    }
 
     /// <summary>
     /// Brings the saved target app back to the front. Used when the flyout took
@@ -37,30 +48,48 @@ public sealed class PasteService(
     }
 
     /// <summary>
-    /// Writes the item to the clipboard and pastes it into the target. Call on the UI
-    /// thread; the delays run in the background so the dispatcher stays free.
+    /// Writes the item to the clipboard and pastes it into the target. Returns
+    /// immediately: all the heavy work (image decode, clipboard write, delays)
+    /// runs off the click so the UI and the input hooks never stall.
     /// </summary>
     public void PasteItem(ClipboardItem item, bool asPlainText = false)
     {
-        // stash the current clipboard so we can restore it after ("paste without clobbering")
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var target = SavedTargetWindow;
         var restore = settings.Current.RestoreClipboardAfterPaste;
+        // snapshot the current clipboard now if the option is on. cheap for text,
+        // and it has to be read on the UI thread anyway (STA).
         var previous = restore ? writeGuard.SnapshotCurrent() : null;
 
-        WriteToClipboard(item, asPlainText);
+        // decode the image (disk read + full decode) OFF the UI thread; text is cheap
+        BitmapSource? bitmap = null;
+        byte[]? pngBytes = null;
+        var isImage = item.Type == ClipboardItemType.Image && item.FilePath is not null;
+        var imagePath = isImage ? mediaStore.ToAbsolute(item.FilePath!) : null;
 
-        var target = SavedTargetWindow;
-        var dispatcher = Dispatcher.CurrentDispatcher;
         _ = Task.Run(() =>
         {
             var ok = true;
             try
             {
-                if (target != nint.Zero && !NativeMethods.ForceForeground(target))
-                    ok = false; // couldn't bring the target back up
+                if (imagePath is not null)
+                    (pngBytes, bitmap) = ClipboardWriteGuard.DecodeImageFile(imagePath);
 
-                Thread.Sleep(80); // give the target window time to reactivate
+                // the actual clipboard write must run on the UI thread (STA)
+                dispatcher.Invoke(() =>
+                {
+                    if (bitmap is not null && pngBytes is not null)
+                        writeGuard.WriteImageFromPng(pngBytes, bitmap);
+                    else
+                        writeGuard.WriteItem(item, plainTextOnly: asPlainText);
+                });
+
+                if (target != nint.Zero && !NativeMethods.ForceForeground(target))
+                    ok = false;
+
+                WaitForForeground(target);
                 NativeMethods.ReleasePressedModifiers();
-                Thread.Sleep(30);
+                Thread.Sleep(20);
                 NativeMethods.SendCtrlV();
             }
             catch (Exception ex)
@@ -69,10 +98,9 @@ public sealed class PasteService(
                 ok = false;
             }
 
-            // put the old clipboard back once the paste already ate the item
             if (restore && previous is not null)
             {
-                Thread.Sleep(180);
+                Thread.Sleep(150);
                 dispatcher.BeginInvoke(() => writeGuard.Restore(previous));
             }
 
@@ -81,9 +109,41 @@ public sealed class PasteService(
         });
     }
 
-    /// <summary>Just copy, no paste (Ctrl+click).</summary>
-    public void CopyItemToClipboard(ClipboardItem item, bool asPlainText = false) =>
-        WriteToClipboard(item, asPlainText);
+    /// <summary>
+    /// Waits (briefly) for the target window to become foreground, instead of a
+    /// fixed sleep. Bails out fast so the paste stays snappy.
+    /// </summary>
+    private static void WaitForForeground(nint target)
+    {
+        if (target == nint.Zero)
+        {
+            Thread.Sleep(40);
+            return;
+        }
+        for (var i = 0; i < 12; i++) // up to ~120ms, usually resolves in one or two
+        {
+            if (NativeMethods.GetForegroundWindow() == target)
+                return;
+            Thread.Sleep(10);
+        }
+    }
+
+    /// <summary>Just copy, no paste (Ctrl+click). Image decode runs off the UI thread.</summary>
+    public void CopyItemToClipboard(ClipboardItem item, bool asPlainText = false)
+    {
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        if (item.Type == ClipboardItemType.Image && item.FilePath is not null)
+        {
+            var path = mediaStore.ToAbsolute(item.FilePath);
+            _ = Task.Run(() =>
+            {
+                var (png, bmp) = ClipboardWriteGuard.DecodeImageFile(path);
+                dispatcher.Invoke(() => writeGuard.WriteImageFromPng(png, bmp));
+            });
+            return;
+        }
+        writeGuard.WriteItem(item, plainTextOnly: asPlainText);
+    }
 
     /// <summary>Writes plain text and pastes it into the target (used by the emoji panel).</summary>
     public void PasteText(string text)
@@ -101,9 +161,9 @@ public sealed class PasteService(
             {
                 if (target != nint.Zero)
                     NativeMethods.ForceForeground(target);
-                Thread.Sleep(80);
+                WaitForForeground(target);
                 NativeMethods.ReleasePressedModifiers();
-                Thread.Sleep(30);
+                Thread.Sleep(20);
                 NativeMethods.SendCtrlV();
             }
             catch (Exception ex)
@@ -113,21 +173,9 @@ public sealed class PasteService(
 
             if (restore && previous is not null)
             {
-                Thread.Sleep(180);
+                Thread.Sleep(150);
                 dispatcher.BeginInvoke(() => writeGuard.Restore(previous));
             }
         });
-    }
-
-    private void WriteToClipboard(ClipboardItem item, bool asPlainText)
-    {
-        // imagem: resolve o caminho absoluto antes de passar pro guard
-        if (item.Type == ClipboardItemType.Image && item.FilePath is not null)
-        {
-            writeGuard.WriteImageFromPngFile(mediaStore.ToAbsolute(item.FilePath));
-            return;
-        }
-        // text + HTML + RTF, or plain text only when asPlainText
-        writeGuard.WriteItem(item, plainTextOnly: asPlainText);
     }
 }

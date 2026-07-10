@@ -31,6 +31,8 @@ public enum DateFilterPreset
 /// <summary>Drives the clipboard history flyout.</summary>
 public sealed partial class HistoryFlyoutViewModel : ObservableObject
 {
+    // first page is small so the flyout opens instantly; the scroll pulls more
+    private const int FirstPageSize = 30;
     private const int PageSize = 100;
 
     private readonly ClipboardItemRepository _repository;
@@ -62,7 +64,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         public int GetHashCode(HistoryItemViewModel vm) => vm.Id.GetHashCode();
     }
 
-    public ObservableCollection<HistoryItemViewModel> Items { get; } = [];
+    public BulkObservableCollection<HistoryItemViewModel> Items { get; } = [];
 
     [ObservableProperty]
     private bool _isEmpty = true;
@@ -107,8 +109,12 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     partial void OnIsMultiSelectModeChanged(bool value) => OnPropertyChanged(nameof(MultiSelectStatus));
     partial void OnMultiSelectTargetChanged(int value) => OnPropertyChanged(nameof(MultiSelectStatus));
 
-    /// <summary>Raised to close the window after a paste.</summary>
-    public event Action? CloseRequested;
+    /// <summary>
+    /// Raised to close the window. The bool says whether HideFlyout should restore
+    /// focus to the target app: false when we're about to paste (the paste flow
+    /// handles focus + Ctrl+V itself, so a second restore would race it).
+    /// </summary>
+    public event Action<bool>? CloseRequested;
 
     /// <summary>Open an image in the editor (window is created by the App).</summary>
     public event Action<ClipboardItem>? OpenInEditorRequested;
@@ -121,7 +127,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     {
         if (item?.IsImage != true)
             return;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(true);
         OpenInEditorRequested?.Invoke(item.Item);
     }
 
@@ -172,7 +178,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
             _selection.Reset();
         Items.Clear();
         _allLoaded = false;
-        AppendPage(beforeMs: null);
+        AppendPage(beforeMs: null, limit: FirstPageSize);
     }
 
     /// <summary>Incremental keyset paging while scrolling.</summary>
@@ -184,10 +190,10 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         var lastUnpinned = Items.LastOrDefault(i => !i.IsPinned);
         if (lastUnpinned is null)
             return;
-        AppendPage(lastUnpinned.Item.LastCopiedAt.ToUnixTimeMilliseconds());
+        AppendPage(lastUnpinned.Item.LastCopiedAt.ToUnixTimeMilliseconds(), limit: PageSize);
     }
 
-    private void AppendPage(long? beforeMs)
+    private void AppendPage(long? beforeMs, int limit)
     {
         var (fromMs, toMs) = ComputeDateRange();
         var results = _repository.Query(new HistoryQuery
@@ -204,12 +210,14 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
             DateFromMs = fromMs,
             DateToMs = toMs,
             BeforeLastCopiedAtMs = beforeMs,
-            Limit = PageSize,
+            Limit = limit,
         });
 
-        if (results.Count < PageSize)
+        if (results.Count < limit)
             _allLoaded = true;
 
+        // build the VMs first, then add them all at once (single notification)
+        var page = new List<HistoryItemViewModel>(results.Count);
         foreach (var item in results)
         {
             var absImage = item.FilePath is not null ? _mediaStore.ToAbsolute(item.FilePath) : null;
@@ -217,8 +225,9 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
             var vm = new HistoryItemViewModel(item, absImage, absThumb);
             if (IsMultiSelectMode)
                 vm.QueueOrder = _selection.OrderOf(vm, ByItemId);
-            Items.Add(vm);
+            page.Add(vm);
         }
+        Items.AddRange(page);
         IsEmpty = Items.Count == 0;
     }
 
@@ -253,7 +262,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
             return;
         }
 
-        CloseRequested?.Invoke(); // close first so the target regains focus
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteItem(item.Item);
     }
 
@@ -301,7 +310,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         var items = _selection.Snapshot().Select(vm => vm.Item).ToList();
         ClearSelectionOrder();
         IsMultiSelectMode = false;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(true);
         _pasteQueue.Arm(items);
     }
 
@@ -319,7 +328,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     {
         if (item is null)
             return;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteItem(item.Item, asPlainText: true);
     }
 
@@ -330,13 +339,13 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         if (item is null)
             return;
         _pasteService.CopyItemToClipboard(item.Item);
-        CloseRequested?.Invoke();
+        // copying keeps the flyout open on purpose, so you can grab more
     }
 
     /// <summary>Clicking an emoji in the picker: paste it and close.</summary>
     public void PasteEmoji(string emoji)
     {
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteText(emoji);
     }
 

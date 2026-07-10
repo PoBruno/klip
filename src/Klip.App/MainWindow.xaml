@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:loc="clr-namespace:Klip.App.Localization"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
     Title="{DynamicResource Loc.SettingsTitle}"
     Width="760"
     Height="720"
@@ -29,12 +30,15 @@
         </Style>
         <Style x:Key="CardTitle" TargetType="TextBlock">
             <Setter Property="FontSize" Value="14" />
+            <Setter Property="FontWeight" Value="SemiBold" />
+            <Setter Property="TextWrapping" Value="Wrap" />
         </Style>
         <Style x:Key="CardCaption" TargetType="TextBlock">
             <Setter Property="FontSize" Value="12" />
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
             <Setter Property="TextWrapping" Value="Wrap" />
-            <Setter Property="Margin" Value="0,2,0,0" />
+            <Setter Property="LineHeight" Value="16" />
+            <Setter Property="Margin" Value="0,3,0,0" />
         </Style>
     </ui:FluentWindow.Resources>
 
@@ -119,7 +123,18 @@
                             <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.OpenHistoryHotkey}" />
                             <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HotkeyHint}" />
                         </StackPanel>
-                        <ui:TextBox x:Name="HistoryHotkeyBox" Grid.Column="1" IsReadOnly="True" VerticalAlignment="Center" />
+                        <Button x:Name="HistoryHotkeyButton" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                Focusable="True" Cursor="Hand" Padding="8,6" MinWidth="140"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <controls:KeyChord x:Name="HistoryHotkeyChord" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="HistoryHotkeyPrompt" Visibility="Collapsed"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                           Text="{DynamicResource Loc.HotkeyPressKeys}" />
+                            </Grid>
+                        </Button>
                     </Grid>
                 </Border>
                 <Border Style="{StaticResource Card}">
@@ -132,8 +147,80 @@
                             <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.NewCaptureHotkey}" />
                             <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HotkeyHint}" />
                         </StackPanel>
-                        <ui:TextBox x:Name="CaptureHotkeyBox" Grid.Column="1" IsReadOnly="True" VerticalAlignment="Center" />
+                        <Button x:Name="CaptureHotkeyButton" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                Focusable="True" Cursor="Hand" Padding="8,6" MinWidth="140"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <controls:KeyChord x:Name="CaptureHotkeyChord" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="CaptureHotkeyPrompt" Visibility="Collapsed"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                           Text="{DynamicResource Loc.HotkeyPressKeys}" />
+                            </Grid>
+                        </Button>
                     </Grid>
+                </Border>
+
+                <!-- ===== Atalhos do painel (referencia) ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionFlyoutShortcuts}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <Border Style="{StaticResource KeyCap}">
+                                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutClickDesc}" />
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <controls:KeyChord Chord="Ctrl" />
+                                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                                <Border Style="{StaticResource KeyCap}">
+                                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutCtrlClickDesc}" />
+                        </Grid>
+                        <Grid Margin="0,0,0,10">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <controls:KeyChord Chord="Alt" />
+                                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                                <Border Style="{StaticResource KeyCap}">
+                                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutAltClickDesc}" />
+                        </Grid>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="180" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <StackPanel Orientation="Horizontal">
+                                <controls:KeyChord Chord="Shift" />
+                                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                                <Border Style="{StaticResource KeyCap}">
+                                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                                </Border>
+                            </StackPanel>
+                            <TextBlock Grid.Column="1" Margin="12,0,0,0" Style="{StaticResource CardCaption}" VerticalAlignment="Center" Text="{DynamicResource Loc.ShortcutShiftClickDesc}" />
+                        </Grid>
+                    </StackPanel>
                 </Border>
 
                 <!-- ===== Geral ===== -->
@@ -169,6 +256,19 @@
                         </Grid.ColumnDefinitions>
                         <TextBlock Style="{StaticResource CardTitle}" VerticalAlignment="Center" Text="{DynamicResource Loc.ThemeTitle}" />
                         <ComboBox x:Name="ThemeCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.ShowEmojiTabTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.ShowEmojiTabCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" Grid.Column="1" />
                     </Grid>
                 </Border>
 
