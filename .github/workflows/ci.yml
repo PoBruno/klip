@@ -1,0 +1,28 @@
+name: CI
+
+on:
+  push:
+    branches: ["**"]
+  pull_request:
+    branches: ["**"]
+
+jobs:
+  build-test:
+    runs-on: windows-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Restaurar
+        run: dotnet restore Klip.sln
+
+      - name: Compilar (Release)
+        run: dotnet build Klip.sln -c Release --no-restore
+
+      - name: Testar
+        run: dotnet test Klip.sln -c Release --no-build --verbosity normal

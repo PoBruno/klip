@@ -1,0 +1,2464 @@
+{
+  "categories": [
+    {
+      "name": "Smileys",
+      "glyph": "\uE76E",
+      "emojis": [
+        "1f600",
+        "1f603",
+        "1f604",
+        "1f601",
+        "1f606",
+        "1f605",
+        "1f923",
+        "1f602",
+        "1f642",
+        "1f643",
+        "1f609",
+        "1f60a",
+        "1f607",
+        "1f970",
+        "1f60d",
+        "1f929",
+        "1f618",
+        "1f617",
+        "1f61a",
+        "1f619",
+        "1f60b",
+        "1f61b",
+        "1f61c",
+        "1f92a",
+        "1f61d",
+        "1f911",
+        "1f917",
+        "1f92d",
+        "1f92b",
+        "1f914",
+        "1f610",
+        "1f611",
+        "1f636",
+        "1f60f",
+        "1f612",
+        "1f644",
+        "1f62c",
+        "1f925",
+        "1f60c",
+        "1f614",
+        "1f62a",
+        "1f924",
+        "1f634",
+        "1f637",
+        "1f912",
+        "1f915",
+        "1f922",
+        "1f92e",
+        "1f927",
+        "1f975",
+        "1f976",
+        "1f974",
+        "1f635",
+        "1f92f",
+        "1f615",
+        "1f61f",
+        "1f641",
+        "1f62e",
+        "1f62f",
+        "1f632",
+        "1f633",
+        "1f97a",
+        "1f626",
+        "1f627",
+        "1f628",
+        "1f630",
+        "1f625",
+        "1f622",
+        "1f62d",
+        "1f631",
+        "1f616",
+        "1f623",
+        "1f61e",
+        "1f613",
+        "1f629",
+        "1f62b",
+        "1f624",
+        "1f620",
+        "1f621",
+        "1f92c",
+        "1f608",
+        "1f47f",
+        "1f480",
+        "1f4a9"
+      ]
+    },
+    {
+      "name": "People",
+      "glyph": "\uE977",
+      "emojis": [
+        "1f44d",
+        "1f44e",
+        "1f44c",
+        "1f44f",
+        "1f64c",
+        "1f450",
+        "1f91d",
+        "1f64f",
+        "270c",
+        "1f91e",
+        "1f918",
+        "1f919",
+        "1f448",
+        "1f449",
+        "1f446",
+        "1f447",
+        "261d",
+        "270b",
+        "1f44a",
+        "270a",
+        "1f91b",
+        "1f91c",
+        "1f4aa",
+        "1f595",
+        "270d",
+        "1f64b",
+        "1f926",
+        "1f937",
+        "1f468",
+        "1f469",
+        "1f476",
+        "1f9d2",
+        "1f466",
+        "1f467",
+        "1f474",
+        "1f475",
+        "1f640",
+        "1f63b",
+        "2764",
+        "1f9e1",
+        "1f49b",
+        "1f49a",
+        "1f499",
+        "1f49c",
+        "1f5a4",
+        "1f90d",
+        "1f494",
+        "1f495",
+        "1f49e",
+        "1f493",
+        "1f497",
+        "1f496",
+        "1f498",
+        "1f49d"
+      ]
+    },
+    {
+      "name": "Animals",
+      "glyph": "\uE909",
+      "emojis": [
+        "1f436",
+        "1f431",
+        "1f42d",
+        "1f439",
+        "1f430",
+        "1f98a",
+        "1f43b",
+        "1f43c",
+        "1f428",
+        "1f42f",
+        "1f981",
+        "1f42e",
+        "1f437",
+        "1f438",
+        "1f435",
+        "1f414",
+        "1f427",
+        "1f426",
+        "1f424",
+        "1f986",
+        "1f985",
+        "1f989",
+        "1f987",
+        "1f43a",
+        "1f417",
+        "1f434",
+        "1f984",
+        "1f41d",
+        "1f41b",
+        "1f98b",
+        "1f40c",
+        "1f41e",
+        "1f41c",
+        "1f577",
+        "1f422",
+        "1f40d",
+        "1f419",
+        "1f41f",
+        "1f420",
+        "1f42c",
+        "1f433",
+        "1f40b",
+        "1f335",
+        "1f332",
+        "1f333",
+        "1f340",
+        "1f338",
+        "1f337",
+        "1f33b",
+        "1f33c",
+        "1f339",
+        "1f33a",
+        "1f308",
+        "2b50",
+        "1f31f",
+        "2600",
+        "26c5",
+        "2601",
+        "1f327",
+        "26a1",
+        "1f525"
+      ]
+    },
+    {
+      "name": "Food",
+      "glyph": "\uE7E8",
+      "emojis": [
+        "1f34f",
+        "1f34e",
+        "1f350",
+        "1f34a",
+        "1f34b",
+        "1f34c",
+        "1f349",
+        "1f347",
+        "1f353",
+        "1f348",
+        "1f352",
+        "1f351",
+        "1f34d",
+        "1f965",
+        "1f95d",
+        "1f345",
+        "1f346",
+        "1f955",
+        "1f33d",
+        "1f336",
+        "1f954",
+        "1f35e",
+        "1f950",
+        "1f956",
+        "1f9c0",
+        "1f357",
+        "1f356",
+        "1f32d",
+        "1f354",
+        "1f35f",
+        "1f355",
+        "1f32e",
+        "1f32f",
+        "1f959",
+        "1f35c",
+        "1f35b",
+        "1f363",
+        "1f371",
+        "1f359",
+        "1f358",
+        "1f365",
+        "1f960",
+        "1f368",
+        "1f366",
+        "1f367",
+        "1f370",
+        "1f382",
+        "1f36b",
+        "1f36c",
+        "1f36d",
+        "1f36e",
+        "1f36f",
+        "2615",
+        "1f375",
+        "1f37a",
+        "1f37b",
+        "1f377",
+        "1f378",
+        "1f379",
+        "1f37e"
+      ]
+    },
+    {
+      "name": "Travel",
+      "glyph": "\uE707",
+      "emojis": [
+        "1f697",
+        "1f695",
+        "1f699",
+        "1f68c",
+        "1f693",
+        "1f691",
+        "1f692",
+        "1f690",
+        "1f6b2",
+        "1f6f4",
+        "1f3cd",
+        "2708",
+        "1f680",
+        "1f681",
+        "1f6f8",
+        "26f5",
+        "1f6a4",
+        "1f6f3",
+        "26f4",
+        "1f6a2",
+        "2693",
+        "1f3e0",
+        "1f3e1",
+        "1f3e2",
+        "1f3ec",
+        "1f3e5",
+        "1f3e6",
+        "1f3eb",
+        "1f3df",
+        "1f5fc",
+        "1f5fd",
+        "26f2",
+        "1f30b",
+        "1f5fb",
+        "1f3d5",
+        "1f3dd",
+        "1f3d6",
+        "1f30d",
+        "1f30e",
+        "1f30f",
+        "1f310",
+        "1f5fa",
+        "2b50",
+        "1f319",
+        "1f31e",
+        "1f30a",
+        "26fa",
+        "1f303"
+      ]
+    },
+    {
+      "name": "Objects",
+      "glyph": "\uE1D3",
+      "emojis": [
+        "231a",
+        "1f4f1",
+        "1f4bb",
+        "2328",
+        "1f5a5",
+        "1f5a8",
+        "1f4be",
+        "1f4bf",
+        "1f4f7",
+        "1f4f8",
+        "1f4f9",
+        "1f3a5",
+        "1f4fa",
+        "1f4fb",
+        "23f0",
+        "23f1",
+        "231b",
+        "1f50b",
+        "1f50c",
+        "1f4a1",
+        "1f526",
+        "1f4d6",
+        "1f4da",
+        "1f4dd",
+        "270f",
+        "1f58a",
+        "1f58c",
+        "1f4cc",
+        "1f4ce",
+        "2702",
+        "1f511",
+        "1f512",
+        "1f513",
+        "1f510",
+        "1f528",
+        "1f527",
+        "2699",
+        "1f9f2",
+        "1f517",
+        "1f4b0",
+        "1f4b3",
+        "1f48e",
+        "1f3af",
+        "1f3b2",
+        "1f9e9",
+        "1f3ae",
+        "1f3b5",
+        "1f3b6",
+        "1f514",
+        "2705",
+        "274c",
+        "2757",
+        "2753",
+        "2b55",
+        "1f4af"
+      ]
+    },
+    {
+      "name": "Symbols",
+      "glyph": "\uE73E",
+      "emojis": [
+        "2764",
+        "1f49b",
+        "1f49a",
+        "1f499",
+        "1f49c",
+        "1f5a4",
+        "2b50",
+        "1f31f",
+        "2728",
+        "26a1",
+        "1f525",
+        "1f4a5",
+        "2705",
+        "274c",
+        "2714",
+        "2716",
+        "2795",
+        "2796",
+        "2757",
+        "2753",
+        "2755",
+        "203c",
+        "2049",
+        "1f4af",
+        "1f51d",
+        "1f53a",
+        "1f53b",
+        "25b6",
+        "23f8",
+        "23f9",
+        "23fa",
+        "23ed",
+        "23ee",
+        "1f500",
+        "1f501",
+        "1f502",
+        "2b06",
+        "2b07",
+        "27a1",
+        "2b05",
+        "2934",
+        "2935",
+        "1f504",
+        "267b",
+        "2648",
+        "264c",
+        "a9",
+        "ae",
+        "2122",
+        "23",
+        "2a",
+        "30",
+        "31",
+        "32"
+      ]
+    }
+  ],
+  "emojis": {
+    "1f600": {
+      "char": "😀",
+      "name": "grinning face",
+      "keywords": "face grin grinning lol rindo risada rosto risonho cara sonriendo divertido feliz sonrisa"
+    },
+    "1f603": {
+      "char": "😃",
+      "name": "grinning face with big eyes",
+      "keywords": "face grinning with big eyes mouth open smile aberto boca rosto risonho com olhos bem abertos sorriso cara sonriendo con ojos grandes divertido risa"
+    },
+    "1f604": {
+      "char": "😄",
+      "name": "grinning face with smiling eyes",
+      "keywords": "eye face grinning with smiling eyes mouth open smile aberta boca olhos rosto risonho com sorridentes sorriso abierta cara sonriendo con ojos sonrientes ojo sonrisa"
+    },
+    "1f601": {
+      "char": "😁",
+      "name": "beaming face with smiling eyes",
+      "keywords": "beaming face with smiling eyes eye grin smile olho rosto contente com olhos sorridentes rindo sorriso aberto cara radiante con ojos sonrientes ojo risa sonrisa"
+    },
+    "1f606": {
+      "char": "😆",
+      "name": "grinning squinting face",
+      "keywords": "face grinning squinting laugh mouth satisfied smile gargalhada olhos fechados rosto risonho com semicerrados sorriso abierta boca cara sonriendo con los ojos cerrados risa"
+    },
+    "1f605": {
+      "char": "😅",
+      "name": "grinning face with sweat",
+      "keywords": "cold face grinning with sweat open smile rosto risonho com gota de suor sorriso frio cara sonriendo con sudor frío risa"
+    },
+    "1f923": {
+      "char": "🤣",
+      "name": "rolling on the floor laughing",
+      "keywords": "face floor laugh rofl rolling on the laughing rotfl chão gargalhada rolando no de rir rosto cara revolviéndose la risa carcajada ojos cerrados"
+    },
+    "1f602": {
+      "char": "😂",
+      "name": "face with tears of joy",
+      "keywords": "face with tears of joy laugh tear alegria lágrimas rosto chorando de rir com cara llorando risa felicidad lágrima"
+    },
+    "1f642": {
+      "char": "🙂",
+      "name": "slightly smiling face",
+      "keywords": "face slightly smiling smile rosto levemente sorridente sorriso cara sonriendo ligeramente sonrisa"
+    },
+    "1f643": {
+      "char": "🙃",
+      "name": "upside-down face",
+      "keywords": "face upside-down rosto de cabeça para baixo invertido cara al revés"
+    },
+    "1f609": {
+      "char": "😉",
+      "name": "winking face",
+      "keywords": "face wink winking piscada rosto com olho piscando cara guiñando el ojo guiño"
+    },
+    "1f60a": {
+      "char": "😊",
+      "name": "smiling face with smiling eyes",
+      "keywords": "blush eye face smile smiling with eyes olhos sorrindo rosto sorridente com sorridentes ruborizar cara feliz con ojos sonrientes ojo rubor sonrisa"
+    },
+    "1f607": {
+      "char": "😇",
+      "name": "smiling face with halo",
+      "keywords": "angel face fantasy halo innocent smiling with anjo auréola inocente rosto sorridente com ángel cara sonriendo con aureola sonrisa"
+    },
+    "1f970": {
+      "char": "🥰",
+      "name": "smiling face with hearts",
+      "keywords": "adore crush hearts in love smiling face with amor apaixonado paixão rosto sorridente com 3 corações adorar cara sonriendo con corazones enamorada enamorado"
+    },
+    "1f60d": {
+      "char": "😍",
+      "name": "smiling face with heart-eyes",
+      "keywords": "eye face love smile smiling with heart-eyes amor coração olhos de rosto sorridente com cara sonriendo con ojos corazón sonrisa"
+    },
+    "1f929": {
+      "char": "🤩",
+      "name": "star-struck",
+      "keywords": "eyes face grinning star star-struck estrela gargalhando olhos rosto com olhar maravilhado cara sonriendo con estrellas sonrisa"
+    },
+    "1f618": {
+      "char": "😘",
+      "name": "face blowing a kiss",
+      "keywords": "face blowing a kiss beijo rosto mandando um beso cara lanzando un"
+    },
+    "1f617": {
+      "char": "😗",
+      "name": "kissing face",
+      "keywords": "face kiss kissing beijo rosto beijando beso cara besando"
+    },
+    "1f61a": {
+      "char": "😚",
+      "name": "kissing face with closed eyes",
+      "keywords": "closed eye face kiss kissing with eyes beijando com os olhos fechados rosto beso cara besando con los ojos cerrados cerrado ojo"
+    },
+    "1f619": {
+      "char": "😙",
+      "name": "kissing face with smiling eyes",
+      "keywords": "eye face kiss kissing with smiling eyes smile olhos sorrindo rosto beijando com sorridentes um sorriso beso cara besando con ojos sonrientes ojo sonrisa"
+    },
+    "1f60b": {
+      "char": "😋",
+      "name": "face savoring food",
+      "keywords": "delicious face savoring food savouring smile yum delicioso gostoso nham rosto saboreando comida sorriso cara hambre rico"
+    },
+    "1f61b": {
+      "char": "😛",
+      "name": "face with tongue",
+      "keywords": "face with tongue rosto com língua para fora mostrando a cara sacando la lengua"
+    },
+    "1f61c": {
+      "char": "😜",
+      "name": "winking face with tongue",
+      "keywords": "eye face joke tongue wink winking with brincadeira língua para fora com piscadela provocação rosto piscando e cara sacando la lengua y guiñando un ojo guiño"
+    },
+    "1f92a": {
+      "char": "🤪",
+      "name": "zany face",
+      "keywords": "eye goofy large small zany face excêntrico grande olho pequeno rosto bizarro cara de loco ojo pequeño"
+    },
+    "1f61d": {
+      "char": "😝",
+      "name": "squinting face with tongue",
+      "keywords": "eye face horrible squinting with tongue taste horrível língua para fora com os olhos fechados rosto semicerrados e cara con ojos cerrados y lengua fuera ojo sabor"
+    },
+    "1f911": {
+      "char": "🤑",
+      "name": "money-mouth face",
+      "keywords": "face money money-mouth mouth cifrão dinheiro na boca rico riqueza rosto com cifrões cara con lengua de dinero"
+    },
+    "1f917": {
+      "char": "🤗",
+      "name": "smiling face with open hands",
+      "keywords": "face hug hugging open hands smiling with abraço mãos abraçando rosto abrazo cara con manos abrazando sonrisa"
+    },
+    "1f92d": {
+      "char": "🤭",
+      "name": "face with hand over mouth",
+      "keywords": "face with hand over mouth whoops ops rosto com a mão sobre boca cara con mano la ostras uy vaya"
+    },
+    "1f92b": {
+      "char": "🤫",
+      "name": "shushing face",
+      "keywords": "quiet shush shushing face quieto rosto fazendo sinal de silêncio callado cara pidiendo silencio"
+    },
+    "1f914": {
+      "char": "🤔",
+      "name": "thinking face",
+      "keywords": "face thinking mão no queixo pensando rosto pensativo cara pensativa duda"
+    },
+    "1f610": {
+      "char": "😐",
+      "name": "neutral face",
+      "keywords": "deadpan face meh neutral neutro rosto sem comentários emoção cara inexpresivo"
+    },
+    "1f611": {
+      "char": "😑",
+      "name": "expressionless face",
+      "keywords": "expressionless face inexpressive meh unexpressive rosto inexpressivo sem expressão cara sin expresión inexpresión inexpresiva inexpresivo"
+    },
+    "1f636": {
+      "char": "😶",
+      "name": "face without mouth",
+      "keywords": "face without mouth quiet silent calado quieto rosto sem boca callado cara sin silencio"
+    },
+    "1f60f": {
+      "char": "😏",
+      "name": "smirking face",
+      "keywords": "face smirk smirking rosto com sorriso maroto malicioso cara sonriendo con superioridad listillo"
+    },
+    "1f612": {
+      "char": "😒",
+      "name": "unamused face",
+      "keywords": "face unamused unhappy blasé rosto aborrecido de quem não achou graça cara desaprobación insatisfacción rechazo"
+    },
+    "1f644": {
+      "char": "🙄",
+      "name": "face with rolling eyes",
+      "keywords": "eyeroll eyes face with rolling olhos revirando os rosto com revirados cara con ojos en blanco frustración vueltos"
+    },
+    "1f62c": {
+      "char": "😬",
+      "name": "grimacing face",
+      "keywords": "face grimace grimacing fazendo careta rosto expressando desagrado cara haciendo una mueca"
+    },
+    "1f925": {
+      "char": "🤥",
+      "name": "lying face",
+      "keywords": "face lie lying pinocchio mentindo mentira mentiroso pinóquio rosto de cara nariz pinocho"
+    },
+    "1f60c": {
+      "char": "😌",
+      "name": "relieved face",
+      "keywords": "face relieved alívio rosto aliviado cara de alivio"
+    },
+    "1f614": {
+      "char": "😔",
+      "name": "pensive face",
+      "keywords": "dejected face pensive deprimido desanimado rosto alicaído cara desanimada pensativo"
+    },
+    "1f62a": {
+      "char": "😪",
+      "name": "sleepy face",
+      "keywords": "face good night sleep sleepy rosto com sono sonolento cara de sueño dormir"
+    },
+    "1f924": {
+      "char": "🤤",
+      "name": "drooling face",
+      "keywords": "drooling face babando babar rosto baba babeando cara"
+    },
+    "1f634": {
+      "char": "😴",
+      "name": "sleeping face",
+      "keywords": "face good night sleep sleeping zzz rosto dormindo sono cara durmiendo dormido sueño"
+    },
+    "1f637": {
+      "char": "😷",
+      "name": "face with medical mask",
+      "keywords": "cold doctor face with medical mask sick doente gripado máscara médica resfriado rosto com cara con mascarilla enfermo malo"
+    },
+    "1f912": {
+      "char": "🤒",
+      "name": "face with thermometer",
+      "keywords": "face with thermometer ill sick de cama febre febril rosto com termômetro cara con termómetro enfermo malo"
+    },
+    "1f915": {
+      "char": "🤕",
+      "name": "face with head-bandage",
+      "keywords": "bandage face with head-bandage hurt injury acidentado ferimento rosto com atadura na cabeça curativos machucado cara con la cabeza vendada dolor herida venda"
+    },
+    "1f922": {
+      "char": "🤢",
+      "name": "nauseated face",
+      "keywords": "face nauseated vomit enjoado enjoo rosto nauseado vômito cara de náuseas vomitar"
+    },
+    "1f92e": {
+      "char": "🤮",
+      "name": "face vomiting",
+      "keywords": "face vomiting puke sick vomit doente rosto vomitando vômito cara enfermo malo vomitar"
+    },
+    "1f927": {
+      "char": "🤧",
+      "name": "sneezing face",
+      "keywords": "face gesundheit sneeze sneezing espirrando espirro rosto cara estornudando estornudar estornudo pañuelo"
+    },
+    "1f975": {
+      "char": "🥵",
+      "name": "hot face",
+      "keywords": "feverish heat stroke hot face red-faced sweating febril insolação quente rosto fervendo de calor vermelho suando cara con roja fiebre golpe sudor"
+    },
+    "1f976": {
+      "char": "🥶",
+      "name": "cold face",
+      "keywords": "blue-faced cold face freezing frostbite icicles congelando frio gélido glacial rosto azul de gelado cara con frío congelada congelado helado"
+    },
+    "1f974": {
+      "char": "🥴",
+      "name": "woozy face",
+      "keywords": "dizzy intoxicated tipsy uneven eyes wavy mouth woozy face bêbado boca ondulada embriagado intoxicado olhos tortos rosto atontado cara de grogui entonado mareado"
+    },
+    "1f635": {
+      "char": "😵",
+      "name": "face with crossed-out eyes",
+      "keywords": "crossed-out eyes dead face with knocked out rosto atordoado cara mareada mareo"
+    },
+    "1f92f": {
+      "char": "🤯",
+      "name": "exploding head",
+      "keywords": "exploding head mind blown shocked cabeça explodindo chocado cabeza explotando explosión"
+    },
+    "1f615": {
+      "char": "😕",
+      "name": "confused face",
+      "keywords": "confused face meh confuso indeciso rosto cara de confusión"
+    },
+    "1f61f": {
+      "char": "😟",
+      "name": "worried face",
+      "keywords": "face worried rosto preocupado cara preocupada preocupación"
+    },
+    "1f641": {
+      "char": "🙁",
+      "name": "slightly frowning face",
+      "keywords": "face frown slightly frowning rosto meio triste tristinho cara con el ceño ligeramente fruncido"
+    },
+    "1f62e": {
+      "char": "😮",
+      "name": "face with open mouth",
+      "keywords": "face with open mouth sympathy boca aberta empatia rosto com cara con la abierta"
+    },
+    "1f62f": {
+      "char": "😯",
+      "name": "hushed face",
+      "keywords": "face hushed stunned surprised espantado rosto surpreso alucinado cara estupefacta estupefacto sorprendido"
+    },
+    "1f632": {
+      "char": "😲",
+      "name": "astonished face",
+      "keywords": "astonished face shocked totally chocado estupefato rosto espantado totalmente alucinado asombrado cara asombrada pasmado"
+    },
+    "1f633": {
+      "char": "😳",
+      "name": "flushed face",
+      "keywords": "dazed face flushed atordoado rosto ruborizado cara sonrojada colorado sonrojado"
+    },
+    "1f97a": {
+      "char": "🥺",
+      "name": "pleading face",
+      "keywords": "begging mercy pleading face puppy eyes implorando olhar de cachorrinho perdão rosto cara suplicante implorar ojos adorables piedad por favor"
+    },
+    "1f626": {
+      "char": "😦",
+      "name": "frowning face with open mouth",
+      "keywords": "face frown frowning with open mouth aberta boca rosto assustado franzido com abierta cara con el ceño fruncido y la"
+    },
+    "1f627": {
+      "char": "😧",
+      "name": "anguished face",
+      "keywords": "anguished face rosto angustiado sofrendo angustia cara angustiada"
+    },
+    "1f628": {
+      "char": "😨",
+      "name": "fearful face",
+      "keywords": "face fear fearful scared assustado rosto amedrontado asustado cara asustada miedo miedoso"
+    },
+    "1f630": {
+      "char": "😰",
+      "name": "anxious face with sweat",
+      "keywords": "anxious face with sweat blue cold rushed boca aberta rosto ansioso com gota de suor azul frio ansiedad cara con y sudor frío"
+    },
+    "1f625": {
+      "char": "😥",
+      "name": "sad but relieved face",
+      "keywords": "disappointed face relieved sad but whew aliviado decepcionado mas rosto triste ufa cara pero aliviada menos mal"
+    },
+    "1f622": {
+      "char": "😢",
+      "name": "crying face",
+      "keywords": "cry crying face sad tear lágrimas rosto chorando triste cara llorando lágrima llorar"
+    },
+    "1f62d": {
+      "char": "😭",
+      "name": "loudly crying face",
+      "keywords": "cry face loudly crying sad sob tear chorando chorar lágrimas rosto aos berros cara llorando fuerte lágrima llorar triste"
+    },
+    "1f631": {
+      "char": "😱",
+      "name": "face screaming in fear",
+      "keywords": "face screaming in fear munch scared scream assustado gritando de medo rosto temeroso asustado cara miedo pánico"
+    },
+    "1f616": {
+      "char": "😖",
+      "name": "confounded face",
+      "keywords": "confounded face perplexo rosto cara de frustración frustrado"
+    },
+    "1f623": {
+      "char": "😣",
+      "name": "persevering face",
+      "keywords": "face persevere persevering perseverança perseverante rosto cara desesperada desesperación frustración"
+    },
+    "1f61e": {
+      "char": "😞",
+      "name": "disappointed face",
+      "keywords": "disappointed face desapontamento rosto decepcionado desapontado cara decepcionada decepción"
+    },
+    "1f613": {
+      "char": "😓",
+      "name": "downcast face with sweat",
+      "keywords": "cold downcast face with sweat rosto cabisbaixo com gota de suor frio cara con sudor frío"
+    },
+    "1f629": {
+      "char": "😩",
+      "name": "weary face",
+      "keywords": "face tired weary cansado rosto aborrecido desolado agotado cara agotada"
+    },
+    "1f62b": {
+      "char": "😫",
+      "name": "tired face",
+      "keywords": "face tired cansado exausto rosto cara cansada"
+    },
+    "1f624": {
+      "char": "😤",
+      "name": "face with steam from nose",
+      "keywords": "face with steam from nose triumph won rosto soltando vapor pelo nariz triunfo vitória cabreo cara resoplando enfado"
+    },
+    "1f620": {
+      "char": "😠",
+      "name": "angry face",
+      "keywords": "anger angry face mad irado rosto zangado cara enfadada enfadado histérico"
+    },
+    "1f621": {
+      "char": "😡",
+      "name": "enraged face",
+      "keywords": "angry enraged face mad pouting rage red irado rosto furioso vermelho zangado cabreo cara cabreada enfadado furia"
+    },
+    "1f92c": {
+      "char": "🤬",
+      "name": "face with symbols on mouth",
+      "keywords": "face with symbols on mouth swearing rosto com símbolos na boca xingando cara con en la maldecir palabrota símbolo"
+    },
+    "1f608": {
+      "char": "😈",
+      "name": "smiling face with horns",
+      "keywords": "face fairy tale fantasy horns smile smiling with chifres rosto sorridente com sorriso cara sonriendo con cuernos demonio sonrisa"
+    },
+    "1f47f": {
+      "char": "👿",
+      "name": "angry face with horns",
+      "keywords": "angry face with horns demon devil fantasy imp demônio diabo rosto zangado com chifres cara enfadada con cuernos demonio diablo"
+    },
+    "1f480": {
+      "char": "💀",
+      "name": "skull",
+      "keywords": "death face fairy tale monster skull caveira conto de fadas corpo morte calavera cara cuento monstruo muerte"
+    },
+    "1f4a9": {
+      "char": "💩",
+      "name": "pile of poo",
+      "keywords": "dung face monster pile of poo poop cocô estrume excremento fezes pilha de caca con ojos cómic mierda mojón"
+    },
+    "1f44d": {
+      "char": "👍",
+      "name": "thumbs up",
+      "keywords": "+1 hand thumb thumbs up dedão mão para cima polegar sinal arriba mano pulgar hacia señal"
+    },
+    "1f44e": {
+      "char": "👎",
+      "name": "thumbs down",
+      "keywords": "-1 down hand thumb thumbs dedão mão para baixo polegar sinal abajo mano pulgar hacia señal"
+    },
+    "1f44c": {
+      "char": "👌",
+      "name": "OK hand",
+      "keywords": "hand ok mão sinalizando sinal de aprobación mano señal con la"
+    },
+    "1f44f": {
+      "char": "👏",
+      "name": "clapping hands",
+      "keywords": "clap clapping hands hand aplauso mãos aplaudindo sinal aplaudir manos aplaudiendo palmas señal"
+    },
+    "1f64c": {
+      "char": "🙌",
+      "name": "raising hands",
+      "keywords": "celebration gesture hand hooray raised raising hands ambas as mãos comemoração levantando para comemorar cima celebración gesto hurra mano manos levantadas celebrando"
+    },
+    "1f450": {
+      "char": "👐",
+      "name": "open hands",
+      "keywords": "hand open hands abertas mão mãos sinal de abiertas manos"
+    },
+    "1f91d": {
+      "char": "🤝",
+      "name": "handshake",
+      "keywords": "agreement hand handshake meeting shake aperto de mãos combinado cumprimento acuerdo apretón manos"
+    },
+    "1f64f": {
+      "char": "🙏",
+      "name": "folded hands",
+      "keywords": "ask folded hands hand high 5 five please pray thanks gesto mão mãos juntas reza rezando rezar gracias mano manos en oración orar por favor"
+    },
+    "270c": {
+      "char": "✌",
+      "name": "victory hand",
+      "keywords": "hand v victory mão com sinal de vitória em sim mano con señal victoria"
+    },
+    "1f91e": {
+      "char": "🤞",
+      "name": "crossed fingers",
+      "keywords": "cross crossed fingers finger hand luck cruzados dedos mão sorte cruzar mano suerte"
+    },
+    "1f918": {
+      "char": "🤘",
+      "name": "sign of the horns",
+      "keywords": "finger hand horns rock-on sign of the chifres dedos mão saudação do rock cuernos dedo mano haciendo el signo de"
+    },
+    "1f919": {
+      "char": "🤙",
+      "name": "call me hand",
+      "keywords": "call me hand hang loose shaka ligar sinal liga llamar mano haciendo el gesto de meñique pulgar"
+    },
+    "1f448": {
+      "char": "👈",
+      "name": "backhand index pointing left",
+      "keywords": "backhand index pointing left finger hand point costas da mão dedo apontado para esquerda indicador dorso com apontando a de mano con índice la izquierda"
+    },
+    "1f449": {
+      "char": "👉",
+      "name": "backhand index pointing right",
+      "keywords": "backhand index pointing right finger hand point costas da mão dedo apontado para direita indicador dorso com apontando a derecha de mano con índice la"
+    },
+    "1f446": {
+      "char": "👆",
+      "name": "backhand index pointing up",
+      "keywords": "backhand index pointing up finger hand point costas da mão dedo apontado para cima indicador dorso com apontando apuntar arriba de mano con índice hacia"
+    },
+    "1f447": {
+      "char": "👇",
+      "name": "backhand index pointing down",
+      "keywords": "backhand index pointing down finger hand point costas da mão dedo apontado para baixo indicador dorso com apontando abajo apuntar de mano con índice hacia"
+    },
+    "261d": {
+      "char": "☝",
+      "name": "index pointing up",
+      "keywords": "finger hand index pointing up point dedo apontando para cima indicador mão apuntar arriba índice hacia mano"
+    },
+    "270b": {
+      "char": "✋",
+      "name": "raised hand",
+      "keywords": "hand high 5 five raised mão erguida levantada choca esos cinco mano"
+    },
+    "1f44a": {
+      "char": "👊",
+      "name": "oncoming fist",
+      "keywords": "clenched fist hand oncoming punch mão punho soco puñetazo puño cerrado"
+    },
+    "270a": {
+      "char": "✊",
+      "name": "raised fist",
+      "keywords": "clenched fist hand punch raised punho erguido levantado cerrado mano puñetazo puño en alto"
+    },
+    "1f91b": {
+      "char": "🤛",
+      "name": "left-facing fist",
+      "keywords": "fist left-facing leftwards esquerdo punho soco izquierda puño hacia la"
+    },
+    "1f91c": {
+      "char": "🤜",
+      "name": "right-facing fist",
+      "keywords": "fist right-facing rightwards direito punho soco derecha puño hacia la"
+    },
+    "1f4aa": {
+      "char": "💪",
+      "name": "flexed biceps",
+      "keywords": "biceps comic flex flexed muscle bíceps contraído engraçado forte músculo cómic flexionado fuerte"
+    },
+    "1f595": {
+      "char": "🖕",
+      "name": "middle finger",
+      "keywords": "finger hand middle dedo do meio gesto ofensivo mão corazón hacia arriba mano peineta"
+    },
+    "270d": {
+      "char": "✍",
+      "name": "writing hand",
+      "keywords": "hand write writing caneta escrevendo à mão escribir lápiz mano escribiendo"
+    },
+    "1f64b": {
+      "char": "🙋",
+      "name": "person raising hand",
+      "keywords": "gesture hand happy person raising raised feliz gesto levantando a mão pessoa levantar mano persona con la levantada"
+    },
+    "1f926": {
+      "char": "🤦",
+      "name": "person facepalming",
+      "keywords": "disbelief exasperation face palm person facepalming decepção desapontamento pessoa dececionada decepcionada facepalm frente incredulidad mano persona con la en"
+    },
+    "1f937": {
+      "char": "🤷",
+      "name": "person shrugging",
+      "keywords": "doubt ignorance indifference person shrugging shrug dar de ombros ignorância indiferença pessoa dando duda encogerse hombros indiferencia persona encogida"
+    },
+    "1f468": {
+      "char": "👨",
+      "name": "man",
+      "keywords": "adult man adulto homem hombre"
+    },
+    "1f469": {
+      "char": "👩",
+      "name": "woman",
+      "keywords": "adult woman adulta mulher mujer"
+    },
+    "1f476": {
+      "char": "👶",
+      "name": "baby",
+      "keywords": "baby young bebê neném bebé joven niño"
+    },
+    "1f9d2": {
+      "char": "🧒",
+      "name": "child",
+      "keywords": "child gender-neutral unspecified gender young criança crío género infante joven neutro"
+    },
+    "1f466": {
+      "char": "👦",
+      "name": "boy",
+      "keywords": "boy young jovem menino joven niño"
+    },
+    "1f467": {
+      "char": "👧",
+      "name": "girl",
+      "keywords": "girl virgo young zodiac garota menina chica joven niña"
+    },
+    "1f474": {
+      "char": "👴",
+      "name": "old man",
+      "keywords": "adult man old adulto homem idoso anciano hombre mayor"
+    },
+    "1f475": {
+      "char": "👵",
+      "name": "old woman",
+      "keywords": "adult old woman adulta idosa mulher anciana mayor mujer"
+    },
+    "1f640": {
+      "char": "🙀",
+      "name": "weary cat",
+      "keywords": "cat face oh surprised weary gato muito surpreso rosto de desolado cara asustado pánico preocupación sorpresa"
+    },
+    "1f63b": {
+      "char": "😻",
+      "name": "smiling cat with heart-eyes",
+      "keywords": "cat eye face heart love smile smiling with heart-eyes amor coração gato olho rosto de sorridente com olhos sorriso cara corazón enamorado sonriendo con ojos"
+    },
+    "2764": {
+      "char": "❤",
+      "name": "red heart",
+      "keywords": "heart red amor coração vermelho corazón emoción rojo"
+    },
+    "1f9e1": {
+      "char": "🧡",
+      "name": "orange heart",
+      "keywords": "orange heart coração emoção laranja corazón emoción naranja"
+    },
+    "1f49b": {
+      "char": "💛",
+      "name": "yellow heart",
+      "keywords": "yellow heart amarelo coração emoção amarillo corazón emoción"
+    },
+    "1f49a": {
+      "char": "💚",
+      "name": "green heart",
+      "keywords": "green heart coração emoção verde corazón emoción"
+    },
+    "1f499": {
+      "char": "💙",
+      "name": "blue heart",
+      "keywords": "blue heart azul coração emoção corazón emoción"
+    },
+    "1f49c": {
+      "char": "💜",
+      "name": "purple heart",
+      "keywords": "purple heart coração emoção roxo corazón emoción morado"
+    },
+    "1f5a4": {
+      "char": "🖤",
+      "name": "black heart",
+      "keywords": "black heart evil wicked coração negro preto corazón"
+    },
+    "1f90d": {
+      "char": "🤍",
+      "name": "white heart",
+      "keywords": "heart white branco coração blanco corazón emoción"
+    },
+    "1f494": {
+      "char": "💔",
+      "name": "broken heart",
+      "keywords": "break broken heart coração partido decepção amorosa emoção rompimento corazón emoción roto"
+    },
+    "1f495": {
+      "char": "💕",
+      "name": "two hearts",
+      "keywords": "love two hearts amantes amor dois corações emoção corazón dos corazones"
+    },
+    "1f49e": {
+      "char": "💞",
+      "name": "revolving hearts",
+      "keywords": "revolving hearts corações girando corazón corazones giratorios giratorio"
+    },
+    "1f493": {
+      "char": "💓",
+      "name": "beating heart",
+      "keywords": "beating heart heartbeat pulsating amor batendo coração emoção pulsante corazón latiendo emoción latido"
+    },
+    "1f497": {
+      "char": "💗",
+      "name": "growing heart",
+      "keywords": "excited growing heart nervous pulse amor coração crescendo emoção nervosismo corazón creciente emocionado latido nervioso"
+    },
+    "1f496": {
+      "char": "💖",
+      "name": "sparkling heart",
+      "keywords": "excited sparkle sparkling heart amor brilhante coração emoção emocionante brillante corazón emoción"
+    },
+    "1f498": {
+      "char": "💘",
+      "name": "heart with arrow",
+      "keywords": "arrow cupid heart with amor coração com flecha emoção corazón con emoción"
+    },
+    "1f49d": {
+      "char": "💝",
+      "name": "heart with ribbon",
+      "keywords": "heart with ribbon valentine coração com fita dia dos namorados emoção corazón con lazo emoción san valentín"
+    },
+    "1f436": {
+      "char": "🐶",
+      "name": "dog face",
+      "keywords": "dog face pet animal cachorro rosto de cara perro mascota"
+    },
+    "1f431": {
+      "char": "🐱",
+      "name": "cat face",
+      "keywords": "cat face pet animal gato rosto de cara mascota"
+    },
+    "1f42d": {
+      "char": "🐭",
+      "name": "mouse face",
+      "keywords": "face mouse animal camundongo rosto de cara ratón"
+    },
+    "1f439": {
+      "char": "🐹",
+      "name": "hamster",
+      "keywords": "face hamster pet animal rosto de cara hámster mascota"
+    },
+    "1f430": {
+      "char": "🐰",
+      "name": "rabbit face",
+      "keywords": "bunny face pet rabbit animal coelho rosto de cara conejo mascota"
+    },
+    "1f98a": {
+      "char": "🦊",
+      "name": "fox",
+      "keywords": "face fox raposa rosto de cara zorro"
+    },
+    "1f43b": {
+      "char": "🐻",
+      "name": "bear",
+      "keywords": "bear face animal rosto de urso cara oso"
+    },
+    "1f43c": {
+      "char": "🐼",
+      "name": "panda",
+      "keywords": "face panda animal rosto de cara oso"
+    },
+    "1f428": {
+      "char": "🐨",
+      "name": "koala",
+      "keywords": "face koala marsupial animal coala cara"
+    },
+    "1f42f": {
+      "char": "🐯",
+      "name": "tiger face",
+      "keywords": "face tiger animal rosto de tigre cara"
+    },
+    "1f981": {
+      "char": "🦁",
+      "name": "lion",
+      "keywords": "face leo lion zodiac animal leão rosto de zodíaco cara león zodiaco"
+    },
+    "1f42e": {
+      "char": "🐮",
+      "name": "cow face",
+      "keywords": "cow face animal rosto de vaca cara"
+    },
+    "1f437": {
+      "char": "🐷",
+      "name": "pig face",
+      "keywords": "face pig animal porco rosto de cara cerdo gorrino"
+    },
+    "1f438": {
+      "char": "🐸",
+      "name": "frog",
+      "keywords": "face frog animal rosto de sapo cara rana"
+    },
+    "1f435": {
+      "char": "🐵",
+      "name": "monkey face",
+      "keywords": "face monkey animal macaco rosto de cara mono"
+    },
+    "1f414": {
+      "char": "🐔",
+      "name": "chicken",
+      "keywords": "bird chicken ave galinha gallina gallinácea pollo"
+    },
+    "1f427": {
+      "char": "🐧",
+      "name": "penguin",
+      "keywords": "bird penguin animal pinguim ave pingüino"
+    },
+    "1f426": {
+      "char": "🐦",
+      "name": "bird",
+      "keywords": "bird animal pássaro ave pajarillo pájaro"
+    },
+    "1f424": {
+      "char": "🐤",
+      "name": "baby chick",
+      "keywords": "baby bird chick ave filhote galinha pintinho de perfil pinto pollito pollo polluelo"
+    },
+    "1f986": {
+      "char": "🦆",
+      "name": "duck",
+      "keywords": "bird duck pássaro pato ave"
+    },
+    "1f985": {
+      "char": "🦅",
+      "name": "eagle",
+      "keywords": "bird eagle águia pássaro águila ave"
+    },
+    "1f989": {
+      "char": "🦉",
+      "name": "owl",
+      "keywords": "bird owl wise coruja pássaro sabedoria ave búho lechuza pájaro"
+    },
+    "1f987": {
+      "char": "🦇",
+      "name": "bat",
+      "keywords": "bat vampire animal morcego vampiro murciélago"
+    },
+    "1f43a": {
+      "char": "🐺",
+      "name": "wolf",
+      "keywords": "face wolf animal lobo rosto de cara"
+    },
+    "1f417": {
+      "char": "🐗",
+      "name": "boar",
+      "keywords": "boar pig animal javali cerdo salvaje jabalí"
+    },
+    "1f434": {
+      "char": "🐴",
+      "name": "horse face",
+      "keywords": "face horse animal cavalo rosto de caballo cara"
+    },
+    "1f984": {
+      "char": "🦄",
+      "name": "unicorn",
+      "keywords": "face unicorn rosto de unicórnio cara unicornio"
+    },
+    "1f41d": {
+      "char": "🐝",
+      "name": "honeybee",
+      "keywords": "bee honeybee insect abelha inseto abeja insecto miel"
+    },
+    "1f41b": {
+      "char": "🐛",
+      "name": "bug",
+      "keywords": "bug insect animal centopeia inseto lagarta bicho gusano insecto"
+    },
+    "1f98b": {
+      "char": "🦋",
+      "name": "butterfly",
+      "keywords": "butterfly insect pretty beleza borboleta inseto bonito insecto mariposa"
+    },
+    "1f40c": {
+      "char": "🐌",
+      "name": "snail",
+      "keywords": "snail animal caracol caracola molusco"
+    },
+    "1f41e": {
+      "char": "🐞",
+      "name": "lady beetle",
+      "keywords": "beetle insect lady ladybird ladybug inseto joaninha cochinilla insecto mariquita"
+    },
+    "1f41c": {
+      "char": "🐜",
+      "name": "ant",
+      "keywords": "ant insect formiga inseto antenas hormiga insecto"
+    },
+    "1f577": {
+      "char": "🕷",
+      "name": "spider",
+      "keywords": "insect spider aranha inseto araña insecto"
+    },
+    "1f422": {
+      "char": "🐢",
+      "name": "turtle",
+      "keywords": "terrapin tortoise turtle animal tartaruga galápago tortuga"
+    },
+    "1f40d": {
+      "char": "🐍",
+      "name": "snake",
+      "keywords": "bearer ophiuchus serpent snake zodiac animal cobra réptil serpente culebra reptil serpiente víbora"
+    },
+    "1f419": {
+      "char": "🐙",
+      "name": "octopus",
+      "keywords": "octopus animal polvo cefalópodo octópodo pulpo"
+    },
+    "1f41f": {
+      "char": "🐟",
+      "name": "fish",
+      "keywords": "fish pisces zodiac animal peixe peixes zodíaco pececillo pescado pez piscis zodiaco"
+    },
+    "1f420": {
+      "char": "🐠",
+      "name": "tropical fish",
+      "keywords": "fish tropical animal peixe pez"
+    },
+    "1f42c": {
+      "char": "🐬",
+      "name": "dolphin",
+      "keywords": "dolphin flipper animal golfinho cetáceo delfín"
+    },
+    "1f433": {
+      "char": "🐳",
+      "name": "spouting whale",
+      "keywords": "face spouting whale animal baleia esguichando água esguicho ballena soltando un chorro de agua"
+    },
+    "1f40b": {
+      "char": "🐋",
+      "name": "whale",
+      "keywords": "whale animal baleia ballena cachalote cetáceo"
+    },
+    "1f335": {
+      "char": "🌵",
+      "name": "cactus",
+      "keywords": "cactus plant cacto planta"
+    },
+    "1f332": {
+      "char": "🌲",
+      "name": "evergreen tree",
+      "keywords": "evergreen tree árvore conífera árbol de hoja perenne"
+    },
+    "1f333": {
+      "char": "🌳",
+      "name": "deciduous tree",
+      "keywords": "deciduous shedding tree árvore caidiça desfolha árbol de hoja caduca caducifolio"
+    },
+    "1f340": {
+      "char": "🍀",
+      "name": "four leaf clover",
+      "keywords": "4 clover four four-leaf leaf folhas quatro trevo de suerte trébol cuatro hojas"
+    },
+    "1f338": {
+      "char": "🌸",
+      "name": "cherry blossom",
+      "keywords": "blossom cherry flower cereja cerejeira flor de cerezo"
+    },
+    "1f337": {
+      "char": "🌷",
+      "name": "tulip",
+      "keywords": "flower tulip flor tulipa tulipán"
+    },
+    "1f33b": {
+      "char": "🌻",
+      "name": "sunflower",
+      "keywords": "flower sun sunflower flor girassol girasol sol"
+    },
+    "1f33c": {
+      "char": "🌼",
+      "name": "blossom",
+      "keywords": "blossom flower flor florescer"
+    },
+    "1f339": {
+      "char": "🌹",
+      "name": "rose",
+      "keywords": "flower rose flor rosa"
+    },
+    "1f33a": {
+      "char": "🌺",
+      "name": "hibiscus",
+      "keywords": "flower hibiscus flor hibisco de"
+    },
+    "1f308": {
+      "char": "🌈",
+      "name": "rainbow",
+      "keywords": "rain rainbow arco-íris chuva clima arcoíris colores lluvia"
+    },
+    "2b50": {
+      "char": "⭐",
+      "name": "star",
+      "keywords": "star estrela branca média estelar estrella"
+    },
+    "1f31f": {
+      "char": "🌟",
+      "name": "glowing star",
+      "keywords": "glittery glow glowing star shining sparkle brilhante brilho cintilante estrela luminosa reluzente brillante estrella resplandeciente"
+    },
+    "2600": {
+      "char": "☀",
+      "name": "sun",
+      "keywords": "bright rays sun sunny clima dia claro raios sol solar tempo espacio rayos soleado"
+    },
+    "26c5": {
+      "char": "⛅",
+      "name": "sun behind cloud",
+      "keywords": "cloud sun behind nuvem sol com nuvens por trás das nube con nubes detrás de una"
+    },
+    "2601": {
+      "char": "☁",
+      "name": "cloud",
+      "keywords": "cloud weather clima nuvem nube tiempo"
+    },
+    "1f327": {
+      "char": "🌧",
+      "name": "cloud with rain",
+      "keywords": "cloud with rain chuva clima nuvem com lluvia nube con"
+    },
+    "26a1": {
+      "char": "⚡",
+      "name": "high voltage",
+      "keywords": "danger electric high voltage lightning zap alta perigo de tensão sinal alto voltaje electricidad peligro señal"
+    },
+    "1f525": {
+      "char": "🔥",
+      "name": "fire",
+      "keywords": "fire flame tool chama fogo fuego llama"
+    },
+    "1f34f": {
+      "char": "🍏",
+      "name": "green apple",
+      "keywords": "apple fruit green fruta maçã verde manzana poma"
+    },
+    "1f34e": {
+      "char": "🍎",
+      "name": "red apple",
+      "keywords": "apple fruit red fruta maçã vermelha manzana poma roja"
+    },
+    "1f350": {
+      "char": "🍐",
+      "name": "pear",
+      "keywords": "fruit pear fruta pera perilla"
+    },
+    "1f34a": {
+      "char": "🍊",
+      "name": "tangerine",
+      "keywords": "fruit orange tangerine fruta laranja tangerina mandarina naranja"
+    },
+    "1f34b": {
+      "char": "🍋",
+      "name": "lemon",
+      "keywords": "citrus fruit lemon cítrico fruta limão siciliano citrón limón"
+    },
+    "1f34c": {
+      "char": "🍌",
+      "name": "banana",
+      "keywords": "banana fruit fruta plátano"
+    },
+    "1f349": {
+      "char": "🍉",
+      "name": "watermelon",
+      "keywords": "fruit watermelon fruta melancia sandía"
+    },
+    "1f347": {
+      "char": "🍇",
+      "name": "grapes",
+      "keywords": "fruit grape grapes fruta uvas agracejo racimo uva"
+    },
+    "1f353": {
+      "char": "🍓",
+      "name": "strawberry",
+      "keywords": "berry fruit strawberry fruta frutas vermelhas morango fresa fresón"
+    },
+    "1f348": {
+      "char": "🍈",
+      "name": "melon",
+      "keywords": "fruit melon fruta melão melón"
+    },
+    "1f352": {
+      "char": "🍒",
+      "name": "cherries",
+      "keywords": "berries cherries cherry fruit red cereja fruta frutas vermelhas cereza cerezas guindas"
+    },
+    "1f351": {
+      "char": "🍑",
+      "name": "peach",
+      "keywords": "fruit peach fruta pêssego durazno melocotón"
+    },
+    "1f34d": {
+      "char": "🍍",
+      "name": "pineapple",
+      "keywords": "fruit pineapple abacaxi fruta ananás piña"
+    },
+    "1f965": {
+      "char": "🥥",
+      "name": "coconut",
+      "keywords": "coconut palm piña colada coco fruta palmera"
+    },
+    "1f95d": {
+      "char": "🥝",
+      "name": "kiwi fruit",
+      "keywords": "food fruit kiwi comida fruta"
+    },
+    "1f345": {
+      "char": "🍅",
+      "name": "tomato",
+      "keywords": "fruit tomato vegetable fruta fruto legume tomate ensalada verdura"
+    },
+    "1f346": {
+      "char": "🍆",
+      "name": "eggplant",
+      "keywords": "aubergine eggplant vegetable berinjela legume berenjena fruto verdura"
+    },
+    "1f955": {
+      "char": "🥕",
+      "name": "carrot",
+      "keywords": "carrot food vegetable cenoura comida legume verdura zanahoria"
+    },
+    "1f33d": {
+      "char": "🌽",
+      "name": "ear of corn",
+      "keywords": "corn ear of maize maze espiga de milho maíz mazorca mijo"
+    },
+    "1f336": {
+      "char": "🌶",
+      "name": "hot pepper",
+      "keywords": "hot pepper apimentado pimenta tempero chile picante planta"
+    },
+    "1f954": {
+      "char": "🥔",
+      "name": "potato",
+      "keywords": "food potato vegetable batata comida legume papa patata verdura"
+    },
+    "1f35e": {
+      "char": "🍞",
+      "name": "bread",
+      "keywords": "bread loaf pão de forma pan molde rebanada tostada"
+    },
+    "1f950": {
+      "char": "🥐",
+      "name": "croissant",
+      "keywords": "bread breakfast croissant food french roll comida pão bollo cruasán francés"
+    },
+    "1f956": {
+      "char": "🥖",
+      "name": "baguette bread",
+      "keywords": "baguette bread food french baguete bisnaga comida pão barra francés pan"
+    },
+    "1f9c0": {
+      "char": "🧀",
+      "name": "cheese wedge",
+      "keywords": "cheese wedge queijo suíço cuña de queso trozo"
+    },
+    "1f357": {
+      "char": "🍗",
+      "name": "poultry leg",
+      "keywords": "bone chicken drumstick leg poultry aves coxa de frango coxinha muslo pollo restaurante"
+    },
+    "1f356": {
+      "char": "🍖",
+      "name": "meat on bone",
+      "keywords": "bone meat on carne no osso con hueso restaurante"
+    },
+    "1f32d": {
+      "char": "🌭",
+      "name": "hot dog",
+      "keywords": "frankfurter hot dog hotdog sausage cachorro-quente pão com salsicha perrito caliente salchicha"
+    },
+    "1f354": {
+      "char": "🍔",
+      "name": "hamburger",
+      "keywords": "burger hamburger búrguer hambúrguer hamburguesa"
+    },
+    "1f35f": {
+      "char": "🍟",
+      "name": "french fries",
+      "keywords": "french fries batata frita fritas papas patatas restaurante"
+    },
+    "1f355": {
+      "char": "🍕",
+      "name": "pizza",
+      "keywords": "cheese pizza slice fatia de porción restaurante"
+    },
+    "1f32e": {
+      "char": "🌮",
+      "name": "taco",
+      "keywords": "mexican taco comida mexicana mexicano"
+    },
+    "1f32f": {
+      "char": "🌯",
+      "name": "burrito",
+      "keywords": "burrito mexican wrap comida mexicana mexicano tex mex"
+    },
+    "1f959": {
+      "char": "🥙",
+      "name": "stuffed flatbread",
+      "keywords": "falafel flatbread food gyro kebab stuffed comida pão recheado recheio wrap durum pan de pita relleno"
+    },
+    "1f35c": {
+      "char": "🍜",
+      "name": "steaming bowl",
+      "keywords": "bowl noodle ramen steaming lámen tigela fideos calientes chinos tazón de"
+    },
+    "1f35b": {
+      "char": "🍛",
+      "name": "curry rice",
+      "keywords": "curry rice arroz com e con restaurante"
+    },
+    "1f363": {
+      "char": "🍣",
+      "name": "sushi",
+      "keywords": "sushi comida japonesa restaurante"
+    },
+    "1f371": {
+      "char": "🍱",
+      "name": "bento box",
+      "keywords": "bento box bentô caixa de caja comida restaurante"
+    },
+    "1f359": {
+      "char": "🍙",
+      "name": "rice ball",
+      "keywords": "ball japanese rice arroz japonês onigiri bola de japonés restaurante"
+    },
+    "1f358": {
+      "char": "🍘",
+      "name": "rice cracker",
+      "keywords": "cracker rice arroz biscoito de galleta"
+    },
+    "1f365": {
+      "char": "🍥",
+      "name": "fish cake with swirl",
+      "keywords": "cake fish with swirl pastry bolinho de peixe croquete comida japonesa pastel pescado japonés"
+    },
+    "1f960": {
+      "char": "🥠",
+      "name": "fortune cookie",
+      "keywords": "fortune cookie prophecy biscoito da sorte profecia adivinación galleta de la fortuna profecía superstición"
+    },
+    "1f368": {
+      "char": "🍨",
+      "name": "ice cream",
+      "keywords": "cream dessert ice sweet sobremesa sorvete helado postre sorbete"
+    },
+    "1f366": {
+      "char": "🍦",
+      "name": "soft ice cream",
+      "keywords": "cream dessert ice icecream soft sweet sorvete de casquinha italiano na cucurucho helado dulce restaurante"
+    },
+    "1f367": {
+      "char": "🍧",
+      "name": "shaved ice",
+      "keywords": "dessert ice shaved sweet gelo raspadinha de sobremesa granizado hawaiano helado hielo postre raspado"
+    },
+    "1f370": {
+      "char": "🍰",
+      "name": "shortcake",
+      "keywords": "cake dessert pastry shortcake slice sweet bolo fatia de pão ló morango sobremesa pedazo tarta restaurante trozo"
+    },
+    "1f382": {
+      "char": "🎂",
+      "name": "birthday cake",
+      "keywords": "birthday cake celebration dessert pastry sweet aniversário bolo de comemoração celebración cumpleaños tarta"
+    },
+    "1f36b": {
+      "char": "🍫",
+      "name": "chocolate bar",
+      "keywords": "bar chocolate dessert sweet barra de restaurante tableta"
+    },
+    "1f36c": {
+      "char": "🍬",
+      "name": "candy",
+      "keywords": "candy dessert sweet bala balinha doce caramelo chuche chuchería dulce golosina"
+    },
+    "1f36d": {
+      "char": "🍭",
+      "name": "lollipop",
+      "keywords": "candy dessert lollipop sweet bala doce pirulito chuche chuchería dulce golosina piruleta"
+    },
+    "1f36e": {
+      "char": "🍮",
+      "name": "custard",
+      "keywords": "custard dessert pudding sweet pudim de leite ovos dulce flan postre"
+    },
+    "1f36f": {
+      "char": "🍯",
+      "name": "honey pot",
+      "keywords": "honey honeypot pot sweet mel pote de dulce miel tarro"
+    },
+    "2615": {
+      "char": "☕",
+      "name": "hot beverage",
+      "keywords": "beverage coffee drink hot steaming tea café cafezinho chá bebida caliente té"
+    },
+    "1f375": {
+      "char": "🍵",
+      "name": "teacup without handle",
+      "keywords": "beverage cup drink tea teacup without handle bebida chá xícara de sem alça taza tazón té"
+    },
+    "1f37a": {
+      "char": "🍺",
+      "name": "beer mug",
+      "keywords": "bar beer drink mug caneca de cerveja chopp cerveza jarra restaurante"
+    },
+    "1f37b": {
+      "char": "🍻",
+      "name": "clinking beer mugs",
+      "keywords": "bar beer clink clinking mugs drink mug caneca canecas de cerveja chopp cerveza jarra jarras brindando restaurante"
+    },
+    "1f377": {
+      "char": "🍷",
+      "name": "wine glass",
+      "keywords": "bar beverage drink glass wine bebida cálice de vinho taça copa vino vaso"
+    },
+    "1f378": {
+      "char": "🍸",
+      "name": "cocktail glass",
+      "keywords": "bar cocktail drink glass coquetel taça de cóctel copa restaurante"
+    },
+    "1f379": {
+      "char": "🍹",
+      "name": "tropical drink",
+      "keywords": "bar drink tropical bebida coquetel de frutas restaurante"
+    },
+    "1f37e": {
+      "char": "🍾",
+      "name": "bottle with popping cork",
+      "keywords": "bar bottle with popping cork drink champanha champanhe espumante garrafa de beber botella descorchada cava corcho"
+    },
+    "1f697": {
+      "char": "🚗",
+      "name": "automobile",
+      "keywords": "automobile car automóvel carro veículo automóvil coche vehículo"
+    },
+    "1f695": {
+      "char": "🚕",
+      "name": "taxi",
+      "keywords": "taxi vehicle táxi veículo coche vehículo"
+    },
+    "1f699": {
+      "char": "🚙",
+      "name": "sport utility vehicle",
+      "keywords": "recreational sport utility vehicle carro suv trailer veículo recreacional camping caravana furgoneta vacaciones vehículo deportivo utilitario"
+    },
+    "1f68c": {
+      "char": "🚌",
+      "name": "bus",
+      "keywords": "bus vehicle ônibus veículo autobús transporte"
+    },
+    "1f693": {
+      "char": "🚓",
+      "name": "police car",
+      "keywords": "car patrol police carro patrulha polícia veículo viatura policial coche de policía patrulla vehículo"
+    },
+    "1f691": {
+      "char": "🚑",
+      "name": "ambulance",
+      "keywords": "ambulance vehicle ambulância veículo ambulancia asistencia médica transporte vehículo"
+    },
+    "1f692": {
+      "char": "🚒",
+      "name": "fire engine",
+      "keywords": "engine fire truck caminhão do corpo de bombeiros carro fogo veículo camión bomberos coche fuego vehículo"
+    },
+    "1f690": {
+      "char": "🚐",
+      "name": "minibus",
+      "keywords": "bus minibus ônibus van veículo autobús minibús transporte"
+    },
+    "1f6b2": {
+      "char": "🚲",
+      "name": "bicycle",
+      "keywords": "bicycle bike bicicleta veículo bici vehículo"
+    },
+    "1f6f4": {
+      "char": "🛴",
+      "name": "kick scooter",
+      "keywords": "kick scooter brinquedo patinete"
+    },
+    "1f3cd": {
+      "char": "🏍",
+      "name": "motorcycle",
+      "keywords": "motorcycle racing corrida motocicleta carreras moto vehículo"
+    },
+    "2708": {
+      "char": "✈",
+      "name": "airplane",
+      "keywords": "aeroplane airplane aéreo avião veículo aeroplano avión"
+    },
+    "1f680": {
+      "char": "🚀",
+      "name": "rocket",
+      "keywords": "rocket space foguete veículo cohete espacio vehículo"
+    },
+    "1f681": {
+      "char": "🚁",
+      "name": "helicopter",
+      "keywords": "helicopter vehicle helicóptero veículo aspas rotores vehículo volar"
+    },
+    "1f6f8": {
+      "char": "🛸",
+      "name": "flying saucer",
+      "keywords": "flying saucer ufo disco voador ovni platillo volante"
+    },
+    "26f5": {
+      "char": "⛵",
+      "name": "sailboat",
+      "keywords": "boat resort sailboat sea yacht barco a vela iate marítimo de velero yate"
+    },
+    "1f6a4": {
+      "char": "🚤",
+      "name": "speedboat",
+      "keywords": "boat speedboat barco lancha veículo motora vehículo"
+    },
+    "1f6f3": {
+      "char": "🛳",
+      "name": "passenger ship",
+      "keywords": "passenger ship cruzeiro navio passageiros veículo barco de pasajeros vehículo"
+    },
+    "26f4": {
+      "char": "⛴",
+      "name": "ferry",
+      "keywords": "boat ferry passenger balsa barco ferry-boat ferri"
+    },
+    "1f6a2": {
+      "char": "🚢",
+      "name": "ship",
+      "keywords": "boat passenger ship navio veículo aquático barco vehículo"
+    },
+    "2693": {
+      "char": "⚓",
+      "name": "anchor",
+      "keywords": "anchor ship tool âncora sinal ancla barco gancho"
+    },
+    "1f3e0": {
+      "char": "🏠",
+      "name": "house",
+      "keywords": "home house casa construção vivienda"
+    },
+    "1f3e1": {
+      "char": "🏡",
+      "name": "house with garden",
+      "keywords": "garden home house with casa com jardim construção lar con jardín construcción vivienda"
+    },
+    "1f3e2": {
+      "char": "🏢",
+      "name": "office building",
+      "keywords": "building office edifício comercial escritório construcción edificio de oficinas"
+    },
+    "1f3ec": {
+      "char": "🏬",
+      "name": "department store",
+      "keywords": "department store departamentos loja de comercio grandes almacenes"
+    },
+    "1f3e5": {
+      "char": "🏥",
+      "name": "hospital",
+      "keywords": "doctor hospital medicine prédio edificio medicina médico"
+    },
+    "1f3e6": {
+      "char": "🏦",
+      "name": "bank",
+      "keywords": "bank building banco prédio banca edificio"
+    },
+    "1f3eb": {
+      "char": "🏫",
+      "name": "school",
+      "keywords": "building school escola prédio da colegio edificio escuela"
+    },
+    "1f3df": {
+      "char": "🏟",
+      "name": "stadium",
+      "keywords": "stadium estádio estadio"
+    },
+    "1f5fc": {
+      "char": "🗼",
+      "name": "Tokyo tower",
+      "keywords": "tokyo tower tóquio torre de tokio"
+    },
+    "1f5fd": {
+      "char": "🗽",
+      "name": "Statue of Liberty",
+      "keywords": "liberty statue of estátua da liberdade estatua de la libertad"
+    },
+    "26f2": {
+      "char": "⛲",
+      "name": "fountain",
+      "keywords": "fountain chafariz fonte fuente"
+    },
+    "1f30b": {
+      "char": "🌋",
+      "name": "volcano",
+      "keywords": "eruption mountain volcano erupção vulcânica vulcão erupción volcánica volcán"
+    },
+    "1f5fb": {
+      "char": "🗻",
+      "name": "mount fuji",
+      "keywords": "fuji mount mountain montanha monte montaña"
+    },
+    "1f3d5": {
+      "char": "🏕",
+      "name": "camping",
+      "keywords": "camping acampamento barraca acampada campamento vacaciones"
+    },
+    "1f3dd": {
+      "char": "🏝",
+      "name": "desert island",
+      "keywords": "desert island ilha deserta desierta isla"
+    },
+    "1f3d6": {
+      "char": "🏖",
+      "name": "beach with umbrella",
+      "keywords": "beach with umbrella guarda-sol praia e playa y sombrilla"
+    },
+    "1f30d": {
+      "char": "🌍",
+      "name": "globe showing Europe-Africa",
+      "keywords": "africa earth europe globe showing europe-africa world áfrica europa globo mostrando e terra terráqueo y mundo planeta tierra"
+    },
+    "1f30e": {
+      "char": "🌎",
+      "name": "globe showing Americas",
+      "keywords": "americas earth globe showing world américa as américas globo mostrando terra terráqueo mundo planeta tierra"
+    },
+    "1f30f": {
+      "char": "🌏",
+      "name": "globe showing Asia-Australia",
+      "keywords": "asia australia earth globe showing asia-australia world ásia austrália globo mostrando e oceania terra terráqueo y mundo planeta tierra"
+    },
+    "1f310": {
+      "char": "🌐",
+      "name": "globe with meridians",
+      "keywords": "earth globe with meridians world globo com meridianos terráqueo con mundo tierra"
+    },
+    "1f5fa": {
+      "char": "🗺",
+      "name": "world map",
+      "keywords": "map world geografia mapa mapa-múndi mundo mundial mapamundi"
+    },
+    "1f319": {
+      "char": "🌙",
+      "name": "crescent moon",
+      "keywords": "crescent moon crescente lua creciente espacio luna"
+    },
+    "1f31e": {
+      "char": "🌞",
+      "name": "sun with face",
+      "keywords": "bright face sun with rosto do sol brillante cara con"
+    },
+    "1f30a": {
+      "char": "🌊",
+      "name": "water wave",
+      "keywords": "ocean water wave onda de água do oceano mar océano ola"
+    },
+    "26fa": {
+      "char": "⛺",
+      "name": "tent",
+      "keywords": "camping tent acampamento barraca campaña tienda de vacaciones"
+    },
+    "1f303": {
+      "char": "🌃",
+      "name": "night with stars",
+      "keywords": "night with stars star estrelas noite estrelada estrellas noche estrellada"
+    },
+    "231a": {
+      "char": "⌚",
+      "name": "watch",
+      "keywords": "clock watch relógio de pulso reloj"
+    },
+    "1f4f1": {
+      "char": "📱",
+      "name": "mobile phone",
+      "keywords": "cell mobile phone telephone celular telefone móvel móvil teléfono"
+    },
+    "1f4bb": {
+      "char": "💻",
+      "name": "laptop",
+      "keywords": "computer laptop pc personal computador pessoal ordenador portátil"
+    },
+    "2328": {
+      "char": "⌨",
+      "name": "keyboard",
+      "keywords": "computer keyboard acessório computador digitação teclado ordenador"
+    },
+    "1f5a5": {
+      "char": "🖥",
+      "name": "desktop computer",
+      "keywords": "computer desktop computador de mesa ordenador sobremesa"
+    },
+    "1f5a8": {
+      "char": "🖨",
+      "name": "printer",
+      "keywords": "computer printer acessório computador impressora impresora ordenador"
+    },
+    "1f4be": {
+      "char": "💾",
+      "name": "floppy disk",
+      "keywords": "computer disk floppy computador disco flexível disquete de 3 1/2"
+    },
+    "1f4bf": {
+      "char": "💿",
+      "name": "optical disk",
+      "keywords": "cd computer disk optical computador disco óptico"
+    },
+    "1f4f7": {
+      "char": "📷",
+      "name": "camera",
+      "keywords": "camera video câmera vídeo cámara de fotos"
+    },
+    "1f4f8": {
+      "char": "📸",
+      "name": "camera with flash",
+      "keywords": "camera with flash video câmera com vídeo cámara con"
+    },
+    "1f4f9": {
+      "char": "📹",
+      "name": "video camera",
+      "keywords": "camera video câmera de vídeo cámara videocámara"
+    },
+    "1f3a5": {
+      "char": "🎥",
+      "name": "movie camera",
+      "keywords": "camera cinema movie câmera de entretenimento filme cámara cine entretenimiento película"
+    },
+    "1f4fa": {
+      "char": "📺",
+      "name": "television",
+      "keywords": "television tv video televisão vídeo televisión"
+    },
+    "1f4fb": {
+      "char": "📻",
+      "name": "radio",
+      "keywords": "radio video rádio vídeo"
+    },
+    "23f0": {
+      "char": "⏰",
+      "name": "alarm clock",
+      "keywords": "alarm clock alarme despertador relógio alarma reloj"
+    },
+    "23f1": {
+      "char": "⏱",
+      "name": "stopwatch",
+      "keywords": "clock stopwatch cronômetro relógio cronómetro reloj"
+    },
+    "231b": {
+      "char": "⌛",
+      "name": "hourglass done",
+      "keywords": "hourglass done sand timer ampulheta areia arena reloj de sin tiempo temporizador"
+    },
+    "1f50b": {
+      "char": "🔋",
+      "name": "battery",
+      "keywords": "battery bateria pilha batería pila"
+    },
+    "1f50c": {
+      "char": "🔌",
+      "name": "electric plug",
+      "keywords": "electric electricity plug elétrica eletricidade plugue tomada corriente electricidad eléctrico enchufe"
+    },
+    "1f4a1": {
+      "char": "💡",
+      "name": "light bulb",
+      "keywords": "bulb comic electric idea light elétrica ideia lâmpada luz quadrinhos bombilla cómic electricidad"
+    },
+    "1f526": {
+      "char": "🔦",
+      "name": "flashlight",
+      "keywords": "electric flashlight light tool torch elétrica ferramenta lanterna luz linterna"
+    },
+    "1f4d6": {
+      "char": "📖",
+      "name": "open book",
+      "keywords": "book open aberto livro abierto libro"
+    },
+    "1f4da": {
+      "char": "📚",
+      "name": "books",
+      "keywords": "book books livro livros libro libros"
+    },
+    "1f4dd": {
+      "char": "📝",
+      "name": "memo",
+      "keywords": "memo pencil lápis memorando comunicación cuaderno de notas"
+    },
+    "270f": {
+      "char": "✏",
+      "name": "pencil",
+      "keywords": "pencil lápis escolar escribir lapicero lápiz"
+    },
+    "1f58a": {
+      "char": "🖊",
+      "name": "pen",
+      "keywords": "ballpoint pen caneta esferográfica boli bolígrafo escribir"
+    },
+    "1f58c": {
+      "char": "🖌",
+      "name": "paintbrush",
+      "keywords": "paintbrush painting pincel pintar"
+    },
+    "1f4cc": {
+      "char": "📌",
+      "name": "pushpin",
+      "keywords": "pin pushpin alfinete tacha chincheta tachuela"
+    },
+    "1f4ce": {
+      "char": "📎",
+      "name": "paperclip",
+      "keywords": "paperclip clipe de papel clip"
+    },
+    "2702": {
+      "char": "✂",
+      "name": "scissors",
+      "keywords": "cutting scissors tool cortar ferramenta tesoura herramienta tijeras"
+    },
+    "1f511": {
+      "char": "🔑",
+      "name": "key",
+      "keywords": "key lock password chave senha contraseña llave"
+    },
+    "1f512": {
+      "char": "🔒",
+      "name": "locked",
+      "keywords": "closed locked cadeado fechado trancado candado cerrado cerrar"
+    },
+    "1f513": {
+      "char": "🔓",
+      "name": "unlocked",
+      "keywords": "lock open unlock unlocked aberto cadeado destrancado abierto abrir candado"
+    },
+    "1f510": {
+      "char": "🔐",
+      "name": "locked with key",
+      "keywords": "closed key lock locked with secure cadeado com chave fechado seguro candado cerrado y llave"
+    },
+    "1f528": {
+      "char": "🔨",
+      "name": "hammer",
+      "keywords": "hammer tool ferramenta martelo herramienta martillo"
+    },
+    "1f527": {
+      "char": "🔧",
+      "name": "wrench",
+      "keywords": "spanner tool wrench chave inglesa ferramenta herramienta llave"
+    },
+    "2699": {
+      "char": "⚙",
+      "name": "gear",
+      "keywords": "cog cogwheel gear tool engrenagem ferramenta engranaje herramienta"
+    },
+    "1f9f2": {
+      "char": "🧲",
+      "name": "magnet",
+      "keywords": "attraction horseshoe magnet magnetic atração ferradura ímã magnético atracción herradura imán"
+    },
+    "1f517": {
+      "char": "🔗",
+      "name": "link",
+      "keywords": "link corrente eslabón"
+    },
+    "1f4b0": {
+      "char": "💰",
+      "name": "money bag",
+      "keywords": "bag dollar money moneybag dinheiro saco de bolsa dinero dólares"
+    },
+    "1f4b3": {
+      "char": "💳",
+      "name": "credit card",
+      "keywords": "card credit money cartão de crédito dinheiro tarjeta"
+    },
+    "1f48e": {
+      "char": "💎",
+      "name": "gem stone",
+      "keywords": "diamond gem stone jewel diamante joia pedra preciosa gema joya piedra"
+    },
+    "1f3af": {
+      "char": "🎯",
+      "name": "bullseye",
+      "keywords": "bullseye dart direct hit game target jogo mira na mosca no alvo tiro certeiro blanco diana en el juego"
+    },
+    "1f3b2": {
+      "char": "🎲",
+      "name": "game die",
+      "keywords": "dice die game dado dados jogo de juego"
+    },
+    "1f9e9": {
+      "char": "🧩",
+      "name": "puzzle piece",
+      "keywords": "clue interlocking jigsaw piece puzzle dica encaixe peça quebra-cabeça conectar pieza de puzle pista rompecabezas"
+    },
+    "1f3ae": {
+      "char": "🎮",
+      "name": "video game",
+      "keywords": "controller game video controle de videogame jogo juego mando videoconsola videojuego"
+    },
+    "1f3b5": {
+      "char": "🎵",
+      "name": "musical note",
+      "keywords": "music musical note música nota"
+    },
+    "1f3b6": {
+      "char": "🎶",
+      "name": "musical notes",
+      "keywords": "music musical notes note música nota notas musicais musicales"
+    },
+    "1f514": {
+      "char": "🔔",
+      "name": "bell",
+      "keywords": "bell sino campana"
+    },
+    "2705": {
+      "char": "✅",
+      "name": "check mark button",
+      "keywords": "✓ button check mark botão marca de seleção branca verificação botón verificación selección"
+    },
+    "274c": {
+      "char": "❌",
+      "name": "cross mark",
+      "keywords": "× cancel cross mark multiplication multiply x cancelar multiplicação multiplicar xis cruz marca de tachado tachar"
+    },
+    "2757": {
+      "char": "❗",
+      "name": "red exclamation mark",
+      "keywords": "exclamation mark punctuation red exclamação ponto de vermelho pontuação exclamación roja puntuación signo"
+    },
+    "2753": {
+      "char": "❓",
+      "name": "red question mark",
+      "keywords": "mark punctuation question red pergunta ponto de interrogação vermelho pontuação sinal interrogación roja pregunta puntuación signo"
+    },
+    "2b55": {
+      "char": "⭕",
+      "name": "hollow red circle",
+      "keywords": "circle hollow red large o círculo grande oco vermelho aro rojo hueco"
+    },
+    "1f4af": {
+      "char": "💯",
+      "name": "hundred points",
+      "keywords": "100 full hundred points score pontos cem pontuação total cien puntos pleno"
+    },
+    "2728": {
+      "char": "✨",
+      "name": "sparkles",
+      "keywords": "* sparkle sparkles star brilhos estrelas brilhantes bengala chispas estrellas"
+    },
+    "1f4a5": {
+      "char": "💥",
+      "name": "collision",
+      "keywords": "boom collision comic colisão emoção engraçado símbolo de colisión cómic"
+    },
+    "2714": {
+      "char": "✔",
+      "name": "check mark",
+      "keywords": "✓ check mark marca de seleção verificação verificación selección"
+    },
+    "2716": {
+      "char": "✖",
+      "name": "multiply",
+      "keywords": "× cancel multiplication multiply sign x cancelar multiplicação multiplicar sinal de marca multiplicación prohibido signo"
+    },
+    "2795": {
+      "char": "➕",
+      "name": "plus",
+      "keywords": "+ math plus sign matemática símbolo de adição sinal mais más signo suma"
+    },
+    "2796": {
+      "char": "➖",
+      "name": "minus",
+      "keywords": "- − math minus sign matemática menos símbolo de subtração sinal resta signo"
+    },
+    "2755": {
+      "char": "❕",
+      "name": "white exclamation mark",
+      "keywords": "exclamation mark outlined punctuation white delineado ponto de exclamação branco pontuação sinal exclamación blanca puntuación"
+    },
+    "203c": {
+      "char": "‼",
+      "name": "double exclamation mark",
+      "keywords": "bangbang double exclamation mark dupla exclamação explosão ponto de duplo pontuação exclamación doble puntuación sorpresa"
+    },
+    "2049": {
+      "char": "⁉",
+      "name": "exclamation question mark",
+      "keywords": "exclamation interrobang mark punctuation question exclamação com interrogação pergunta pontuação sinal exclamación e interrogación"
+    },
+    "1f51d": {
+      "char": "🔝",
+      "name": "TOP arrow",
+      "keywords": "arrow top up para cima seta arriba flecha hacia con"
+    },
+    "1f53a": {
+      "char": "🔺",
+      "name": "red triangle pointed up",
+      "keywords": "geometric red triangle pointed up geométrico triângulo vermelho para cima geometría rojo triángulo hacia arriba"
+    },
+    "1f53b": {
+      "char": "🔻",
+      "name": "red triangle pointed down",
+      "keywords": "down geometric red triangle pointed geométrico triângulo vermelho para baixo geometría rojo triángulo hacia abajo"
+    },
+    "25b6": {
+      "char": "▶",
+      "name": "play button",
+      "keywords": "arrow play button right triangle botão reproduzir direita seta triângulo botón de reproducción flecha reproducir triángulo"
+    },
+    "23f8": {
+      "char": "⏸",
+      "name": "pause button",
+      "keywords": "bar double pause button vertical barra botão pausar dupla barras botón pausa"
+    },
+    "23f9": {
+      "char": "⏹",
+      "name": "stop button",
+      "keywords": "square stop button botão parar quadrado botón cuadrado detener"
+    },
+    "23fa": {
+      "char": "⏺",
+      "name": "record button",
+      "keywords": "circle record button botão gravar círculo botón grabar"
+    },
+    "23ed": {
+      "char": "⏭",
+      "name": "next track button",
+      "keywords": "arrow next scene track button triangle botão de próxima faixa cena seta dupla para a direita pista siguiente raya vertical triángulos"
+    },
+    "23ee": {
+      "char": "⏮",
+      "name": "last track button",
+      "keywords": "arrow last track button previous scene triangle botão de faixa anterior cena seta triângulo atrás escena pista triángulo"
+    },
+    "1f500": {
+      "char": "🔀",
+      "name": "shuffle tracks button",
+      "keywords": "arrow crossed shuffle tracks button botão de músicas aleatórias cruzadas seta cruzado flechas entrecruzadas reproducción aleatoria"
+    },
+    "1f501": {
+      "char": "🔁",
+      "name": "repeat button",
+      "keywords": "arrow clockwise repeat button botão de repetir sentido horário seta flechas repetición"
+    },
+    "1f502": {
+      "char": "🔂",
+      "name": "repeat single button",
+      "keywords": "arrow clockwise once repeat single button botão de repetir uma única faixa sentido horário seta vez flechas repetición una uno"
+    },
+    "2b06": {
+      "char": "⬆",
+      "name": "up arrow",
+      "keywords": "arrow cardinal direction north up direção norte seta para cima dirección flecha arriba hacia"
+    },
+    "2b07": {
+      "char": "⬇",
+      "name": "down arrow",
+      "keywords": "arrow cardinal direction down south direção para baixo seta sul abajo dirección flecha hacia sur"
+    },
+    "27a1": {
+      "char": "➡",
+      "name": "right arrow",
+      "keywords": "arrow cardinal direction east right direção direita leste seta para a derecha dirección este flecha hacia la"
+    },
+    "2b05": {
+      "char": "⬅",
+      "name": "left arrow",
+      "keywords": "arrow cardinal direction left west direção esquerda oeste seta para a flecha hacia la izquierda"
+    },
+    "2934": {
+      "char": "⤴",
+      "name": "right arrow curving up",
+      "keywords": "arrow right curving up curva seta de baixo para cima a direita curvada arriba dirección flecha derecha curvándose hacia"
+    },
+    "2935": {
+      "char": "⤵",
+      "name": "right arrow curving down",
+      "keywords": "arrow down right curving curva seta de cima para baixo a direita curvada abajo dirección flecha derecha curvándose hacia"
+    },
+    "1f504": {
+      "char": "🔄",
+      "name": "counterclockwise arrows button",
+      "keywords": "anticlockwise arrow counterclockwise arrows button withershins anti-horário botão de setas em sentido no seta dirección flechas en antihorario señal recarga"
+    },
+    "267b": {
+      "char": "♻",
+      "name": "recycling symbol",
+      "keywords": "recycle recycling symbol reciclagem símbolo de reciclaje reciclar señal universal sólido"
+    },
+    "2648": {
+      "char": "♈",
+      "name": "Aries",
+      "keywords": "aries ram zodiac áries carneiro signo de zodíaco carnero zodiaco"
+    },
+    "264c": {
+      "char": "♌",
+      "name": "Leo",
+      "keywords": "leo lion zodiac leão signo de zodíaco león zodiaco"
+    },
+    "a9": {
+      "char": "©",
+      "name": "copyright",
+      "keywords": "c copyright símbolo de"
+    },
+    "ae": {
+      "char": "®",
+      "name": "registered",
+      "keywords": "r registered marca registrada símbolo de registrado"
+    },
+    "2122": {
+      "char": "™",
+      "name": "trade mark",
+      "keywords": "mark tm trade trademark marca registrada símbolo de comercial"
+    },
+    "23": {
+      "char": "#",
+      "name": "hash sign",
+      "keywords": "hash sign hashtag lb number pound cerquilha número almohadilla numeral sostenido"
+    },
+    "2a": {
+      "char": "*",
+      "name": "asterisk",
+      "keywords": "asterisk star wildcard asterisco curinga estrela comodín"
+    },
+    "30": {
+      "char": "0",
+      "name": "keycap: 0",
+      "keywords": "keycap 0 tecla teclas"
+    },
+    "31": {
+      "char": "1",
+      "name": "keycap: 1",
+      "keywords": "keycap 1 tecla teclas"
+    },
+    "32": {
+      "char": "2",
+      "name": "keycap: 2",
+      "keywords": "keycap 2 tecla teclas"
+    }
+  }
+}

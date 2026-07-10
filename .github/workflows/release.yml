@@ -1,0 +1,92 @@
+name: Release
+
+# Dispara quando uma tag vX.Y.Z e enviada (ex.: git tag v1.0.0 && git push origin v1.0.0)
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write   # necessario para criar a Release e anexar os arquivos
+
+jobs:
+  build:
+    runs-on: windows-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup .NET 9
+        uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: "9.0.x"
+
+      - name: Derivar versao da tag
+        id: version
+        shell: pwsh
+        run: |
+          $version = "${{ github.ref_name }}".TrimStart("v")
+          "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
+          Write-Host "Versao: $version"
+
+      - name: Restaurar dependencias
+        run: dotnet restore Klip.sln
+
+      - name: Compilar (Release)
+        run: dotnet build Klip.sln -c Release --no-restore
+
+      - name: Testar
+        run: dotnet test Klip.sln -c Release --no-build --verbosity normal
+
+      - name: Publicar executavel standalone
+        shell: pwsh
+        run: |
+          dotnet publish src/Klip.App -c Release -r win-x64 --self-contained true `
+            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false `
+            -p:Version=${{ steps.version.outputs.version }} -o publish
+          Remove-Item publish\*.pdb -ErrorAction SilentlyContinue
+
+      - name: Instalar Inno Setup
+        run: choco install innosetup --no-progress -y
+
+      - name: Compilar instalador
+        shell: pwsh
+        run: |
+          New-Item -ItemType Directory -Force -Path dist | Out-Null
+          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
+            "/DAppVersion=${{ steps.version.outputs.version }}" `
+            installer\Klip.iss
+
+      - name: Renomear o executavel standalone para a release
+        shell: pwsh
+        run: |
+          Copy-Item publish\Klip.exe "dist\Klip-${{ steps.version.outputs.version }}-portable.exe"
+
+      - name: Criar Release e anexar artefatos
+        uses: softprops/action-gh-release@v2
+        with:
+          name: Klip ${{ steps.version.outputs.version }}
+          generate_release_notes: true
+          files: |
+            dist/Klip-Setup-${{ steps.version.outputs.version }}.exe
+            dist/Klip-${{ steps.version.outputs.version }}-portable.exe
+
+      # Atualiza o manifesto no winget-pkgs a cada release.
+      # Requer o secret WINGET_TOKEN (um PAT classico com escopo public_repo)
+      # e que o pacote pobruno.Klip ja exista no winget (primeiro envio e manual).
+      # So roda se o token estiver configurado, entao nao quebra releases sem ele.
+      - name: Atualizar winget
+        if: ${{ secrets.WINGET_TOKEN != '' }}
+        shell: pwsh
+        run: |
+          $installerUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Klip-Setup-${{ steps.version.outputs.version }}.exe"
+          # o .exe portable entra como segundo installer do mesmo pacote
+          $portableUrl  = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Klip-${{ steps.version.outputs.version }}-portable.exe"
+          Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
+          .\wingetcreate.exe update pobruno.Klip `
+            --version ${{ steps.version.outputs.version }} `
+            --urls "$installerUrl" "$portableUrl" `
+            --submit `
+            --token "${{ secrets.WINGET_TOKEN }}"
