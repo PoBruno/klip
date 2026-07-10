@@ -109,8 +109,12 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     partial void OnIsMultiSelectModeChanged(bool value) => OnPropertyChanged(nameof(MultiSelectStatus));
     partial void OnMultiSelectTargetChanged(int value) => OnPropertyChanged(nameof(MultiSelectStatus));
 
-    /// <summary>Raised to close the window after a paste.</summary>
-    public event Action? CloseRequested;
+    /// <summary>
+    /// Raised to close the window. The bool says whether HideFlyout should restore
+    /// focus to the target app: false when we're about to paste (the paste flow
+    /// handles focus + Ctrl+V itself, so a second restore would race it).
+    /// </summary>
+    public event Action<bool>? CloseRequested;
 
     /// <summary>Open an image in the editor (window is created by the App).</summary>
     public event Action<ClipboardItem>? OpenInEditorRequested;
@@ -123,7 +127,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     {
         if (item?.IsImage != true)
             return;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(true);
         OpenInEditorRequested?.Invoke(item.Item);
     }
 
@@ -258,7 +262,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
             return;
         }
 
-        CloseRequested?.Invoke(); // close first so the target regains focus
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteItem(item.Item);
     }
 
@@ -306,7 +310,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         var items = _selection.Snapshot().Select(vm => vm.Item).ToList();
         ClearSelectionOrder();
         IsMultiSelectMode = false;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(true);
         _pasteQueue.Arm(items);
     }
 
@@ -324,7 +328,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     {
         if (item is null)
             return;
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteItem(item.Item, asPlainText: true);
     }
 
@@ -341,7 +345,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     /// <summary>Clicking an emoji in the picker: paste it and close.</summary>
     public void PasteEmoji(string emoji)
     {
-        CloseRequested?.Invoke();
+        CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteText(emoji);
     }
 

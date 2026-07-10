@@ -453,7 +453,7 @@ public partial class App : Application
             _flyout.HideFlyout();
             return;
         }
-        _pasteService?.CaptureForegroundTarget();
+        _pasteService?.CaptureForegroundTarget(_flyout.Hwnd);
         _flyout.ShowFlyout();
     }
 

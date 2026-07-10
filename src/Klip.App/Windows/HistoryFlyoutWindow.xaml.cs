@@ -59,7 +59,15 @@ public partial class HistoryFlyoutWindow
         ItemsList.PreviewMouseLeftButtonUp += OnListClick;
 
         // route hooked keys onto the UI thread; returns true when we consumed it
-        _keys.OnKeyDown = vk => Dispatcher.Invoke(() => HandleHookedKey(vk));
+        _keys.OnKeyDown = vk =>
+        {
+            // when a click gave us focus, WPF handles typing; skip the UI-thread
+            // round trip entirely so typing in the search box never stalls on the
+            // hook thread. read a volatile bool, no dispatcher hop.
+            if (System.Threading.Volatile.Read(ref _hasFocus))
+                return false;
+            return Dispatcher.Invoke(() => HandleHookedKey(vk));
+        };
         _keys.Install();
 
         // click outside the flyout closes it (screen point in physical px)
@@ -170,11 +178,29 @@ public partial class HistoryFlyoutWindow
                 exStyle &= ~NativeMethods.WS_EX_NOACTIVATE;
                 NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
             }
+            // we own the keyboard from here: the WPF side handles typing now.
+            // tracking this explicitly (instead of polling GetForegroundWindow)
+            // avoids the race where the hook and WPF fight over the first keys.
+            System.Threading.Volatile.Write(ref _hasFocus, true);
             handled = true;
             return NativeMethods.MA_ACTIVATE;
         }
+        // lost activation (clicked elsewhere): hand the keyboard back to the hook
+        if (msg == NativeMethods.WM_ACTIVATE)
+        {
+            const int WA_INACTIVE = 0;
+            if ((wParam & 0xFFFF) == WA_INACTIVE)
+                System.Threading.Volatile.Write(ref _hasFocus, false);
+        }
         return nint.Zero;
     }
+
+    // true once a click activated the flyout, so typing goes through WPF. set in
+    // WndProc synchronously with the activation, cleared when we lose it or hide.
+    private bool _hasFocus;
+
+    /// <summary>This window's native handle (for the paste target guard).</summary>
+    public nint Hwnd => new WindowInteropHelper(this).Handle;
 
     // ----- Tabs -----
 
@@ -445,6 +471,7 @@ public partial class HistoryFlyoutWindow
 
         RepositionBottomRight();
 
+        System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
         Show();
         if (ItemsList.Items.Count > 0)
             ItemsList.SelectedIndex = 0;
@@ -481,7 +508,7 @@ public partial class HistoryFlyoutWindow
             NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
 
-    public void HideFlyout()
+    public void HideFlyout(bool restoreFocus = true)
     {
         if (_closing)
             return;
@@ -496,15 +523,17 @@ public partial class HistoryFlyoutWindow
             _viewModel.ConfirmMultiSelectCommand.Execute(null);
 
         // if we grabbed focus (search box click), hand it back to the app the
-        // user came from, so their caret returns where it was
-        var ourHwnd = new WindowInteropHelper(this).Handle;
-        var weHadFocus = NativeMethods.GetForegroundWindow() == ourHwnd;
+        // user came from, so their caret returns where it was. skip this when a
+        // paste is about to run: that flow restores focus and fires Ctrl+V on its
+        // own, and a second restore here would race it and paste in the wrong spot.
+        var weHadFocus = System.Threading.Volatile.Read(ref _hasFocus);
+        System.Threading.Volatile.Write(ref _hasFocus, false);
 
         Hide();
         SearchBox.Text = "";
         _closing = false;
 
-        if (weHadFocus)
+        if (restoreFocus && weHadFocus)
             _viewModel.RestoreTargetFocus();
     }
 
@@ -590,17 +619,17 @@ public partial class HistoryFlyoutWindow
         if (!IsVisible)
             return false;
 
-        // if the flyout itself is the foreground window (user clicked into it),
-        // let WPF's normal keyboard handling do the work, don't double-handle
-        var ourHwnd = new WindowInteropHelper(this).Handle;
-        if (NativeMethods.GetForegroundWindow() == ourHwnd)
+        // if a click already activated the flyout, WPF owns the keyboard. use the
+        // flag we set synchronously in WndProc, not GetForegroundWindow, so there's
+        // no race window right after the click where both sides grab the keys.
+        if (_hasFocus)
             return false;
 
         var ctrl = NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
         var shift = NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
 
-        // if the search box has focus (user clicked it), let typing flow normally
-        // and only steal the navigation keys
+        // the search box only has focus after a click, which sets _hasFocus above,
+        // so at this point typing is always false; keep the check for clarity
         var typing = SearchBox.IsKeyboardFocusWithin || EmojiSearchBox.IsKeyboardFocusWithin;
 
         // emoji panel open: only Esc matters, back to history
@@ -755,7 +784,17 @@ public partial class HistoryFlyoutWindow
     {
         if (EmojiPanel.Visibility == Visibility.Visible)
             return; // no search box while the emoji picker is up
-        if (!SearchBox.IsKeyboardFocusWithin && e.Text.Length > 0 && !char.IsControl(e.Text[0]))
+
+        // only redirect when the search box is neither focused nor about to be.
+        // during the click that focuses it, the focused element is already the
+        // text box, so appending here would double the first character.
+        if (SearchBox.IsKeyboardFocusWithin || Keyboard.FocusedElement == SearchBox)
+        {
+            base.OnPreviewTextInput(e);
+            return;
+        }
+
+        if (e.Text.Length > 0 && !char.IsControl(e.Text[0]))
         {
             SearchBox.Focus();
             SearchBox.Text += e.Text;

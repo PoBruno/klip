@@ -73,6 +73,9 @@ public static partial class NativeMethods
     public const int MA_ACTIVATE = 1;
     public const int MA_NOACTIVATE = 3;
 
+    // sent when a window is activated or deactivated
+    public const int WM_ACTIVATE = 0x0006;
+
     [LibraryImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     public static partial nint GetWindowLongPtr(nint hWnd, int nIndex);
 

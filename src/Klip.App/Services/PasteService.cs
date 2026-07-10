@@ -23,8 +23,18 @@ public sealed class PasteService(
     /// <summary>Fires when the paste fails, so we can show a fallback toast.</summary>
     public event Action? PasteFailed;
 
-    public void CaptureForegroundTarget() =>
-        SavedTargetWindow = NativeMethods.GetForegroundWindow();
+    /// <summary>
+    /// Saves the app that currently has focus, so we can paste back into it. If the
+    /// foreground is one of our own windows (a fast reopen where focus hasn't
+    /// settled yet), we keep the previous target instead of grabbing ourselves.
+    /// </summary>
+    public void CaptureForegroundTarget(nint ignoreHwnd = 0)
+    {
+        var fg = NativeMethods.GetForegroundWindow();
+        if (fg == nint.Zero || fg == ignoreHwnd)
+            return; // don't overwrite a good target with our own window
+        SavedTargetWindow = fg;
+    }
 
     /// <summary>
     /// Brings the saved target app back to the front. Used when the flyout took
