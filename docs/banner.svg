@@ -1,0 +1,80 @@
+<svg width="1280" height="640" viewBox="0 0 1280 640" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <!-- background gradient: graphite to a deep blue, Fluent-ish -->
+    <linearGradient id="bg" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop offset="0" stop-color="#1B1D21"/>
+      <stop offset="0.55" stop-color="#202632"/>
+      <stop offset="1" stop-color="#12233B"/>
+    </linearGradient>
+    <!-- accent glow behind the wordmark -->
+    <radialGradient id="glow" cx="0.5" cy="0.5" r="0.5" gradientUnits="objectBoundingBox">
+      <stop offset="0" stop-color="#2A6FB5" stop-opacity="0.55"/>
+      <stop offset="1" stop-color="#2A6FB5" stop-opacity="0"/>
+    </radialGradient>
+    <linearGradient id="accent" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#4CC2FF"/>
+      <stop offset="1" stop-color="#0078D4"/>
+    </linearGradient>
+    <!-- soft shadow for the cards -->
+    <filter id="soft" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="8" stdDeviation="18" flood-color="#000000" flood-opacity="0.45"/>
+    </filter>
+    <!-- Segoe Fluent Icons glyph font (present on Windows 11) -->
+    <style>
+      .seg { font-family: 'Segoe Fluent Icons'; }
+      .ui  { font-family: 'Segoe UI Variable Display', 'Segoe UI', sans-serif; }
+    </style>
+  </defs>
+
+  <!-- base -->
+  <rect width="1280" height="640" rx="0" fill="url(#bg)"/>
+
+  <!-- subtle dotted grid on the right, like a design canvas -->
+  <g fill="#FFFFFF" opacity="0.05">
+    <!-- generated dot field -->
+    <g>
+      <circle cx="820" cy="120" r="2"/><circle cx="870" cy="120" r="2"/><circle cx="920" cy="120" r="2"/><circle cx="970" cy="120" r="2"/><circle cx="1020" cy="120" r="2"/><circle cx="1070" cy="120" r="2"/><circle cx="1120" cy="120" r="2"/><circle cx="1170" cy="120" r="2"/><circle cx="1220" cy="120" r="2"/>
+      <circle cx="820" cy="170" r="2"/><circle cx="870" cy="170" r="2"/><circle cx="920" cy="170" r="2"/><circle cx="970" cy="170" r="2"/><circle cx="1020" cy="170" r="2"/><circle cx="1070" cy="170" r="2"/><circle cx="1120" cy="170" r="2"/><circle cx="1170" cy="170" r="2"/><circle cx="1220" cy="170" r="2"/>
+      <circle cx="820" cy="220" r="2"/><circle cx="870" cy="220" r="2"/><circle cx="920" cy="220" r="2"/><circle cx="970" cy="220" r="2"/><circle cx="1020" cy="220" r="2"/><circle cx="1070" cy="220" r="2"/><circle cx="1120" cy="220" r="2"/><circle cx="1170" cy="220" r="2"/><circle cx="1220" cy="220" r="2"/>
+      <circle cx="820" cy="470" r="2"/><circle cx="870" cy="470" r="2"/><circle cx="920" cy="470" r="2"/><circle cx="970" cy="470" r="2"/><circle cx="1020" cy="470" r="2"/><circle cx="1070" cy="470" r="2"/><circle cx="1120" cy="470" r="2"/><circle cx="1170" cy="470" r="2"/><circle cx="1220" cy="470" r="2"/>
+      <circle cx="820" cy="520" r="2"/><circle cx="870" cy="520" r="2"/><circle cx="920" cy="520" r="2"/><circle cx="970" cy="520" r="2"/><circle cx="1020" cy="520" r="2"/><circle cx="1070" cy="520" r="2"/><circle cx="1120" cy="520" r="2"/><circle cx="1170" cy="520" r="2"/><circle cx="1220" cy="520" r="2"/>
+    </g>
+  </g>
+
+  <!-- glow behind text -->
+  <ellipse cx="360" cy="300" rx="420" ry="260" fill="url(#glow)"/>
+
+  <!-- product glyph cards on the right (clipboard + capture), Fluent style -->
+  <g filter="url(#soft)">
+    <!-- clipboard history card -->
+    <rect x="760" y="210" width="180" height="180" rx="24" fill="#2B3340"/>
+    <rect x="760" y="210" width="180" height="180" rx="24" fill="none" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="850" y="330" class="seg" font-size="92" fill="url(#accent)" text-anchor="middle">&#xE8C8;</text>
+  </g>
+  <g filter="url(#soft)">
+    <!-- capture card, slightly lower and overlapping -->
+    <rect x="965" y="270" width="180" height="180" rx="24" fill="#2B3340"/>
+    <rect x="965" y="270" width="180" height="180" rx="24" fill="none" stroke="#FFFFFF" stroke-opacity="0.08"/>
+    <text x="1055" y="390" class="seg" font-size="88" fill="url(#accent)" text-anchor="middle">&#xE7A8;</text>
+  </g>
+
+  <!-- accent bar -->
+  <rect x="96" y="196" width="64" height="8" rx="4" fill="url(#accent)"/>
+
+  <!-- wordmark -->
+  <text x="92" y="330" class="ui" font-size="150" font-weight="700" fill="#FFFFFF" letter-spacing="-2">Klip</text>
+
+  <!-- tagline -->
+  <text x="96" y="400" class="ui" font-size="34" font-weight="400" fill="#C7CDD6">Clipboard history and screen capture,</text>
+  <text x="96" y="446" class="ui" font-size="34" font-weight="400" fill="#C7CDD6">the way Windows 11 should have shipped them.</text>
+
+  <!-- small feature pills -->
+  <g class="ui" font-size="20" font-weight="600">
+    <rect x="96" y="486" width="196" height="42" rx="21" fill="#FFFFFF" fill-opacity="0.06"/>
+    <text x="122" y="513" fill="#DDE3EC">Unlimited history</text>
+    <rect x="308" y="486" width="188" height="42" rx="21" fill="#FFFFFF" fill-opacity="0.06"/>
+    <text x="334" y="513" fill="#DDE3EC">Scrolling capture</text>
+    <rect x="512" y="486" width="150" height="42" rx="21" fill="#FFFFFF" fill-opacity="0.06"/>
+    <text x="538" y="513" fill="#DDE3EC">No telemetry</text>
+  </g>
+</svg>
