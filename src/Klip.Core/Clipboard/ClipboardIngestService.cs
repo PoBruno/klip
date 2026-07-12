@@ -114,7 +114,10 @@ public sealed class ClipboardIngestService(
             };
         }
 
-        if (snapshot.Files is { Count: > 0 } files && s.CaptureFiles)
+        // RF-F3.07: itens de origem propria (gravacao) entram mesmo com a
+        // captura de arquivos do clipboard desligada - o toggle e sobre copias.
+        if (snapshot.Files is { Count: > 0 } files &&
+            (s.CaptureFiles || snapshot.Origin != ClipboardItemOrigin.Clipboard))
         {
             var joined = string.Join("\n", files);
             return new ClipboardItem
@@ -124,6 +127,7 @@ public sealed class ClipboardIngestService(
                 LastCopiedAt = ts,
                 SourceApp = snapshot.SourceApp,
                 SourceTitle = snapshot.SourceTitle,
+                Origin = snapshot.Origin,
                 ContentHash = HashUtil.Sha256Hex("files:" + joined),
                 ByteSize = joined.Length,
                 TextContent = joined, // searchable through FTS
