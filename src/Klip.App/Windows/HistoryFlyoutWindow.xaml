@@ -4,6 +4,7 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:loc="clr-namespace:Klip.App.Localization"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
     xmlns:vm="clr-namespace:Klip.App.ViewModels"
     Title="Klip"
     Width="360"
@@ -330,7 +331,7 @@
                                     Text="{Binding PreviewText, Mode=OneTime}"
                                     TextTrimming="None"
                                     TextWrapping="Wrap"
-                                    Visibility="{Binding IsImage, Converter={StaticResource InverseBoolToVisibility}}" />
+                                    Visibility="{Binding ShowsTextPreview, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
                                 <Image
                                     MaxHeight="96"
                                     HorizontalAlignment="Left"
@@ -338,6 +339,23 @@
                                     Stretch="Uniform"
                                     StretchDirection="DownOnly"
                                     Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- RF-F4.05: GIF mostra o primeiro frame e anima só com o mouse sobre o card -->
+                                <controls:HoverGifPlayer
+                                    MaxHeight="96"
+                                    HorizontalAlignment="Left"
+                                    SourcePath="{Binding MediaFilePath, Mode=OneTime}"
+                                    Stretch="Uniform"
+                                    StretchDirection="DownOnly"
+                                    Visibility="{Binding IsGifMedia, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- MP4: glifo de vídeo como placeholder, sem decode de vídeo -->
+                                <TextBlock
+                                    HorizontalAlignment="Left"
+                                    VerticalAlignment="Center"
+                                    FontFamily="Segoe Fluent Icons"
+                                    FontSize="40"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="&#xE714;"
+                                    Visibility="{Binding IsMp4Media, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
                             </Grid>
 
                             <!-- Metadados + ações -->

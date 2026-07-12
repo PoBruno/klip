@@ -375,6 +375,140 @@
                         </StackPanel>
                     </Grid>
                 </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="140" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.EditorModifierTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.EditorModifierCaption}" />
+                        </StackPanel>
+                        <ComboBox x:Name="EditorModifierCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.AlwaysEditorTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.AlwaysEditorCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="AlwaysEditorToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+
+                <!-- ===== Gravação de tela (specs F3/F4) ===== -->
+                <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionRecording}" />
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.RecordingsFolderTitle}" />
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.RecordingsFolderCaption}" />
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox x:Name="RecordingsFolderBox" VerticalAlignment="Center" IsReadOnly="True" />
+                            <ui:Button x:Name="ChooseRecordingsFolderButton" Grid.Column="1" Margin="8,0,0,0" Content="{DynamicResource Loc.ChooseFolder}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.GifFpsTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.GifFpsCaption}" />
+                        </StackPanel>
+                        <ComboBox x:Name="GifFpsCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.GifScaleTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.GifScaleCaption}" />
+                        </StackPanel>
+                        <ComboBox x:Name="GifScaleCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="180" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.Mp4BitrateTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.Mp4BitrateCaption}" />
+                        </StackPanel>
+                        <ComboBox x:Name="Mp4BitrateCombo" Grid.Column="1" VerticalAlignment="Center" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel Margin="0,0,12,0">
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.HideRecordingBorderTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HideRecordingBorderCaption}" />
+                        </StackPanel>
+                        <ui:ToggleSwitch x:Name="HideRecordingBorderToggle" Grid.Column="1" />
+                    </Grid>
+                </Border>
+                <Border Style="{StaticResource Card}">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="200" />
+                        </Grid.ColumnDefinitions>
+                        <StackPanel>
+                            <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.StopRecordingHotkeyTitle}" />
+                            <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.HotkeyHint}" />
+                        </StackPanel>
+                        <Button x:Name="StopRecHotkeyButton" Grid.Column="1" VerticalAlignment="Center" HorizontalAlignment="Right"
+                                Focusable="True" Cursor="Hand" Padding="8,6" MinWidth="140"
+                                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource ControlElevationBorderBrush}" BorderThickness="1">
+                            <Grid>
+                                <controls:KeyChord x:Name="StopRecHotkeyChord" HorizontalAlignment="Center" />
+                                <TextBlock x:Name="StopRecHotkeyPrompt" Visibility="Collapsed"
+                                           HorizontalAlignment="Center" VerticalAlignment="Center"
+                                           FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                           Text="{DynamicResource Loc.HotkeyPressKeys}" />
+                            </Grid>
+                        </Button>
+                    </Grid>
+                </Border>
+                <!-- RF-F5.14: caminho do ffmpeg.exe para o editor de midia -->
+                <Border Style="{StaticResource Card}">
+                    <StackPanel>
+                        <TextBlock Style="{StaticResource CardTitle}" Text="{DynamicResource Loc.FfmpegPathTitle}" />
+                        <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.FfmpegPathCaption}" />
+                        <Grid Margin="0,10,0,0">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox x:Name="FfmpegPathBox" VerticalAlignment="Center" IsReadOnly="True" />
+                            <ui:Button x:Name="ChooseFfmpegButton" Grid.Column="1" Margin="8,0,0,0" Content="{DynamicResource Loc.FfmpegChoose}" />
+                        </Grid>
+                    </StackPanel>
+                </Border>
 
                 <!-- ===== Privacidade ===== -->
                 <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionPrivacy}" />

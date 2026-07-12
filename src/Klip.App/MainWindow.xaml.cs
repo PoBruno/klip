@@ -55,12 +55,15 @@ public partial class MainWindow
 
         // hotkey editor: click the keycap button to start capturing, then the
         // keys you press show up live as keycaps
-        HistoryHotkeyButton.Click += (_, _) => BeginCapture(isHistory: true);
-        CaptureHotkeyButton.Click += (_, _) => BeginCapture(isHistory: false);
-        HistoryHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, isHistory: true);
-        CaptureHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, isHistory: false);
-        HistoryHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(isHistory: true);
-        CaptureHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(isHistory: false);
+        HistoryHotkeyButton.Click += (_, _) => BeginCapture(HotkeySlot.History);
+        CaptureHotkeyButton.Click += (_, _) => BeginCapture(HotkeySlot.Capture);
+        StopRecHotkeyButton.Click += (_, _) => BeginCapture(HotkeySlot.StopRecording);
+        HistoryHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, HotkeySlot.History);
+        CaptureHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, HotkeySlot.Capture);
+        StopRecHotkeyButton.PreviewKeyDown += (_, e) => CaptureHotkey(e, HotkeySlot.StopRecording);
+        HistoryHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(HotkeySlot.History);
+        CaptureHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(HotkeySlot.Capture);
+        StopRecHotkeyButton.LostKeyboardFocus += (_, _) => EndCapture(HotkeySlot.StopRecording);
 
         // settings applied on the spot
         AutostartToggle.Click += (_, _) =>
@@ -98,6 +101,66 @@ public partial class MainWindow
             ScrollDelayLabel.Text = $"{(int)ScrollDelaySlider.Value} ms";
             if (!_loading)
                 _settings.Update(s => s.ScrollCaptureDelayMs = (int)ScrollDelaySlider.Value);
+        };
+
+        // RF-F1.02: modificador que abre a captura direto no editor (Ctrl padrão)
+        EditorModifierCombo.Items.Add(new ComboBoxItem { Content = "Ctrl", Tag = CaptureEditorModifier.Control });
+        EditorModifierCombo.Items.Add(new ComboBoxItem { Content = "Shift", Tag = CaptureEditorModifier.Shift });
+        EditorModifierCombo.Items.Add(new ComboBoxItem { Content = "Alt", Tag = CaptureEditorModifier.Alt });
+        EditorModifierCombo.Items.Add(new ComboBoxItem { Content = Loc.ModifierDisabled, Tag = CaptureEditorModifier.None });
+        EditorModifierCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && EditorModifierCombo.SelectedItem is ComboBoxItem selected)
+                _settings.Update(s => s.EditorModifierKey = (CaptureEditorModifier)selected.Tag);
+        };
+
+        // RF-F1.05: toda captura estática abre no editor
+        AlwaysEditorToggle.Click += (_, _) =>
+        {
+            if (!_loading)
+                _settings.Update(s => s.AlwaysOpenEditorAfterCapture = AlwaysEditorToggle.IsChecked == true);
+        };
+
+        // ----- Gravação de tela (specs F3/F4) -----
+
+        ChooseRecordingsFolderButton.Click += (_, _) => ChooseRecordingsFolder();
+
+        // RF-F5.14: caminho manual do ffmpeg.exe para o editor de midia
+        ChooseFfmpegButton.Click += (_, _) => ChooseFfmpegPath();
+
+        // RF-F4.02: FPS do GIF com o valor EFETIVO do formato na lista
+        foreach (var fps in new[] { 10, 15, 20 })
+            GifFpsCombo.Items.Add(new ComboBoxItem { Content = BuildGifFpsLabel(fps), Tag = fps });
+        GifFpsCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && GifFpsCombo.SelectedItem is ComboBoxItem selected)
+                _settings.Update(s => s.GifFps = (int)selected.Tag);
+        };
+
+        // RF-F4.03: escala da gravação GIF
+        foreach (var scale in new[] { 100, 75, 50 })
+            GifScaleCombo.Items.Add(new ComboBoxItem { Content = $"{scale}%", Tag = scale });
+        GifScaleCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && GifScaleCombo.SelectedItem is ComboBoxItem selected)
+                _settings.Update(s => s.GifScalePercent = (int)selected.Tag);
+        };
+
+        // Q-F3.1 resolvida como presets: Automático / 5 / 8 / 16 Mbps
+        Mp4BitrateCombo.Items.Add(new ComboBoxItem { Content = Loc.Mp4BitrateAuto, Tag = 0 });
+        foreach (var kbps in new[] { 5000, 8000, 16000 })
+            Mp4BitrateCombo.Items.Add(new ComboBoxItem { Content = $"{kbps / 1000} Mbps", Tag = kbps });
+        Mp4BitrateCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && Mp4BitrateCombo.SelectedItem is ComboBoxItem selected)
+                _settings.Update(s => s.Mp4BitrateKbps = (int)selected.Tag);
+        };
+
+        // RF-F3.04: modo reunião
+        HideRecordingBorderToggle.Click += (_, _) =>
+        {
+            if (!_loading)
+                _settings.Update(s => s.HideRecordingBorder = HideRecordingBorderToggle.IsChecked == true);
         };
 
         // language (defaults to Windows; applies right away via DynamicResource)
@@ -261,6 +324,43 @@ public partial class MainWindow
         _settings.Update(s => s.ScreenshotsFolder = dialog.FolderName);
     }
 
+    /// <summary>RF-F3.06: pasta configurável das gravações.</summary>
+    private void ChooseRecordingsFolder()
+    {
+        var dialog = new Microsoft.Win32.OpenFolderDialog
+        {
+            Title = Localization.Loc.ChooseFolder,
+            InitialDirectory = RecordingsFolderBox.Text,
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+        RecordingsFolderBox.Text = dialog.FolderName;
+        _settings.Update(s => s.RecordingsFolder = dialog.FolderName);
+    }
+
+    /// <summary>RF-F5.14: escolha manual do ffmpeg.exe (download automático fica para depois).</summary>
+    private void ChooseFfmpegPath()
+    {
+        var dialog = new Microsoft.Win32.OpenFileDialog
+        {
+            Title = Localization.Loc.FfmpegChoose,
+            Filter = "ffmpeg.exe|ffmpeg.exe|*.exe|*.exe",
+        };
+        if (dialog.ShowDialog() != true)
+            return;
+        FfmpegPathBox.Text = dialog.FileName;
+        _settings.Update(s => s.FfmpegPath = dialog.FileName);
+    }
+
+    /// <summary>RF-F4.02: "15 fps (efetivo 14,3)" - honestidade com a grade de centésimos.</summary>
+    private static string BuildGifFpsLabel(int fps)
+    {
+        var effective = Core.Recording.GifRecordingMath.EffectiveFps(fps);
+        return Math.Abs(effective - fps) < 0.05
+            ? $"{fps} fps"
+            : string.Format(Loc.GifFpsEffective, fps, effective.ToString("0.#"));
+    }
+
     private void AddExcludedApp()
     {
         var name = ExcludeAppBox.Text.Trim();
@@ -289,6 +389,20 @@ public partial class MainWindow
     private void RefreshExcludedApps() =>
         ExcludedAppsList.ItemsSource = _settings.Current.ExcludedApps.ToList();
 
+    /// <summary>Seleciona o item do combo cujo Tag (int) bate com o valor salvo.</summary>
+    private static void SelectComboByTag(ComboBox combo, int value, int fallbackIndex)
+    {
+        combo.SelectedIndex = fallbackIndex;
+        for (var i = 0; i < combo.Items.Count; i++)
+        {
+            if (combo.Items[i] is ComboBoxItem item && (int)item.Tag == value)
+            {
+                combo.SelectedIndex = i;
+                break;
+            }
+        }
+    }
+
     public void RefreshStatus()
     {
         _loading = true;
@@ -296,6 +410,7 @@ public partial class MainWindow
         var s = _settings.Current;
         HistoryHotkeyChord.Chord = s.HotkeyHistory;
         CaptureHotkeyChord.Chord = s.HotkeyCapture;
+        StopRecHotkeyChord.Chord = s.StopRecordingHotkey;
         AutostartToggle.IsChecked = s.StartWithWindows;
         AutoSaveToggle.IsChecked = s.AutoSaveScreenshots;
         SkipSecretsToggle.IsChecked = s.SkipSecrets;
@@ -309,6 +424,35 @@ public partial class MainWindow
                 Environment.GetFolderPath(Environment.SpecialFolder.MyPictures), "Screenshots");
         ScrollDelaySlider.Value = s.ScrollCaptureDelayMs;
         ScrollDelayLabel.Text = $"{s.ScrollCaptureDelayMs} ms";
+
+        // Gravação de tela (specs F3/F4)
+        RecordingsFolderBox.Text = Core.Recording.RecordingPaths.Resolve(s.RecordingsFolder);
+        FfmpegPathBox.Text = s.FfmpegPath;
+        HideRecordingBorderToggle.IsChecked = s.HideRecordingBorder;
+        SelectComboByTag(GifFpsCombo, s.GifFps, fallbackIndex: 1);
+        SelectComboByTag(GifScaleCombo, s.GifScalePercent, fallbackIndex: 0);
+        SelectComboByTag(Mp4BitrateCombo, s.Mp4BitrateKbps, fallbackIndex: 0);
+        ((ComboBoxItem)Mp4BitrateCombo.Items[0]).Content = Loc.Mp4BitrateAuto;
+        for (var i = 0; i < GifFpsCombo.Items.Count; i++)
+        {
+            // relabela após troca de idioma (o "efetivo" é localizado)
+            if (GifFpsCombo.Items[i] is ComboBoxItem item)
+                item.Content = BuildGifFpsLabel((int)item.Tag);
+        }
+
+        // F1: seleciona o modificador salvo por Tag e relabela "Desativado" pós-troca de idioma
+        AlwaysEditorToggle.IsChecked = s.AlwaysOpenEditorAfterCapture;
+        EditorModifierCombo.SelectedIndex = 0;
+        for (var i = 0; i < EditorModifierCombo.Items.Count; i++)
+        {
+            if (EditorModifierCombo.Items[i] is ComboBoxItem item
+                && (CaptureEditorModifier)item.Tag == s.EditorModifierKey)
+            {
+                EditorModifierCombo.SelectedIndex = i;
+                break;
+            }
+        }
+        ((ComboBoxItem)EditorModifierCombo.Items[3]).Content = Loc.ModifierDisabled;
 
         // pick the language by Tag (the list is dynamic)
         LanguageCombo.SelectedIndex = 0;
@@ -444,29 +588,64 @@ public partial class MainWindow
 
     // ----- Hotkey editor -----
 
+    /// <summary>Slots do editor de atalhos (o de parar gravação só registra durante a sessão, RF-F3.05).</summary>
+    private enum HotkeySlot
+    {
+        History,
+        Capture,
+        StopRecording,
+    }
+
     private bool _capturing;
 
+    private Klip.App.Controls.KeyChord ChordOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.History => HistoryHotkeyChord,
+        HotkeySlot.Capture => CaptureHotkeyChord,
+        _ => StopRecHotkeyChord,
+    };
+
+    private TextBlock PromptOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.History => HistoryHotkeyPrompt,
+        HotkeySlot.Capture => CaptureHotkeyPrompt,
+        _ => StopRecHotkeyPrompt,
+    };
+
+    private Button ButtonOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.History => HistoryHotkeyButton,
+        HotkeySlot.Capture => CaptureHotkeyButton,
+        _ => StopRecHotkeyButton,
+    };
+
+    private string SavedGestureOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.History => _settings.Current.HotkeyHistory,
+        HotkeySlot.Capture => _settings.Current.HotkeyCapture,
+        _ => _settings.Current.StopRecordingHotkey,
+    };
+
     /// <summary>Enter capture mode for a hotkey button: prompt for keys.</summary>
-    private void BeginCapture(bool isHistory)
+    private void BeginCapture(HotkeySlot slot)
     {
         _capturing = true;
-        (isHistory ? HistoryHotkeyChord : CaptureHotkeyChord).Visibility = Visibility.Collapsed;
-        (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Visible;
-        (isHistory ? HistoryHotkeyButton : CaptureHotkeyButton).Focus();
+        ChordOf(slot).Visibility = Visibility.Collapsed;
+        PromptOf(slot).Visibility = Visibility.Visible;
+        ButtonOf(slot).Focus();
     }
 
     /// <summary>Leave capture mode, showing the saved chord again.</summary>
-    private void EndCapture(bool isHistory)
+    private void EndCapture(HotkeySlot slot)
     {
         _capturing = false;
-        var saved = isHistory ? _settings.Current.HotkeyHistory : _settings.Current.HotkeyCapture;
-        var chord = isHistory ? HistoryHotkeyChord : CaptureHotkeyChord;
-        chord.Chord = saved;
+        var chord = ChordOf(slot);
+        chord.Chord = SavedGestureOf(slot);
         chord.Visibility = Visibility.Visible;
-        (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Collapsed;
+        PromptOf(slot).Visibility = Visibility.Collapsed;
     }
 
-    private void CaptureHotkey(KeyEventArgs e, bool isHistory)
+    private void CaptureHotkey(KeyEventArgs e, HotkeySlot slot)
     {
         if (!_capturing)
             return;
@@ -476,7 +655,7 @@ public partial class MainWindow
         // Esc bails out of capture without changing anything
         if (key == Key.Escape)
         {
-            EndCapture(isHistory);
+            EndCapture(slot);
             return;
         }
 
@@ -490,9 +669,9 @@ public partial class MainWindow
         if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
             or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin)
         {
-            var live = isHistory ? HistoryHotkeyChord : CaptureHotkeyChord;
+            var live = ChordOf(slot);
             live.Visibility = Visibility.Visible;
-            (isHistory ? HistoryHotkeyPrompt : CaptureHotkeyPrompt).Visibility = Visibility.Collapsed;
+            PromptOf(slot).Visibility = Visibility.Collapsed;
             live.Chord = string.Join("+", parts);
             return;
         }
@@ -517,15 +696,25 @@ public partial class MainWindow
 
         _settings.Update(s =>
         {
-            if (isHistory)
-                s.HotkeyHistory = gesture;
-            else
-                s.HotkeyCapture = gesture;
+            switch (slot)
+            {
+                case HotkeySlot.History:
+                    s.HotkeyHistory = gesture;
+                    break;
+                case HotkeySlot.Capture:
+                    s.HotkeyCapture = gesture;
+                    break;
+                default:
+                    s.StopRecordingHotkey = gesture; // RF-F3.05
+                    break;
+            }
         });
 
-        // try to register right away; a conflict shows up as a notification
-        var ok = ((App)Application.Current).ApplyHotkeys(_settings);
-        EndCapture(isHistory); // shows the freshly saved chord as keycaps
+        // RF-F3.05: o atalho de parar só é registrado durante a gravação -
+        // conflitos aparecem lá; os demais registram na hora
+        var ok = slot == HotkeySlot.StopRecording
+            || ((App)Application.Current).ApplyHotkeys(_settings);
+        EndCapture(slot); // shows the freshly saved chord as keycaps
         StatusText.Text = ok
             ? string.Format(Loc.HotkeyUpdated, gesture)
             : string.Format(Loc.HotkeyConflict, gesture);

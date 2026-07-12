@@ -23,16 +23,36 @@ public sealed class PathToThumbnailConverter : IValueConverter
         if (value is not string path || path.Length == 0 || !File.Exists(path))
             return null;
 
+        if (TryGetCached(path, out var cached))
+            return cached;
+
+        return DecodeAndCache(path, DecodeWidth);
+    }
+
+    /// <summary>Consulta o cache LRU sem decodificar (barato, qualquer thread).</summary>
+    public static bool TryGetCached(string path, out BitmapImage? bitmap)
+    {
         lock (Sync)
         {
             if (Cache.TryGetValue(path, out var cached))
             {
                 Touch(path);
-                return cached;
+                bitmap = cached;
+                return true;
             }
         }
+        bitmap = null;
+        return false;
+    }
 
-        BitmapImage? bitmap = Decode(path);
+    /// <summary>
+    /// Decodifica (pode rodar fora da UI thread - o bitmap sai Freeze()) e
+    /// insere no cache LRU. Usado pelo HoverGifPlayer para tirar o decode da
+    /// thumbnail estatica da UI thread (bug do decode sincrono no scroll).
+    /// </summary>
+    public static BitmapImage? DecodeAndCache(string path, int decodeWidth)
+    {
+        var bitmap = Decode(path, decodeWidth);
         if (bitmap is null)
             return null;
 
@@ -48,14 +68,14 @@ public sealed class PathToThumbnailConverter : IValueConverter
         }
     }
 
-    private BitmapImage? Decode(string path)
+    private static BitmapImage? Decode(string path, int decodeWidth)
     {
         try
         {
             var bitmap = new BitmapImage();
             bitmap.BeginInit();
             bitmap.CacheOption = BitmapCacheOption.OnLoad;
-            bitmap.DecodePixelWidth = DecodeWidth;
+            bitmap.DecodePixelWidth = decodeWidth;
             bitmap.UriSource = new Uri(path, UriKind.Absolute);
             bitmap.EndInit();
             bitmap.Freeze();

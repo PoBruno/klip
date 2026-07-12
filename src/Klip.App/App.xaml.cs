@@ -31,6 +31,16 @@ public partial class App : Application
     private PasteService? _pasteService;
     private ClipboardMonitorService? _clipboardMonitor;
     private CaptureController? _captureController;
+    private RecordingController? _recordingController;
+
+    // pasta do ultimo toast de gravacao: clique no balao abre a pasta (RF-F3.16)
+    private string? _recordingToastFolder;
+
+    // arquivo do ultimo toast de gravacao MP4: clique abre o editor de midia (RF-F5.16)
+    private string? _recordingToastFile;
+
+    // editor de midia (spec F5): uma janela por arquivo, reativada se ja aberta
+    private readonly Dictionary<string, MediaEditorWindow> _mediaEditors = new(StringComparer.OrdinalIgnoreCase);
 
     public bool IsExiting { get; private set; }
 
@@ -99,6 +109,13 @@ public partial class App : Application
         builder.Services.AddSingleton<PasteQueueService>();
         builder.Services.AddSingleton<ScreenCaptureService>();
         builder.Services.AddSingleton<PanoramicCaptureService>();
+        // gravacao (specs F3/F4): concretas do Interop so via factory (ponto unico)
+        builder.Services.AddSingleton(sp => new RecordingController(
+            sp.GetRequiredService<SettingsService>(),
+            sp.GetRequiredService<ClipboardIngestService>(),
+            sp.GetRequiredService<HotkeyService>(),
+            RecordingInteropFactory.CreateAudioDeviceEnumerator,
+            RecordingInteropFactory.CreateMp4Recorder));
         builder.Services.AddSingleton<CaptureController>();
         builder.Services.AddSingleton<AutostartService>();
         builder.Services.AddSingleton<HotkeyService>();
@@ -158,11 +175,38 @@ public partial class App : Application
         // capture overlay
         _captureController = _host.Services.GetRequiredService<CaptureController>();
         _captureController.CaptureCompleted += message =>
+        {
+            _recordingToastFolder = null; // o clique volta a abrir o editor
+            _recordingToastFile = null;
             _tray?.ShowNotification("Klip", message);
+        };
         _captureController.EditRequested += OpenEditor; // scroll capture opens in the editor
+
+        // gravacao GIF/MP4 (specs F3/F4): toasts + estado no tray
+        _recordingController = _host.Services.GetRequiredService<RecordingController>();
+        _recordingController.RecordingToast += (message, folder, editorFile) =>
+        {
+            // estado do toast anterior nao vaza para o clique deste (limpa e
+            // reatribui a cada toast de gravacao)
+            _recordingToastFolder = folder;
+            _recordingToastFile = editorFile; // MP4: clique abre o editor de midia
+            _tray?.ShowNotification("Klip", message);
+        };
+        // RF-F3.04: tooltip do tray com o timer enquanto grava (tick de 1 s)
+        _recordingController.StateChanged += () =>
+        {
+            if (_tray is null || _recordingController is null)
+                return;
+            _tray.ToolTipText = _recordingController.IsActive
+                ? string.Format(Loc.TrayRecordingTooltip, _recordingController.Elapsed.ToString(@"mm\:ss"))
+                : "Klip";
+        };
 
         // editor: opened from the flyout and from the toast
         _host.Services.GetRequiredService<HistoryFlyoutViewModel>().OpenInEditorRequested += OpenEditor;
+
+        // editor de midia (spec F5): registra o gateway para historico/toasts
+        MediaEditorGateway.Opener = path => Dispatcher.BeginInvoke(() => OpenMediaEditor(path));
 
         RegisterHotkeys(settings);
         CreateTrayIcon();
@@ -422,9 +466,25 @@ public partial class App : Application
         _captureController?.StartCapture();
     }
 
-    /// <summary>Opens the editor with an image from history or capture.</summary>
-    private void OpenEditor(ClipboardItem item)
+    /// <summary>Abre a pasta de gravacoes no Explorer (acao do toast, RF-F3.16).</summary>
+    private static void OpenFolder(string folder)
     {
+        try
+        {
+            System.Diagnostics.Process.Start(new System.Diagnostics.ProcessStartInfo
+            {
+                FileName = folder,
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("OpenRecordingFolder", ex);
+        }
+    }
+
+    /// <summary>Opens the editor with an image from history or capture.</summary>
+    private void OpenEditor(ClipboardItem item)    {
         if (item.FilePath is null || _host is null)
             return;
         try
@@ -438,6 +498,51 @@ public partial class App : Application
         catch (Exception ex)
         {
             StartupLog.WriteException("OpenEditor", ex);
+        }
+    }
+
+    /// <summary>
+    /// Abre o editor de midia (spec F5): uma janela por arquivo; se ja existe
+    /// uma para o mesmo caminho, apenas reativa (RF-F5.16).
+    /// </summary>
+    private void OpenMediaEditor(string filePath)
+    {
+        if (_host is null)
+            return;
+        try
+        {
+            if (_mediaEditors.TryGetValue(filePath, out var existing))
+            {
+                existing.Show();
+                if (existing.WindowState == WindowState.Minimized)
+                    existing.WindowState = WindowState.Normal;
+                existing.Activate();
+                return;
+            }
+
+            var window = new MediaEditorWindow(
+                _host.Services.GetRequiredService<SettingsService>(),
+                _host.Services.GetRequiredService<Klip.Core.Clipboard.ClipboardIngestService>());
+            window.ExportCompleted += message => _tray?.ShowNotification("Klip", message);
+            window.FileOpened += (w, path) =>
+            {
+                // drag-and-drop trocou o arquivo: re-mapeia a janela
+                foreach (var stale in _mediaEditors.Where(kv => kv.Value == w).Select(kv => kv.Key).ToList())
+                    _mediaEditors.Remove(stale);
+                _mediaEditors[path] = w;
+            };
+            window.Closed += (_, _) =>
+            {
+                foreach (var stale in _mediaEditors.Where(kv => kv.Value == window).Select(kv => kv.Key).ToList())
+                    _mediaEditors.Remove(stale);
+            };
+            window.OpenFile(filePath);
+            window.Show();
+            window.Activate();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("OpenMediaEditor", ex);
         }
     }
 
@@ -502,12 +607,36 @@ public partial class App : Application
             ToolTipText = "Klip",
         };
         BuildTrayMenu();
-        _tray.TrayLeftMouseUp += (_, _) => ToggleHistoryFlyout();
-        // clicking the capture toast opens the editor
+        _tray.TrayLeftMouseUp += (_, _) =>
+        {
+            if (IsExiting)
+                return; // shutdown pumpeando o dispatcher: sem reentrancia via tray
+            // RF-F3.04: durante uma gravacao o clique no tray PARA a gravacao
+            if (_recordingController?.IsActive == true)
+                _recordingController.RequestStop();
+            else
+                ToggleHistoryFlyout();
+        };
+        // clicking the toast: MP4 opens the media editor, recording opens its
+        // folder, capture opens the image editor
         _tray.TrayBalloonTipClicked += (_, _) =>
         {
-            if (_captureController?.LastCapturedItem is { } lastCapture)
+            if (IsExiting)
+                return;
+            if (_recordingToastFile is { } file)
+            {
+                _recordingToastFile = null;
+                MediaEditorGateway.Open(file);
+            }
+            else if (_recordingToastFolder is { } folder)
+            {
+                _recordingToastFolder = null;
+                OpenFolder(folder);
+            }
+            else if (_captureController?.LastCapturedItem is { } lastCapture)
+            {
                 OpenEditor(lastCapture);
+            }
         };
         _tray.ForceCreate();
 
@@ -579,14 +708,134 @@ public partial class App : Application
         _tray?.ShowNotification("Klip", string.Format(Loc.NotifyHotkeyConflict, gesture));
     }
 
-    private void ExitApplication()
+    // RF-F3.16: finalizacao graciosa no encerramento do app - o Sair do tray
+    // para a gravacao ativa e espera a finalizacao (MP4 com teto de 30 s; GIF
+    // ate o fim do encode) antes do shutdown; a janela "Finalizando
+    // gravacao..." do proprio StopAsync fica visivel enquanto isso
+    private async void ExitApplication()
     {
+        if (IsExiting)
+            return;
         IsExiting = true;
+
+        if (_recordingController is { } recording)
+        {
+            // contagem/painel pendentes sao cancelados antes de sair (nao
+            // deixar o countdown ligar engine/recorder durante o shutdown)
+            if (recording.IsActive && !recording.IsBusy)
+                recording.RequestStop();
+
+            if (recording.IsBusy)
+            {
+                try
+                {
+                    _recordingFinalizeHandled = true;
+                    await recording.StopAndFinalizeAsync(TimeSpan.FromSeconds(30));
+                }
+                catch (Exception ex)
+                {
+                    StartupLog.WriteException("ExitFinalizeRecording", ex);
+                }
+            }
+        }
+
         Shutdown();
+    }
+
+    // evita finalizar duas vezes quando o OnExit roda depois do Sair do tray
+    private bool _recordingFinalizeHandled;
+
+    /// <summary>
+    /// RF-F3.16: shutdown/logoff do Windows nao espera awaits da UI - melhor
+    /// esforco sincrono com timeout curto (5 s), bombeando o dispatcher via
+    /// DispatcherFrame para as continuations da finalizacao rodarem sem
+    /// deadlock na UI thread. MP4 preserva o ja fragmentado; GIF pode perder
+    /// o buffer se o encode nao couber nos 5 s.
+    /// </summary>
+    protected override void OnSessionEnding(SessionEndingCancelEventArgs e)
+    {
+        base.OnSessionEnding(e);
+        if (_recordingController?.IsBusy == true && !_recordingFinalizeHandled)
+        {
+            _recordingFinalizeHandled = true;
+            PumpRecordingFinalize(TimeSpan.FromSeconds(5));
+        }
+    }
+
+    /// <summary>Espera a finalizacao da gravacao sem bloquear o dispatcher (RF-F3.16).</summary>
+    private void PumpRecordingFinalize(TimeSpan timeout)
+    {
+        if (_recordingController is not { } controller)
+            return;
+        try
+        {
+            // o PushFrame reentra no dispatcher: hotkeys globais e tray
+            // poderiam disparar handlers (flyout, captura, nova gravacao) no
+            // meio do shutdown - corta as entradas antes de pumpear
+            IsExiting = true;
+            try
+            {
+                var hotkeys = _host?.Services.GetService<HotkeyService>();
+                if (hotkeys is not null)
+                {
+                    if (_historyHotkeyId != 0)
+                    {
+                        hotkeys.Unregister(_historyHotkeyId);
+                        _historyHotkeyId = 0;
+                    }
+                    if (_captureHotkeyId != 0)
+                    {
+                        hotkeys.Unregister(_captureHotkeyId);
+                        _captureHotkeyId = 0;
+                    }
+                }
+                if (_tray is not null)
+                    _tray.ContextMenu = null; // cliques guardados por IsExiting
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("ShutdownDisableInputs", ex);
+            }
+
+            if (Dispatcher.HasShutdownStarted)
+            {
+                // dispatcher ja encerrando: PushFrame nao e permitido e as
+                // continuations de UI nao rodariam - melhor esforco bloqueante
+                // com teto curto (fMP4 preserva o ja fragmentado)
+                controller.StopAndFinalizeAsync(timeout).Wait(TimeSpan.FromSeconds(2));
+                return;
+            }
+
+            var frame = new System.Windows.Threading.DispatcherFrame();
+            _ = controller.StopAndFinalizeAsync(timeout)
+                .ContinueWith(_ => frame.Continue = false, TaskScheduler.Default);
+            var timer = new System.Windows.Threading.DispatcherTimer { Interval = timeout };
+            timer.Tick += (_, _) => { timer.Stop(); frame.Continue = false; };
+            timer.Start();
+            System.Windows.Threading.Dispatcher.PushFrame(frame);
+            timer.Stop();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("ShutdownFinalizeRecording", ex);
+        }
     }
 
     protected override void OnExit(ExitEventArgs e)
     {
+        // contagem/painel pendentes nao podem ligar engine/recorder no shutdown
+        if (_recordingController is { } pending && pending.IsActive && !pending.IsBusy)
+            pending.RequestStop();
+
+        // RF-F3.16: rede de seguranca para saidas que nao passaram pelo
+        // ExitApplication (ex.: Shutdown() direto) - mesmo melhor esforco
+        // do SessionEnding, com o teto de 30 s do fluxo normal
+        if (_recordingController?.IsBusy == true && !_recordingFinalizeHandled)
+        {
+            _recordingFinalizeHandled = true;
+            PumpRecordingFinalize(TimeSpan.FromSeconds(30));
+        }
+
         _tray?.Dispose();
         _clipboardMonitor?.Dispose();
         if (_host is not null)
