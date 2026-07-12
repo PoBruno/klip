@@ -6,6 +6,9 @@ using System.Windows.Media;
 using System.Windows.Media.Animation;
 using System.Windows.Shapes;
 using Klip.App.Services;
+using Klip.Core.Capture;
+using Klip.Core.Recording;
+using Klip.Core.Settings;
 using Klip.Interop;
 
 namespace Klip.App.Windows;
@@ -18,6 +21,10 @@ public enum CaptureMode
     Fullscreen,
     Scrolling,
     Freeform,
+
+    // RF-F4.01 / RF-F3.01: modos de gravacao (selecao retangular apenas)
+    Gif,
+    Mp4,
 }
 
 /// <summary>Delay before the shot fires.</summary>
@@ -44,16 +51,27 @@ public sealed class CaptureOverlayWindow : Window
 
     private readonly FrozenMonitor _source;
     private readonly IReadOnlyList<NativeMethods.TopLevelWindow> _topWindows;
-    private readonly Action<FrozenMonitor, Int32Rect, CaptureMode, Point[]?> _onSelected;
+    private readonly Action<FrozenMonitor, Int32Rect, CaptureMode, Point[]?, bool> _onSelected;
     private readonly Action _onCancel;
+
+    // F1: modificador que abre a captura direto no editor
+    private readonly CaptureEditorModifier _editorModifier;
+    private readonly bool _alwaysOpenEditor;
+    private bool _modifierHeldSinceOpen; // RF-F1.07: debounce do modificador vindo do hotkey
 
     private readonly Grid _root = new();
     private readonly System.Windows.Shapes.Path _scrim;
     private readonly Rectangle _selectionBorder;
     private readonly TextBlock _sizeLabel;
+    private readonly TextBlock _editorHintLabel;
     private readonly Border _sizeLabelHost;
     private readonly List<Button> _modeButtons = [];
     private Border? _toolbar;
+
+    // UX submenu de gravacao: painel inline abaixo do botao GIF/MP4 da toolbar
+    private readonly SettingsService _settings;
+    private readonly Func<IAudioDeviceEnumerator> _audioEnumeratorFactory;
+    private RecordingOptionsPanel? _recordingPanel;
 
     private bool _dragging;
     private Point _dragStartDip;
@@ -68,11 +86,19 @@ public sealed class CaptureOverlayWindow : Window
         FrozenMonitor source,
         bool showToolbar,
         IReadOnlyList<NativeMethods.TopLevelWindow> topWindows,
-        Action<FrozenMonitor, Int32Rect, CaptureMode, Point[]?> onSelected,
+        CaptureEditorModifier editorModifier,
+        bool alwaysOpenEditor,
+        SettingsService settings,
+        Func<IAudioDeviceEnumerator> audioEnumeratorFactory,
+        Action<FrozenMonitor, Int32Rect, CaptureMode, Point[]?, bool> onSelected,
         Action onCancel)
     {
         _source = source;
         _topWindows = topWindows;
+        _editorModifier = editorModifier;
+        _alwaysOpenEditor = alwaysOpenEditor;
+        _settings = settings;
+        _audioEnumeratorFactory = audioEnumeratorFactory;
         _onSelected = onSelected;
         _onCancel = onCancel;
 
@@ -132,12 +158,24 @@ public sealed class CaptureOverlayWindow : Window
             FontSize = 12,
             FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
         };
+        // RF-F1.04: hint discreto do modificador junto ao label de dimensões
+        _editorHintLabel = new TextBlock
+        {
+            Foreground = HintIdleBrush,
+            FontSize = 12,
+            FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
+            Margin = new Thickness(10, 0, 0, 0),
+            Visibility = Visibility.Collapsed,
+        };
+        var labelPanel = new StackPanel { Orientation = Orientation.Horizontal };
+        labelPanel.Children.Add(_sizeLabel);
+        labelPanel.Children.Add(_editorHintLabel);
         _sizeLabelHost = new Border
         {
             Background = new SolidColorBrush(Color.FromArgb(0xCC, 0x20, 0x20, 0x20)),
             CornerRadius = new CornerRadius(4),
             Padding = new Thickness(6, 2, 6, 2),
-            Child = _sizeLabel,
+            Child = labelPanel,
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false,
             HorizontalAlignment = HorizontalAlignment.Left,
@@ -153,11 +191,8 @@ public sealed class CaptureOverlayWindow : Window
         MouseDown += OnOverlayMouseDown;
         MouseMove += OnOverlayMouseMove;
         MouseUp += OnOverlayMouseUp;
-        KeyDown += (_, e) =>
-        {
-            if (e.Key == Key.Escape)
-                _onCancel();
-        };
+        KeyDown += OnOverlayKeyDown;
+        KeyUp += OnOverlayKeyUp;
     }
 
     public void ShowOverlay()
@@ -177,9 +212,31 @@ public sealed class CaptureOverlayWindow : Window
         Activate();
         Focus();
 
+        // RF-F1.07: se o modificador configurado já estava pressionado quando o
+        // overlay abriu (ex.: hotkey Ctrl+Shift+S contém Ctrl), ignora até que
+        // seja solto e pressionado de novo. Leitura única via GetAsyncKeyState
+        // porque o WM_KEYDOWN original foi para outra janela (D-F1.1).
+        _modifierHeldSinceOpen = _editorModifier switch
+        {
+            CaptureEditorModifier.Control => NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL),
+            CaptureEditorModifier.Shift => NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT),
+            CaptureEditorModifier.Alt => NativeMethods.IsKeyDown(NativeMethods.VK_MENU),
+            _ => false,
+        };
+
         var transform = PresentationSource.FromVisual(this)?.CompositionTarget?.TransformToDevice;
         _scale = transform?.M11 ?? _source.Monitor.Dpi / 96.0;
         UpdateScrim();
+
+        // UX submenu de gravacao: o modo e compartilhado entre sessoes; se o
+        // overlay ja abre em GIF/MP4, o submenu aparece direto abaixo do botao
+        // (apos o layout da toolbar, senao TranslatePoint devolve lixo)
+        if (_toolbar is not null && _mode is CaptureMode.Gif or CaptureMode.Mp4)
+        {
+            Dispatcher.BeginInvoke(
+                () => ShowRecordingOptions(_mode),
+                System.Windows.Threading.DispatcherPriority.Loaded);
+        }
     }
 
     public void CloseOverlay()
@@ -209,6 +266,13 @@ public sealed class CaptureOverlayWindow : Window
 
         // scrolling capture
         AddModeButton(panel, "\uEC8F", Localization.Loc.ModeScrolling, CaptureMode.Scrolling);
+
+        panel.Children.Add(Divider());
+
+        // RF-F4.01/RF-F3.01: gravacao GIF (\uF4A9 = GIF, Segoe Fluent Icons)
+        // e MP4 (\uE714 = Video); selecao retangular igual ao modo retangulo
+        AddModeButton(panel, "\uF4A9", Localization.Loc.ModeGif, CaptureMode.Gif);
+        AddModeButton(panel, "\uE714", Localization.Loc.ModeMp4, CaptureMode.Mp4);
 
         panel.Children.Add(Divider());
 
@@ -260,13 +324,78 @@ public sealed class CaptureOverlayWindow : Window
         button.Tag = mode;
         button.Click += (_, _) =>
         {
+            // UX submenu de gravacao: clicar de novo no modo ja ativo alterna
+            // o submenu; trocar de modo fecha o do outro e abre o deste
+            var repeat = _mode == mode;
             _mode = mode;
             ResetSelection();
             ResetLasso();
             RefreshToolbarState();
+
+            if (mode is CaptureMode.Gif or CaptureMode.Mp4)
+            {
+                if (repeat && _recordingPanel is not null)
+                    HideRecordingOptions();
+                else
+                    ShowRecordingOptions(mode);
+            }
+            else
+            {
+                HideRecordingOptions(); // modos nao-gravacao nao tem submenu
+            }
         };
         _modeButtons.Add(button);
         panel.Children.Add(button);
+    }
+
+    // ----- UX submenu de gravacao (painel inline GIF/MP4) -----
+
+    /// <summary>
+    /// Abre o painel de opcoes ancorado abaixo do botao GIF/MP4. As mudancas
+    /// persistem na hora (SettingsService) e valem para a proxima gravacao;
+    /// a selecao de area segue direto para gravar, sem painel pre-gravacao.
+    /// </summary>
+    private void ShowRecordingOptions(CaptureMode mode)
+    {
+        HideRecordingOptions();
+        if (_toolbar is null)
+            return;
+
+        var panel = new RecordingOptionsPanel(
+            mode == CaptureMode.Gif ? RecordingKind.Gif : RecordingKind.Mp4,
+            _settings,
+            _audioEnumeratorFactory);
+        _recordingPanel = panel;
+        _root.Children.Add(panel);
+        // a lista de microfones carrega async e muda a altura/largura:
+        // reancora a cada mudanca de tamanho
+        panel.SizeChanged += (_, _) => PositionRecordingOptions();
+        PositionRecordingOptions();
+    }
+
+    private void HideRecordingOptions()
+    {
+        if (_recordingPanel is null)
+            return;
+        _root.Children.Remove(_recordingPanel);
+        _recordingPanel = null;
+    }
+
+    /// <summary>Centraliza o painel sob o botao do modo, logo abaixo da pill, clampado ao monitor.</summary>
+    private void PositionRecordingOptions()
+    {
+        if (_recordingPanel is null || _toolbar is null)
+            return;
+        var mode = _recordingPanel.Kind == RecordingKind.Gif ? CaptureMode.Gif : CaptureMode.Mp4;
+        var button = _modeButtons.FirstOrDefault(b => (CaptureMode)b.Tag == mode);
+        if (button is null)
+            return;
+
+        var anchorX = button.TranslatePoint(new Point(button.ActualWidth / 2, 0), _root).X;
+        var top = _toolbar.TranslatePoint(new Point(0, _toolbar.ActualHeight), _root).Y + 8;
+        var width = _recordingPanel.ActualWidth;
+        var left = Math.Clamp(anchorX - width / 2, 8.0, Math.Max(8.0, _root.ActualWidth - width - 8));
+        _recordingPanel.Margin = new Thickness(left, top, 0, 0);
     }
 
     private void RefreshToolbarState()
@@ -326,14 +455,21 @@ public sealed class CaptureOverlayWindow : Window
 
     // ----- Interaction -----
 
+    /// <summary>Modos que selecionam arrastando um retangulo (inclui gravacao).</summary>
+    private bool IsDragRectMode =>
+        _mode is CaptureMode.Rectangle or CaptureMode.Scrolling or CaptureMode.Gif or CaptureMode.Mp4;
+
     private void OnOverlayMouseDown(object sender, MouseButtonEventArgs e)
     {
-        if (e.ChangedButton != MouseButton.Left || (_toolbar?.IsMouseOver ?? false))
+        // UX submenu de gravacao: interacoes na toolbar OU no submenu inline
+        // nunca iniciam a selecao de area (clicar fora deles segue normal)
+        if (e.ChangedButton != MouseButton.Left || (_toolbar?.IsMouseOver ?? false)
+            || (_recordingPanel?.IsMouseOver ?? false))
             return;
 
         switch (_mode)
         {
-            case CaptureMode.Rectangle or CaptureMode.Scrolling:
+            case CaptureMode.Rectangle or CaptureMode.Scrolling or CaptureMode.Gif or CaptureMode.Mp4:
                 _dragging = true;
                 _dragStartDip = e.GetPosition(_root);
                 _selectionDip = new Rect(_dragStartDip, _dragStartDip);
@@ -364,7 +500,7 @@ public sealed class CaptureOverlayWindow : Window
     {
         var posDip = e.GetPosition(_root);
 
-        if (_mode is CaptureMode.Rectangle or CaptureMode.Scrolling && _dragging)
+        if (IsDragRectMode && _dragging)
         {
             _selectionDip = new Rect(_dragStartDip, posDip);
             UpdateSelectionVisuals();
@@ -406,7 +542,7 @@ public sealed class CaptureOverlayWindow : Window
 
     private void OnOverlayMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_mode is CaptureMode.Rectangle or CaptureMode.Scrolling && _dragging && e.ChangedButton == MouseButton.Left)
+        if (IsDragRectMode && _dragging && e.ChangedButton == MouseButton.Left)
         {
             _dragging = false;
             ReleaseMouseCapture();
@@ -417,6 +553,103 @@ public sealed class CaptureOverlayWindow : Window
             _dragging = false;
             ReleaseMouseCapture();
             CompleteFreeform();
+        }
+    }
+
+    // ----- Editor modifier (spec F1) -----
+
+    private void OnOverlayKeyDown(object sender, KeyEventArgs e)
+    {
+        if (e.Key == Key.Escape)
+        {
+            _onCancel();
+            return;
+        }
+
+        if (!IsConfiguredModifierKey(e))
+            return;
+
+        // RF-F1.04 / CA-F1.6: estado do hint acompanha a tecla em tempo real
+        UpdateEditorHint();
+        if (e.Key == Key.System)
+            e.Handled = true; // Alt configurado não deve acionar semântica de menu
+    }
+
+    private void OnOverlayKeyUp(object sender, KeyEventArgs e)
+    {
+        if (!IsConfiguredModifierKey(e))
+            return;
+
+        // RF-F1.07: soltar a tecla encerra o debounce herdado do hotkey de captura
+        _modifierHeldSinceOpen = false;
+        UpdateEditorHint();
+        if (e.Key == Key.System)
+            e.Handled = true;
+    }
+
+    /// <summary>True se a tecla do evento é o modificador configurado (Alt chega como Key.System).</summary>
+    private bool IsConfiguredModifierKey(KeyEventArgs e)
+    {
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        return _editorModifier switch
+        {
+            CaptureEditorModifier.Control => key is Key.LeftCtrl or Key.RightCtrl,
+            CaptureEditorModifier.Shift => key is Key.LeftShift or Key.RightShift,
+            CaptureEditorModifier.Alt => key is Key.LeftAlt or Key.RightAlt,
+            _ => false,
+        };
+    }
+
+    /// <summary>Estado físico via Keyboard.Modifiers; o overlay tem foco (D-F1.1).</summary>
+    private bool IsConfiguredModifierDown() => _editorModifier switch
+    {
+        CaptureEditorModifier.Control => Keyboard.Modifiers.HasFlag(ModifierKeys.Control),
+        CaptureEditorModifier.Shift => Keyboard.Modifiers.HasFlag(ModifierKeys.Shift),
+        CaptureEditorModifier.Alt => Keyboard.Modifiers.HasFlag(ModifierKeys.Alt),
+        _ => false,
+    };
+
+    /// <summary>Pedido de abrir no editor no instante da seleção (RF-F1.01/RF-F1.03).</summary>
+    private bool IsEditorModifierActive() =>
+        EditorOpenDecision.IsModifierRequestValid(
+            _editorModifier, IsConfiguredModifierDown(), _modifierHeldSinceOpen);
+
+    private string ModifierDisplayName => _editorModifier switch
+    {
+        CaptureEditorModifier.Control => "Ctrl",
+        CaptureEditorModifier.Shift => "Shift",
+        CaptureEditorModifier.Alt => "Alt",
+        _ => string.Empty,
+    };
+
+    // cinza discreto no estado ocioso; accent do sistema quando ativo
+    private static Brush HintIdleBrush { get; } = new SolidColorBrush(Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF));
+
+    private static Brush HintActiveBrush =>
+        Application.Current?.TryFindResource("SystemAccentColorSecondaryBrush") as Brush
+            ?? new SolidColorBrush(Color.FromRgb(0x60, 0xCD, 0xFF)); // fallback: accent claro padrão
+
+    /// <summary>RF-F1.04/RF-F1.05: hint some com modificador desativado ou toggle "sempre editor".</summary>
+    private void UpdateEditorHint()
+    {
+        if (_editorModifier == CaptureEditorModifier.None || _alwaysOpenEditor
+            || _mode == CaptureMode.Scrolling // RF-F1.06: rolagem já abre no editor
+            || _mode is CaptureMode.Gif or CaptureMode.Mp4) // gravacao nao abre no editor de imagem
+        {
+            _editorHintLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        _editorHintLabel.Visibility = Visibility.Visible;
+        if (IsEditorModifierActive())
+        {
+            _editorHintLabel.Text = Localization.Loc.EditorHintRelease;
+            _editorHintLabel.Foreground = HintActiveBrush;
+        }
+        else
+        {
+            _editorHintLabel.Text = string.Format(Localization.Loc.EditorHint, ModifierDisplayName);
+            _editorHintLabel.Foreground = HintIdleBrush;
         }
     }
 
@@ -469,7 +702,8 @@ public sealed class CaptureOverlayWindow : Window
         }
 
         _lassoShape.Visibility = Visibility.Collapsed;
-        _onSelected(_source, rect, CaptureMode.Freeform, mask);
+        // RF-F1.03: estado do modificador lido no instante em que a seleção termina
+        _onSelected(_source, rect, CaptureMode.Freeform, mask, IsEditorModifierActive());
     }
 
     private void CompleteSelection()
@@ -496,10 +730,21 @@ public sealed class CaptureOverlayWindow : Window
     /// <summary>Runs the countdown delay before firing the shot.</summary>
     private void FireSelection(Int32Rect rect)
     {
+        // gravacao (RF-F3.01/RF-F4.01): sem delay do overlay (a contagem de 3 s
+        // vem do fluxo de gravacao) e sem modificador de editor
+        if (_mode is CaptureMode.Gif or CaptureMode.Mp4)
+        {
+            _onSelected(_source, rect, _mode, null, false);
+            return;
+        }
+
+        // RF-F1.03/RF-F1.06: modificador lido no fim da seleção; nunca vale para rolagem
+        var openEditor = _mode != CaptureMode.Scrolling && IsEditorModifierActive();
+
         // scrolling ignores the delay, the user sets the pace there
         if (_delay == CaptureDelay.None || _mode == CaptureMode.Scrolling)
         {
-            _onSelected(_source, rect, _mode, null);
+            _onSelected(_source, rect, _mode, null, openEditor);
             return;
         }
 
@@ -526,7 +771,7 @@ public sealed class CaptureOverlayWindow : Window
                 timer.Stop();
                 _countdownLabel.Visibility = Visibility.Collapsed;
                 // grab the frame now, the screen may have changed while we waited
-                _onSelected(_source, rect, _mode, null);
+                _onSelected(_source, rect, _mode, null, openEditor);
             }
             else
             {
@@ -622,6 +867,7 @@ public sealed class CaptureOverlayWindow : Window
         _selectionBorder.Height = _selectionDip.Height;
 
         _sizeLabel.Text = $"{(int)(_selectionDip.Width * _scale)} x {(int)(_selectionDip.Height * _scale)}";
+        UpdateEditorHint(); // RF-F1.04: hint acompanha o label de dimensões
         _sizeLabelHost.Visibility = Visibility.Visible;
         var labelY = _selectionDip.Bottom + 8;
         if (labelY > _root.ActualHeight - 32)
