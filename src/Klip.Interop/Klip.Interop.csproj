@@ -1,7 +1,9 @@
 <Project Sdk="Microsoft.NET.Sdk">
 
   <PropertyGroup>
-    <TargetFramework>net9.0-windows10.0.19041.0</TargetFramework>
+    <!-- TFM 26100 expoe as APIs WGC mais novas (IsBorderRequired 20348, MinUpdateInterval 26100);
+         o minimo suportado continua 17763 com feature-detection em runtime (spec F2). -->
+    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,6 +13,15 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Klip.Core\Klip.Core.csproj" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <!-- D-F2.2: bindings D3D11/DXGI (MIT) para o motor de captura de frames -->
+    <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
+    <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
+    <!-- D-F3.2: SinkWriter H.264/AAC (MIT); D-F3.4: WASAPI loopback/capture + resample (MIT) -->
+    <PackageReference Include="Vortice.MediaFoundation" Version="3.8.3" />
+    <PackageReference Include="NAudio" Version="2.2.1" />
   </ItemGroup>
 
 </Project>
