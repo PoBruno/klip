@@ -15,6 +15,9 @@ public enum ClipboardItemOrigin
     Clipboard,
     Capture,
     Editor,
+
+    /// <summary>Gravacao de tela GIF/MP4 (RF-F3.07). Novo valor no FIM: nao muda os ints persistidos.</summary>
+    Recording,
 }
 
 /// <summary>One row of the history (items table).</summary>

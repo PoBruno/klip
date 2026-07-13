@@ -1,0 +1,179 @@
+<ui:FluentWindow
+    x:Class="Klip.App.Windows.MediaEditorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:local="clr-namespace:Klip.App.Windows"
+    Title="{DynamicResource Loc.MediaEditorTitle}"
+    Width="1000"
+    Height="680"
+    MinWidth="720"
+    MinHeight="480"
+    AllowDrop="True"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen">
+    <ui:FluentWindow.Resources>
+        <Style x:Key="ActionButton" TargetType="Button">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border
+                            x:Name="Bg"
+                            Padding="10,8"
+                            Margin="1,0"
+                            Background="Transparent"
+                            CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="MuteToggle" TargetType="ToggleButton">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ToggleButton">
+                        <Border
+                            x:Name="Bg"
+                            Padding="8,6"
+                            Background="Transparent"
+                            CornerRadius="4">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsChecked" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <Style x:Key="Glyph" TargetType="TextBlock">
+            <Setter Property="FontFamily" Value="Segoe Fluent Icons" />
+            <Setter Property="FontSize" Value="16" />
+        </Style>
+    </ui:FluentWindow.Resources>
+
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="{DynamicResource Loc.MediaEditorTitle}" />
+
+        <!-- Barra superior: ferramentas GIF, undo/redo, exportacao (RF-F5.01/02) -->
+        <Grid Grid.Row="1" Margin="12,4,12,8">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*" />
+                <ColumnDefinition Width="Auto" />
+            </Grid.ColumnDefinitions>
+
+            <StackPanel Grid.Column="0" Orientation="Horizontal">
+                <!-- RF-F5.08: ferramentas so de GIF -->
+                <Button x:Name="ReduceFpsButton" Style="{StaticResource ActionButton}"
+                        Content="{DynamicResource Loc.MediaReduceFps}" FontSize="12" />
+                <Button x:Name="ResizeButton" Style="{StaticResource ActionButton}"
+                        Content="{DynamicResource Loc.MediaResize}" FontSize="12" />
+            </StackPanel>
+
+            <StackPanel Grid.Column="1" Orientation="Horizontal">
+                <Button x:Name="UndoButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.ToolUndo}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE7A7;" />
+                </Button>
+                <Button x:Name="RedoButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.ToolRedo}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE7A6;" />
+                </Button>
+                <Border Width="1" Margin="6,8" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Button x:Name="ExportGifButton" Style="{StaticResource ActionButton}"
+                        Content="{DynamicResource Loc.MediaExportGif}" FontSize="12" />
+                <Button x:Name="ExportMp4Button" Style="{StaticResource ActionButton}"
+                        Content="{DynamicResource Loc.MediaExportMp4}" FontSize="12" />
+            </StackPanel>
+        </Grid>
+
+        <!-- Area de preview -->
+        <Border Grid.Row="2" Margin="12,0,12,8" CornerRadius="6"
+                Background="{DynamicResource ControlFillColorInputActiveBrush}">
+            <Grid>
+                <ContentControl x:Name="PreviewHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
+                <!-- RF-F5.20: overlay preto exibido enquanto o playhead esta num gap (MP4) -->
+                <Border x:Name="GapOverlay" Background="Black" CornerRadius="6" Visibility="Collapsed" />
+            </Grid>
+        </Border>
+
+        <!-- Painel de audio (so MP4 com audio, RF-F5.09) -->
+        <Border x:Name="AudioPanel" Grid.Row="3" Margin="12,0,12,8" Padding="10,6"
+                CornerRadius="6" Visibility="Collapsed"
+                Background="{DynamicResource ControlFillColorDefaultBrush}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Style="{StaticResource Glyph}" Text="&#xE767;" VerticalAlignment="Center" />
+                <TextBlock Margin="8,0,12,0" VerticalAlignment="Center" FontSize="12"
+                           Text="{DynamicResource Loc.MediaAudioTrack}" />
+                <ToggleButton x:Name="MuteToggleButton" Style="{StaticResource MuteToggle}"
+                              ToolTip="{DynamicResource Loc.MediaMuteTooltip}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE74F;" FontSize="14" />
+                </ToggleButton>
+                <Slider x:Name="VolumeSlider" Width="160" Margin="12,0,8,0" VerticalAlignment="Center"
+                        Minimum="0" Maximum="200" Value="100" SmallChange="5" LargeChange="25" />
+                <TextBlock x:Name="VolumeLabel" Width="44" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />
+            </StackPanel>
+        </Border>
+
+        <!-- Barra de transporte: play/step/tempo + corte/exclusao, junto da timeline (pedido do dono) -->
+        <Grid Grid.Row="4" Margin="12,0,12,2">
+            <StackPanel Orientation="Horizontal" HorizontalAlignment="Center">
+                <Button x:Name="PlayButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.MediaPlayPause}">
+                    <TextBlock x:Name="PlayGlyph" Style="{StaticResource Glyph}" Text="&#xE768;" />
+                </Button>
+                <Button x:Name="StepBackButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.MediaStepBack}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE76B;" />
+                </Button>
+                <Button x:Name="StepForwardButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.MediaStepForward}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE76C;" />
+                </Button>
+                <TextBlock x:Name="PositionLabel" Margin="8,0" VerticalAlignment="Center" FontSize="12"
+                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <Border Width="1" Margin="6,8" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
+                <Button x:Name="SplitButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.MediaSplit}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE8C6;" />
+                </Button>
+                <Button x:Name="RemoveSegmentButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.MediaRemoveSegment}">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE74D;" />
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- Timeline (RF-F5.05..07) -->
+        <local:MediaEditorTimelineControl x:Name="Timeline" Grid.Row="5" Height="96" Margin="12,0,12,4" />
+
+        <!-- Status -->
+        <TextBlock x:Name="StatusText" Grid.Row="6" Margin="12,4,12,8" FontSize="11"
+                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+    </Grid>
+</ui:FluentWindow>

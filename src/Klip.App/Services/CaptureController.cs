@@ -1,6 +1,7 @@
 using System.Windows;
 using System.Windows.Media.Imaging;
 using Klip.App.Windows;
+using Klip.Core.Capture;
 using Klip.Core.Clipboard;
 using Klip.Core.Settings;
 using Klip.Interop;
@@ -17,7 +18,8 @@ public sealed class CaptureController(
     PanoramicCaptureService panoramicCapture,
     ClipboardWriteGuard writeGuard,
     ClipboardIngestService ingest,
-    SettingsService settings)
+    SettingsService settings,
+    RecordingController recording)
 {
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private bool _sessionActive;
@@ -57,6 +59,12 @@ public sealed class CaptureController(
                     frame,
                     showToolbar: frame.Monitor.Handle == cursorMonitor,
                     topWindows,
+                    settings.Current.EditorModifierKey,
+                    settings.Current.AlwaysOpenEditorAfterCapture,
+                    settings,
+                    // UX submenu de gravacao: enumeracao de microfones no painel
+                    // inline (concreta do Interop so via factory, ponto unico)
+                    RecordingInteropFactory.CreateAudioDeviceEnumerator,
                     OnRegionSelected,
                     CancelCapture);
                 _overlays.Add(overlay);
@@ -72,8 +80,12 @@ public sealed class CaptureController(
         }
     }
 
-    /// <summary>Gets the selection in physical pixels from the source monitor.</summary>
-    private void OnRegionSelected(FrozenMonitor source, Int32Rect physicalRect, CaptureMode mode, Point[]? mask)
+    /// <summary>
+    /// Gets the selection in physical pixels from the source monitor.
+    /// <paramref name="openEditorRequested"/> é o estado físico do modificador
+    /// reportado pelo overlay; a política fica aqui (D-F1.2).
+    /// </summary>
+    private void OnRegionSelected(FrozenMonitor source, Int32Rect physicalRect, CaptureMode mode, Point[]? mask, bool openEditorRequested)
     {
         CloseOverlays();
 
@@ -89,13 +101,32 @@ public sealed class CaptureController(
             return;
         }
 
+        // RF-F3.01/RF-F4.01: gravacao sai do fluxo de captura estatica e vai
+        // para o RecordingController com a regiao em px fisicos do desktop virtual
+        if (mode is CaptureMode.Gif or CaptureMode.Mp4)
+        {
+            var region = new Core.Recording.RecordingRegion(
+                source.Monitor.Bounds.left + physicalRect.X,
+                source.Monitor.Bounds.top + physicalRect.Y,
+                physicalRect.Width,
+                physicalRect.Height);
+            recording.Start(region,
+                mode == CaptureMode.Gif ? RecordingKind.Gif : RecordingKind.Mp4,
+                source.Monitor.Bounds);
+            _sessionActive = false;
+            return;
+        }
+
         try
         {
             var cropped = ScreenCaptureService.Crop(source.Frame, physicalRect);
             // freeform: keep only what's inside the lasso, rest goes transparent
             if (mode == CaptureMode.Freeform && mask is { Length: >= 3 })
                 cropped = ApplyPolygonMask(cropped, mask);
-            PublishResult(cropped, Localization.Loc.CaptureTitleScreen, openEditor: false);
+            // RF-F1.01/RF-F1.05: modificador OU toggle "sempre editor"; toast suprimido ao abrir no editor
+            var openEditor = EditorOpenDecision.ShouldOpenEditor(
+                openEditorRequested, settings.Current.AlwaysOpenEditorAfterCapture);
+            PublishResult(cropped, Localization.Loc.CaptureTitleScreen, openEditor, suppressToast: openEditor);
         }
         catch (Exception ex)
         {
@@ -184,7 +215,8 @@ public sealed class CaptureController(
                 if (result is not null)
                 {
                     var (image, discarded) = result.Value;
-                    PublishResult(image, Localization.Loc.CaptureTitleScrolling, openEditor: true);
+                    // rolagem sempre abre no editor (RF-F1.06); toast suprimido como no RF-F1.01
+                    PublishResult(image, Localization.Loc.CaptureTitleScrolling, openEditor: true, suppressToast: true);
                     if (limitHit)
                         CaptureCompleted?.Invoke(Localization.Loc.NotifyMemoryLimit);
                     else if (discarded > 3)
@@ -213,7 +245,7 @@ public sealed class CaptureController(
     }
 
     /// <summary>clipboard (PNG + DIB, anti-loop) + history + auto-save + toast.</summary>
-    private Core.Storage.ClipboardItem? PublishResult(BitmapSource image, string title, bool openEditor)
+    private Core.Storage.ClipboardItem? PublishResult(BitmapSource image, string title, bool openEditor, bool suppressToast = false)
     {
         var png = ScreenCaptureService.EncodePng(image);
         writeGuard.WriteImageFromPng(png, image);
@@ -233,9 +265,13 @@ public sealed class CaptureController(
         if (settings.Current.AutoSaveScreenshots)
             AutoSave(png);
 
-        CaptureCompleted?.Invoke(
-            string.Format(Localization.Loc.NotifyCaptureCopied, image.PixelWidth, image.PixelHeight) +
-            ". " + Localization.Loc.NotifyClickToEdit);
+        // RF-F1.01: quando abre direto no editor, o toast é redundante (Q-F1.2)
+        if (!suppressToast)
+        {
+            CaptureCompleted?.Invoke(
+                string.Format(Localization.Loc.NotifyCaptureCopied, image.PixelWidth, image.PixelHeight) +
+                ". " + Localization.Loc.NotifyClickToEdit);
+        }
         StartupLog.Write($"Captura: {image.PixelWidth}x{image.PixelHeight}, item {item?.Id}");
 
         if (openEditor && item is not null)

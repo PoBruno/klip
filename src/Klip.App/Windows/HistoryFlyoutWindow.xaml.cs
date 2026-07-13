@@ -910,6 +910,19 @@ public partial class HistoryFlyoutWindow
             AddMenuItem(menu, Localization.Loc.MenuOpenInEditor, "\uE70F", () => _viewModel.OpenInEditorCommand.Execute(item));
             menu.Items.Add(new Separator());
         }
+        // RF-F5.16: gif/mp4 de arquivo unico abre no editor de midia, se ele
+        // existir nesta build e o arquivo ainda estiver no disco
+        if (item.MediaFilePath is { } mediaPath &&
+            Services.MediaEditorGateway.IsAvailable &&
+            System.IO.File.Exists(mediaPath))
+        {
+            AddMenuItem(menu, Localization.Loc.MenuOpenInMediaEditor, "\uE714", () =>
+            {
+                HideFlyout();
+                Services.MediaEditorGateway.Open(mediaPath);
+            });
+            menu.Items.Add(new Separator());
+        }
         AddMenuItem(menu, item.IsPinned ? Localization.Loc.MenuUnpin : Localization.Loc.MenuPin, item.IsPinned ? "\uE77A" : "\uE718",
             () => _viewModel.TogglePinCommand.Execute(item));
         AddMenuItem(menu, item.IsFavorite ? Localization.Loc.MenuUnfavorite : Localization.Loc.MenuFavorite, item.IsFavorite ? "\uE8D9" : "\uE734",

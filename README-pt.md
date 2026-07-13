@@ -33,7 +33,7 @@ O painel Win+V e a Ferramenta de Captura nativos são bonitos, mas te seguram: o
 O Klip mantém essa mesma cara e jeito nativo, e tira os limites. Duas coisas, bem feitas:
 
 - **Histórico de clipboard** como o Win+V, mas ilimitado, com busca de verdade, filtro por data, favoritos, abas e um seletor de emoji colorido.
-- **Captura de tela** como o Win+Shift+S, mais captura com rolagem e um editor de verdade.
+- **Captura de tela** como o Win+Shift+S, mais captura com rolagem, gravação de tela em GIF/MP4 e um editor de verdade.
 
 App WPF nativo, Fluent Design e Mica, mora na bandeja. Sem Electron, sem navegador, sem telemetria. Pode assumir os atalhos `Win+V` e `Win+Shift+S` se você deixar.
 
@@ -50,7 +50,18 @@ App WPF nativo, Fluent Design e Mica, mora na bandeja. Sem Electron, sem navegad
 - Cópia fiel do overlay do Win+Shift+S.
 - Modos: retângulo, janela, tela cheia, forma livre.
 - Captura com rolagem pra pegar uma página inteira que não cabe na tela.
+- Segure Ctrl ao selecionar pra abrir a captura direto no editor.
 - Ciente de múltiplos monitores, geometria em pixels físicos.
+
+**Gravação de tela**
+- Grave qualquer região em MP4 (H.264 + AAC, encoder de hardware com tuning pra conteúdo de tela) com som do sistema e microfones, ou direto em GIF com encoder próprio.
+- Control hub flutuante durante a gravação: arraste pra onde quiser (qualquer monitor), pause/retome, mute do mic ou do som do sistema, mostrar/ocultar o cursor e a borda da região, tudo ao vivo.
+- MP4 fragmentado à prova de crash: mesmo se o app morrer, o que foi gravado continua reproduzível.
+
+**Editor de mídia**
+- Edição em timeline pras gravações: dividir, aparar, reordenar e afastar segmentos (espaços viram preto), com desfazer/refazer.
+- Ferramentas de GIF: reduzir fps, redimensionar, scrub frame a frame; exportar MP4 pra GIF.
+- Exporta pelo encoder GIF embutido ou via `ffmpeg` quando disponível.
 
 **Editor**
 - Caneta, marca-texto, formas, seta, texto livre, recorte, girar.

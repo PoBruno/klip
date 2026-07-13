@@ -4,7 +4,7 @@
 
 #define AppName "Klip"
 #ifndef AppVersion
-  #define AppVersion "1.2.0"
+  #define AppVersion "1.3.0"
 #endif
 #define AppPublisher "PoBruno"
 #define AppUrl "https://github.com/PoBruno/klip"

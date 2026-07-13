@@ -16,10 +16,49 @@ public sealed partial class HistoryItemViewModel(
     /// <summary>Card thumbnail source: use the thumb if we have one, else the full PNG.</summary>
     public string? ThumbSource => thumbAbsolutePath ?? imageAbsolutePath;
 
+    /// <summary>
+    /// RF-F4.05/RF-F5.16: caminho do arquivo de midia quando o item e um
+    /// arquivo unico .gif/.mp4 que ainda existe no disco (gravacoes entram
+    /// assim no historico); null para os demais itens.
+    /// </summary>
+    public string? MediaFilePath { get; } = ResolveMediaFilePath(item);
+
+    /// <summary>GIF de arquivo unico: o card mostra thumbnail que anima no hover.</summary>
+    public bool IsGifMedia => MediaFilePath?.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) == true;
+
+    /// <summary>MP4 de arquivo unico: o card mostra o glifo de video (sem decode).</summary>
+    public bool IsMp4Media => MediaFilePath?.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase) == true;
+
+    public bool IsMediaFile => MediaFilePath is not null;
+
+    /// <summary>O preview textual so aparece quando nao ha imagem nem midia.</summary>
+    public bool ShowsTextPreview => !IsImage && !IsMediaFile;
+
+    private static string? ResolveMediaFilePath(ClipboardItem item)
+    {
+        if (item.Type != ClipboardItemType.Files || item.FilesJson is null)
+            return null;
+        try
+        {
+            var files = System.Text.Json.JsonSerializer.Deserialize<List<string>>(item.FilesJson);
+            if (files is not [{ Length: > 0 } single])
+                return null; // so arquivo unico conta como midia (RF-F4.05)
+            if (!single.EndsWith(".gif", StringComparison.OrdinalIgnoreCase) &&
+                !single.EndsWith(".mp4", StringComparison.OrdinalIgnoreCase))
+                return null;
+            return System.IO.File.Exists(single) ? single : null;
+        }
+        catch (System.Text.Json.JsonException)
+        {
+            return null;
+        }
+    }
+
     /// <summary>Segoe Fluent Icons glyph per type.</summary>
     public string TypeGlyph => Item.Type switch
     {
         ClipboardItemType.Image => "\uE91B", // Photo
+        ClipboardItemType.Files when IsMediaFile => "\uE714", // Video (gravacao gif/mp4)
         ClipboardItemType.Files => "\uE7C3", // Page
         ClipboardItemType.Html => "\uE8D2",  // Font
         _ => "\uE8D2",
