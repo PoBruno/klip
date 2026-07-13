@@ -5,12 +5,14 @@
 
 # Klip
 
-**Histórico de clipboard e captura de tela para o Windows 11, sem os limites do nativo.**
+**Histórico de clipboard, captura e gravação de tela para o Windows 11, sem os limites do nativo.**
 
 [![Build](https://github.com/PoBruno/klip/actions/workflows/ci.yml/badge.svg)](https://github.com/PoBruno/klip/actions/workflows/ci.yml)
 [![Release](https://img.shields.io/github/v/release/PoBruno/klip?display_name=tag&sort=semver)](https://github.com/PoBruno/klip/releases/latest)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white)](#)
+
+<img src="docs/demo.gif" alt="Klip em ação: histórico de clipboard, captura com rolagem e o editor de mídia" width="840">
 
 ### Instalar
 
