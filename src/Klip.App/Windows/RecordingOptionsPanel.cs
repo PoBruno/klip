@@ -19,9 +19,19 @@ namespace Klip.App.Windows;
 /// </summary>
 public sealed class RecordingOptionsPanel : Border
 {
-    private static readonly Brush LabelBrush = new SolidColorBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush FaintBrush = new SolidColorBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
-    private static readonly Brush SelectedFill = new SolidColorBrush(Color.FromArgb(0x4D, 0xFF, 0xFF, 0xFF));
+    // RF-P4.09: brushes estaticos congelados - nenhum ponto do painel muta a
+    // cor (so troca a referencia do Brush), entao Freeze() elimina o custo de
+    // change notification/thread affinity de cada SolidColorBrush.
+    private static readonly Brush LabelBrush = FrozenBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush FaintBrush = FrozenBrush(Color.FromArgb(0x80, 0xFF, 0xFF, 0xFF));
+    private static readonly Brush SelectedFill = FrozenBrush(Color.FromArgb(0x4D, 0xFF, 0xFF, 0xFF));
+
+    private static SolidColorBrush FrozenBrush(Color color)
+    {
+        var brush = new SolidColorBrush(color);
+        brush.Freeze();
+        return brush;
+    }
 
     private readonly SettingsService _settings;
 
@@ -50,6 +60,10 @@ public sealed class RecordingOptionsPanel : Border
             ShadowDepth = 2,
             Opacity = 0.5,
         };
+        // RF-P4.01: o painel e conteudo estatico (rotulos + segmentos) sob um
+        // DropShadowEffect; o bitmap cache rasteriza a sombra uma vez em vez de
+        // reprocessar o filtro a cada invalidacao do overlay.
+        CacheMode = new BitmapCache();
 
         Child = kind == RecordingKind.Gif ? BuildGifContent() : BuildMp4Content(audioEnumeratorFactory);
     }

@@ -99,7 +99,16 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid Margin="8" TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. O texto do painel vive
+         entre 9 e 16 px (cards, metadados, glifos de acao), faixa em que Display e
+         mais nitido e mais barato que Ideal. Os dois glifos grandes (32 e 40 px)
+         sobrescrevem para Ideal localmente. -->
+    <Grid
+        Margin="8"
+        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -332,9 +341,13 @@
                                     TextTrimming="None"
                                     TextWrapping="Wrap"
                                     Visibility="{Binding ShowsTextPreview, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
+                                <!-- RF-P4.01: a thumbnail ja e decodificada perto do tamanho
+                                     de exibicao (DecodePixelWidth no conversor), entao o filtro
+                                     de alta qualidade so custa tempo por frame de scroll. -->
                                 <Image
                                     MaxHeight="96"
                                     HorizontalAlignment="Left"
+                                    RenderOptions.BitmapScalingMode="LowQuality"
                                     Source="{Binding ThumbSource, Mode=OneTime, Converter={StaticResource PathToThumbnail}}"
                                     Stretch="Uniform"
                                     StretchDirection="DownOnly"
@@ -348,11 +361,13 @@
                                     StretchDirection="DownOnly"
                                     Visibility="{Binding IsGifMedia, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
                                 <!-- MP4: glifo de vídeo como placeholder, sem decode de vídeo -->
+                                <!-- RF-P4.01: 40 px esta acima da faixa onde Display ajuda; volta para Ideal -->
                                 <TextBlock
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
                                     FontFamily="Segoe Fluent Icons"
                                     FontSize="40"
+                                    TextOptions.TextFormattingMode="Ideal"
                                     Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                     Text="&#xE714;"
                                     Visibility="{Binding IsMp4Media, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
@@ -416,9 +431,11 @@
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
             Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
+            <!-- RF-P4.01: glifo de 32 px no limite da faixa util de Display; volta para Ideal -->
             <TextBlock
                 FontFamily="Segoe Fluent Icons"
                 FontSize="32"
+                TextOptions.TextFormattingMode="Ideal"
                 HorizontalAlignment="Center"
                 Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                 Text="&#xE8C8;" />

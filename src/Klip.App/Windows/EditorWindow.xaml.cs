@@ -608,7 +608,7 @@ public partial class EditorWindow
         var size = 32 + CurrentThickness * 8; // thickness slider scales the emoji
         var image = new Image
         {
-            Source = LoadEmojiImage(_pendingEmojiCode),
+            Source = LoadEmojiStampImage(_pendingEmojiCode),
             Width = size,
             Height = size,
             Stretch = Stretch.Uniform,
@@ -626,20 +626,70 @@ public partial class EditorWindow
     }
 
     // cache the decoded emoji so the picker and stamping don't re-read the file
-    private static readonly Dictionary<string, BitmapImage> _emojiCache = new();
+    //
+    // RF-P4.03: dois caches distintos porque os dois usos tem resolucoes alvo
+    // opostas. A paleta do popup exibe 20x20 DIP, entao decodificar o Twemoji
+    // (72x72 nativo) em 24 px basta - mesmo valor ja usado no painel de emoji do
+    // flyout. O stamp, porem, e colocado no canvas de 32 ate 160 DIP (size =
+    // 32 + espessura * 8) e entra no RenderTargetBitmap da exportacao em
+    // resolucao plena da imagem base; um decode de 24 px sairia borrado na
+    // imagem final. Por isso o cache de stamp mantem a resolucao nativa.
+    private const int EmojiCacheLimit = 128;
+    private const int EmojiPaletteDecodeWidth = 24;
 
-    private static BitmapImage LoadEmojiImage(string code)
+    private static readonly EmojiImageCache _emojiPaletteCache = new(EmojiPaletteDecodeWidth);
+    private static readonly EmojiImageCache _emojiStampCache = new(decodeWidth: 0);
+
+    /// <summary>Emoji da paleta do popup (botoes de 20x20).</summary>
+    private static BitmapImage LoadEmojiPaletteImage(string code) => _emojiPaletteCache.Get(code);
+
+    /// <summary>Emoji carimbado no canvas: resolucao nativa, vai para a exportacao.</summary>
+    private static BitmapImage LoadEmojiStampImage(string code) => _emojiStampCache.Get(code);
+
+    /// <summary>
+    /// RF-P4.03: cache LRU com teto fixo. O dicionario anterior nao tinha limite
+    /// e podia reter ~400 BitmapImage vivos pelo resto do processo (percorrer as
+    /// categorias ou usar a busca toca o repositorio inteiro). Uso restrito a UI
+    /// thread (paleta e stamp), por isso sem lock.
+    /// </summary>
+    private sealed class EmojiImageCache(int decodeWidth)
     {
-        if (_emojiCache.TryGetValue(code, out var cached))
-            return cached;
-        var img = new BitmapImage();
-        img.BeginInit();
-        img.CacheOption = BitmapCacheOption.OnLoad;
-        img.UriSource = new Uri(Controls.EmojiRepository.ImageUri(code));
-        img.EndInit();
-        img.Freeze();
-        _emojiCache[code] = img;
-        return img;
+        private readonly Dictionary<string, BitmapImage> _items = new();
+        private readonly LinkedList<string> _order = new(); // frente = mais recente
+
+        public BitmapImage Get(string code)
+        {
+            if (_items.TryGetValue(code, out var cached))
+            {
+                _order.Remove(code);
+                _order.AddFirst(code);
+                return cached;
+            }
+
+            var image = new BitmapImage();
+            image.BeginInit();
+            image.CacheOption = BitmapCacheOption.OnLoad;
+            if (decodeWidth > 0)
+                image.DecodePixelWidth = decodeWidth; // 0 = resolucao nativa do PNG
+            image.UriSource = new Uri(Controls.EmojiRepository.ImageUri(code));
+            image.EndInit();
+            image.Freeze();
+
+            _items[code] = image;
+            _order.AddFirst(code);
+            Evict();
+            return image;
+        }
+
+        private void Evict()
+        {
+            while (_items.Count > EmojiCacheLimit && _order.Last is not null)
+            {
+                var oldest = _order.Last.Value;
+                _order.RemoveLast();
+                _items.Remove(oldest);
+            }
+        }
     }
 
     private void BuildEmojiPickerOnce()
@@ -688,7 +738,7 @@ public partial class EditorWindow
                 Style = style,
                 Content = new Image
                 {
-                    Source = LoadEmojiImage(emoji.Code),
+                    Source = LoadEmojiPaletteImage(emoji.Code),
                     Width = 20,
                     Height = 20,
                     Stretch = Stretch.Uniform,

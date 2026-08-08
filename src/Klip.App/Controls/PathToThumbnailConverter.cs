@@ -16,7 +16,12 @@ public sealed class PathToThumbnailConverter : IValueConverter
     private static readonly LinkedList<string> Order = new(); // front = most recent
     private static readonly Lock Sync = new();
 
-    public int DecodeWidth { get; set; } = 256;
+    // RF-P4.03: o card do flyout exibe a thumbnail com MaxHeight=96 e
+    // StretchDirection=DownOnly, entao a largura util fica perto de 96-128 px
+    // em 100% de DPI. 192 cobre 150-200% de escala com folga e decodifica
+    // ~1,8x menos pixels que os 256 anteriores (256^2 / 192^2), sem perda
+    // visivel: o filtro de reducao ainda trabalha com sobra de resolucao.
+    public int DecodeWidth { get; set; } = 192;
 
     public object? Convert(object? value, Type targetType, object? parameter, CultureInfo culture)
     {

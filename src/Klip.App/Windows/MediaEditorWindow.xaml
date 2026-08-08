@@ -73,7 +73,13 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. Todo texto da janela
+         fica em 11-16 px, faixa em que Display e mais nitido que Ideal. -->
+    <Grid
+        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />

@@ -121,7 +121,14 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}">
+    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. Display vale para a
+         moldura (glifos e rotulos de 11-16 px); a camada de documento (CanvasHost)
+         volta para Ideal, ver comentario la embaixo. -->
+    <Grid
+        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
         <Grid.RowDefinitions>
             <RowDefinition Height="Auto" />
             <RowDefinition Height="Auto" />
@@ -247,7 +254,12 @@
             HorizontalScrollBarVisibility="Auto"
             VerticalScrollBarVisibility="Auto">
             <Grid x:Name="ZoomWrapper" HorizontalAlignment="Center" VerticalAlignment="Center">
-                <Grid x:Name="CanvasHost" HorizontalAlignment="Left" VerticalAlignment="Top">
+                <!-- RF-P4.01: a camada de documento fica em Ideal (nao herda o Display
+                     da moldura): a anotacao de texto chega a 46 px (14 + espessura * 2),
+                     o conteudo sofre ScaleTransform de zoom e e rasterizado pelo
+                     RenderTargetBitmap da exportacao. Ideal preserva o resultado atual. -->
+                <Grid x:Name="CanvasHost" HorizontalAlignment="Left" VerticalAlignment="Top"
+                      TextOptions.TextFormattingMode="Ideal">
                     <Image x:Name="BaseImage" Stretch="None" />
                     <InkCanvas
                         x:Name="Ink"
@@ -286,10 +298,13 @@
         <!-- Emoji picker popup (opens from the emoji tool button) -->
         <Popup x:Name="EmojiPopup" Grid.Row="1" PlacementTarget="{Binding ElementName=ToolEmoji}"
                Placement="Bottom" StaysOpen="False" AllowsTransparency="True">
+            <!-- RF-P4.01: CacheMode rasteriza a sombra do popup uma vez em vez de
+                 reprocessar o DropShadowEffect a cada invalidacao da subarvore. -->
             <Border Width="320" Height="280" Margin="8"
                     Background="{DynamicResource AcrylicBackgroundFillColorDefaultBrush}"
                     BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
-                    BorderThickness="1" CornerRadius="8">
+                    BorderThickness="1" CornerRadius="8"
+                    CacheMode="BitmapCache">
                 <Border.Effect>
                     <DropShadowEffect BlurRadius="16" ShadowDepth="2" Opacity="0.4" />
                 </Border.Effect>

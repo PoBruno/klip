@@ -48,6 +48,8 @@ public sealed class CaptureOverlayWindow : Window
     private static CaptureDelay _delay = CaptureDelay.None;    // same deal
     private Button? _delayButton;
     private TextBlock? _countdownLabel;
+    // RF-P4.02: timer do delay guardado para poder ser parado no cancelamento
+    private System.Windows.Threading.DispatcherTimer? _countdownTimer;
 
     private readonly FrozenMonitor _source;
     private readonly IReadOnlyList<NativeMethods.TopLevelWindow> _topWindows;
@@ -133,8 +135,7 @@ public sealed class CaptureOverlayWindow : Window
             HorizontalAlignment = HorizontalAlignment.Left,
             VerticalAlignment = VerticalAlignment.Top,
         };
-        _selectionBorder.BeginAnimation(Shape.StrokeDashOffsetProperty,
-            new DoubleAnimation(0, 14, TimeSpan.FromSeconds(0.6)) { RepeatBehavior = RepeatBehavior.Forever });
+        _selectionBorder.BeginAnimation(Shape.StrokeDashOffsetProperty, MarchingAntsAnimation());
         _root.Children.Add(_selectionBorder);
 
         // freeform lasso outline (same marching-ants look, but a polygon)
@@ -147,8 +148,7 @@ public sealed class CaptureOverlayWindow : Window
             Visibility = Visibility.Collapsed,
             IsHitTestVisible = false,
         };
-        _lassoShape.BeginAnimation(Shape.StrokeDashOffsetProperty,
-            new DoubleAnimation(0, 14, TimeSpan.FromSeconds(0.6)) { RepeatBehavior = RepeatBehavior.Forever });
+        _lassoShape.BeginAnimation(Shape.StrokeDashOffsetProperty, MarchingAntsAnimation());
         _root.Children.Add(_lassoShape);
 
         // selection size in physical px, the native tool doesn't show this
@@ -193,6 +193,46 @@ public sealed class CaptureOverlayWindow : Window
         MouseUp += OnOverlayMouseUp;
         KeyDown += OnOverlayKeyDown;
         KeyUp += OnOverlayKeyUp;
+    }
+
+    /// <summary>
+    /// RF-P4.02: marching ants com framerate limitado. Cada tick da animacao
+    /// retessela o tracejado da geometria no render thread; sem limite ela roda
+    /// na taxa do monitor (60-360 Hz) sobre a tela inteira congelada. 15 fps
+    /// mantem o efeito de formiguinhas e corta o trabalho em 4x ou mais.
+    /// </summary>
+    private static DoubleAnimation MarchingAntsAnimation()
+    {
+        var animation = new DoubleAnimation(0, 14, TimeSpan.FromSeconds(0.6))
+        {
+            RepeatBehavior = RepeatBehavior.Forever,
+        };
+        Timeline.SetDesiredFrameRate(animation, 15);
+        return animation;
+    }
+
+    /// <summary>
+    /// RF-P4.02: solta as animacoes Forever quando o overlay sai de cena. Sem
+    /// isso o clock continua vivo enquanto a janela nao e coletada.
+    /// </summary>
+    private void StopMarchingAnts()
+    {
+        _selectionBorder.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+        _lassoShape.BeginAnimation(Shape.StrokeDashOffsetProperty, null);
+    }
+
+    /// <summary>RF-P4.02: countdown cancelado (Esc/fechar) nao pode sobreviver ao overlay.</summary>
+    private void StopCountdown()
+    {
+        _countdownTimer?.Stop();
+        _countdownTimer = null;
+    }
+
+    protected override void OnClosing(System.ComponentModel.CancelEventArgs e)
+    {
+        StopMarchingAnts();
+        StopCountdown();
+        base.OnClosing(e);
     }
 
     public void ShowOverlay()
@@ -294,7 +334,11 @@ public sealed class CaptureOverlayWindow : Window
         panel.Children.Add(Divider());
 
         var close = ToolButton("\uE711", Localization.Loc.CloseEsc);
-        close.Click += (_, _) => _onCancel();
+        close.Click += (_, _) =>
+        {
+            StopCountdown(); // RF-P4.02: idem Esc
+            _onCancel();
+        };
         panel.Children.Add(close);
 
         _toolbar = new Border
@@ -562,6 +606,7 @@ public sealed class CaptureOverlayWindow : Window
     {
         if (e.Key == Key.Escape)
         {
+            StopCountdown(); // RF-P4.02: cancelar durante a contagem nao dispara a captura
             _onCancel();
             return;
         }
@@ -623,7 +668,16 @@ public sealed class CaptureOverlayWindow : Window
     };
 
     // cinza discreto no estado ocioso; accent do sistema quando ativo
-    private static Brush HintIdleBrush { get; } = new SolidColorBrush(Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF));
+    // RF-P4.09: congelado - o hint so troca a referencia do Foreground, nunca
+    // muta a cor deste brush.
+    private static Brush HintIdleBrush { get; } = CreateHintIdleBrush();
+
+    private static SolidColorBrush CreateHintIdleBrush()
+    {
+        var brush = new SolidColorBrush(Color.FromArgb(0xB3, 0xFF, 0xFF, 0xFF));
+        brush.Freeze();
+        return brush;
+    }
 
     private static Brush HintActiveBrush =>
         Application.Current?.TryFindResource("SystemAccentColorSecondaryBrush") as Brush
@@ -763,12 +817,14 @@ public sealed class CaptureOverlayWindow : Window
         {
             Interval = TimeSpan.FromSeconds(1),
         };
+        StopCountdown(); // RF-P4.02: nunca deixar dois countdowns vivos
+        _countdownTimer = timer;
         timer.Tick += (_, _) =>
         {
             remaining--;
             if (remaining <= 0)
             {
-                timer.Stop();
+                StopCountdown();
                 _countdownLabel.Visibility = Visibility.Collapsed;
                 // grab the frame now, the screen may have changed while we waited
                 _onSelected(_source, rect, _mode, null, openEditor);
