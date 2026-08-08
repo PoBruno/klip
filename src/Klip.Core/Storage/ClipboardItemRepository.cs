@@ -1,3 +1,5 @@
+using System.Globalization;
+using System.Text;
 using Microsoft.Data.Sqlite;
 
 namespace Klip.Core.Storage;
@@ -13,6 +15,14 @@ public sealed class HistoryQuery
     /// <summary>Keyset for paging; ignored when there's a search.</summary>
     public long? BeforeLastCopiedAtMs { get; init; }
     public int Limit { get; init; } = 100;
+
+    /// <summary>
+    /// RF-P2.10: quando true a busca ordena apenas por i.last_copied_at DESC, pulando o
+    /// calculo de bm25() (que le as listas de posicao do indice FTS para CADA match antes
+    /// do LIMIT). Serve para busca incremental enquanto o usuario digita.
+    /// Default false = ordenacao por relevancia, o comportamento historico.
+    /// </summary>
+    public bool OrderBySearchRecency { get; init; }
 }
 
 /// <summary>
@@ -21,6 +31,12 @@ public sealed class HistoryQuery
 /// </summary>
 public sealed class ClipboardItemRepository(Database database)
 {
+    /// <summary>
+    /// RF-P2.09: tamanho maximo de cada lote de ids em "DELETE ... WHERE id IN (...)".
+    /// Mantem o texto do statement curto e fica muito abaixo do limite de variaveis do SQLite.
+    /// </summary>
+    private const int DeleteBatchSize = 500;
+
     /// <summary>Inserts, or if the hash is already there just bumps last_copied_at and moves it to the top.</summary>
     public long Upsert(ClipboardItem item)
     {
@@ -36,25 +52,31 @@ public sealed class ClipboardItemRepository(Database database)
             ON CONFLICT(content_hash) DO UPDATE SET last_copied_at = excluded.last_copied_at
             RETURNING id;
             """;
-        cmd.Parameters.AddWithValue("$type", TypeToDb(item.Type));
-        cmd.Parameters.AddWithValue("$created", item.CreatedAt.ToUnixTimeMilliseconds());
-        cmd.Parameters.AddWithValue("$copied", item.LastCopiedAt.ToUnixTimeMilliseconds());
-        cmd.Parameters.AddWithValue("$app", (object?)item.SourceApp ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$title", (object?)item.SourceTitle ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$origin", item.Origin.ToString().ToLowerInvariant());
-        cmd.Parameters.AddWithValue("$pinned", item.Pinned ? 1 : 0);
-        cmd.Parameters.AddWithValue("$favorite", item.Favorite ? 1 : 0);
-        cmd.Parameters.AddWithValue("$hash", item.ContentHash);
-        cmd.Parameters.AddWithValue("$size", item.ByteSize);
-        cmd.Parameters.AddWithValue("$text", (object?)item.TextContent ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$html", (object?)item.HtmlContent ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$rtf", (object?)item.RtfContent ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$file", (object?)item.FilePath ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$thumb", (object?)item.ThumbPath ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$files", (object?)item.FilesJson ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$ocr", (object?)item.OcrText ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$w", (object?)item.Width ?? DBNull.Value);
-        cmd.Parameters.AddWithValue("$h", (object?)item.Height ?? DBNull.Value);
+
+        // RF-P2.08: parametros declarados com SqliteType explicito em vez de AddWithValue.
+        // AddWithValue precisa inferir o tipo do object em runtime a cada chamada (e eram 19
+        // por Upsert); aqui o tipo ja vem pronto e o binding vai direto.
+        var p = cmd.Parameters;
+        p.Add("$type", SqliteType.Text).Value = TypeToDb(item.Type);
+        p.Add("$created", SqliteType.Integer).Value = item.CreatedAt.ToUnixTimeMilliseconds();
+        p.Add("$copied", SqliteType.Integer).Value = item.LastCopiedAt.ToUnixTimeMilliseconds();
+        p.Add("$app", SqliteType.Text).Value = (object?)item.SourceApp ?? DBNull.Value;
+        p.Add("$title", SqliteType.Text).Value = (object?)item.SourceTitle ?? DBNull.Value;
+        p.Add("$origin", SqliteType.Text).Value = OriginToDb(item.Origin);
+        p.Add("$pinned", SqliteType.Integer).Value = item.Pinned ? 1L : 0L;
+        p.Add("$favorite", SqliteType.Integer).Value = item.Favorite ? 1L : 0L;
+        p.Add("$hash", SqliteType.Text).Value = item.ContentHash;
+        p.Add("$size", SqliteType.Integer).Value = item.ByteSize;
+        p.Add("$text", SqliteType.Text).Value = (object?)item.TextContent ?? DBNull.Value;
+        p.Add("$html", SqliteType.Text).Value = (object?)item.HtmlContent ?? DBNull.Value;
+        p.Add("$rtf", SqliteType.Text).Value = (object?)item.RtfContent ?? DBNull.Value;
+        p.Add("$file", SqliteType.Text).Value = (object?)item.FilePath ?? DBNull.Value;
+        p.Add("$thumb", SqliteType.Text).Value = (object?)item.ThumbPath ?? DBNull.Value;
+        p.Add("$files", SqliteType.Text).Value = (object?)item.FilesJson ?? DBNull.Value;
+        p.Add("$ocr", SqliteType.Text).Value = (object?)item.OcrText ?? DBNull.Value;
+        p.Add("$w", SqliteType.Integer).Value = item.Width is { } w ? w : (object)DBNull.Value;
+        p.Add("$h", SqliteType.Integer).Value = item.Height is { } h ? h : (object)DBNull.Value;
+
         var id = (long)cmd.ExecuteScalar()!;
         item.Id = id;
         return id;
@@ -65,7 +87,42 @@ public sealed class ClipboardItemRepository(Database database)
     {
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
+        var sql = BuildQuerySql(query, cmd);
+        if (sql is null)
+            return [];
+        cmd.CommandText = sql;
+        return ReadAll(cmd);
+    }
 
+    /// <summary>
+    /// RF-P2.08: diagnostico. Roda EXPLAIN QUERY PLAN em cima do SQL EXATO que Query()
+    /// montaria para estes filtros e devolve a coluna "detail" do plano. Existe para os
+    /// testes conseguirem provar que nenhuma listagem cai em "USE TEMP B-TREE FOR ORDER BY"
+    /// sem precisar duplicar (e deixar apodrecer) o SQL do repositorio.
+    /// </summary>
+    public IReadOnlyList<string> ExplainQueryPlan(HistoryQuery query)
+    {
+        using var conn = database.OpenConnection();
+        using var cmd = conn.CreateCommand();
+        var sql = BuildQuerySql(query, cmd);
+        if (sql is null)
+            return [];
+        cmd.CommandText = "EXPLAIN QUERY PLAN " + sql;
+
+        var plan = new List<string>();
+        using var reader = cmd.ExecuteReader();
+        var detail = reader.GetOrdinal("detail");
+        while (reader.Read())
+            plan.Add(reader.GetString(detail));
+        return plan;
+    }
+
+    /// <summary>
+    /// Monta o SQL da listagem/busca e associa os parametros ao comando.
+    /// Devolve null quando a busca ficou vazia depois do saneamento (nada a consultar).
+    /// </summary>
+    private static string? BuildQuerySql(HistoryQuery query, SqliteCommand cmd)
+    {
         var where = new List<string>();
         var hasSearch = !string.IsNullOrWhiteSpace(query.SearchText);
 
@@ -73,9 +130,9 @@ public sealed class ClipboardItemRepository(Database database)
         {
             var sanitized = SanitizeFtsQuery(query.SearchText!);
             if (sanitized.Length == 0)
-                return [];
+                return null;
             where.Add("items_fts MATCH $q");
-            cmd.Parameters.AddWithValue("$q", sanitized);
+            cmd.Parameters.Add("$q", SqliteType.Text).Value = sanitized;
         }
 
         if (query.Type is not null)
@@ -83,12 +140,20 @@ public sealed class ClipboardItemRepository(Database database)
             // the "Text" tab lumps text+html together (same thing to the user)
             if (query.Type == ClipboardItemType.Text)
             {
-                where.Add("i.type IN ('text', 'html')");
+                // RF-P2.08: o "+" e proposital. Com "i.type IN (...)" o SQLite usa
+                // ix_items_type_pinned_recency para cada valor do IN, e como ele concatena os
+                // dois trechos a saida deixa de estar ordenada - resultado: le TODAS as linhas
+                // text+html e joga numa temp B-tree antes do LIMIT. O "+" (no-op documentado do
+                // SQLite que desabilita o termo como restricao de indice) faz o planner varrer
+                // ix_items_pinned_recency / ix_items_fav_pinned_recency ja na ordem final e
+                // apenas filtrar o type linha a linha, parando no LIMIT. Ambos os lados da
+                // comparacao sao TEXT, entao a perda de afinidade de coluna nao muda resultado.
+                where.Add("+i.type IN ('text', 'html')");
             }
             else
             {
                 where.Add("i.type = $type");
-                cmd.Parameters.AddWithValue("$type", TypeToDb(query.Type.Value));
+                cmd.Parameters.Add("$type", SqliteType.Text).Value = TypeToDb(query.Type.Value);
             }
         }
 
@@ -98,39 +163,51 @@ public sealed class ClipboardItemRepository(Database database)
         if (query.DateFromMs is not null)
         {
             where.Add("i.last_copied_at >= $from");
-            cmd.Parameters.AddWithValue("$from", query.DateFromMs.Value);
+            cmd.Parameters.Add("$from", SqliteType.Integer).Value = query.DateFromMs.Value;
         }
 
         if (query.DateToMs is not null)
         {
             where.Add("i.last_copied_at < $to");
-            cmd.Parameters.AddWithValue("$to", query.DateToMs.Value);
+            cmd.Parameters.Add("$to", SqliteType.Integer).Value = query.DateToMs.Value;
         }
 
         if (!hasSearch && query.BeforeLastCopiedAtMs is not null)
         {
             // keyset paging so na ordem cronologica, ou seja nos itens nao fixados
             where.Add("i.pinned = 0 AND i.last_copied_at < $before");
-            cmd.Parameters.AddWithValue("$before", query.BeforeLastCopiedAtMs.Value);
+            cmd.Parameters.Add("$before", SqliteType.Integer).Value = query.BeforeLastCopiedAtMs.Value;
         }
 
         var whereSql = where.Count > 0 ? "WHERE " + string.Join(" AND ", where) : "";
-        cmd.CommandText = hasSearch
-            ? $"""
-              SELECT i.* FROM items_fts f
-              JOIN items i ON i.id = f.rowid
-              {whereSql}
-              ORDER BY bm25(items_fts), i.last_copied_at DESC
-              LIMIT $limit;
-              """
-            : $"""
-              SELECT i.* FROM items i
-              {whereSql}
-              ORDER BY i.pinned DESC, i.last_copied_at DESC
-              LIMIT $limit;
-              """;
-        cmd.Parameters.AddWithValue("$limit", query.Limit);
-        return ReadAll(cmd);
+        cmd.Parameters.Add("$limit", SqliteType.Integer).Value = query.Limit;
+
+        if (!hasSearch)
+        {
+            // RF-P2.08: este ORDER BY e coberto por ix_items_pinned_recency,
+            // ix_items_type_pinned_recency ou ix_items_fav_pinned_recency conforme o filtro.
+            return $"""
+                SELECT i.* FROM items i
+                {whereSql}
+                ORDER BY i.pinned DESC, i.last_copied_at DESC
+                LIMIT $limit;
+                """;
+        }
+
+        // RF-P2.10: bm25() pontua TODOS os matches antes do LIMIT, e pontuar exige ler as
+        // listas de posicao do indice FTS linha a linha. OrderBySearchRecency troca isso por
+        // uma ordenacao simples sobre uma coluna ja carregada.
+        var orderBy = query.OrderBySearchRecency
+            ? "i.last_copied_at DESC"
+            : "bm25(items_fts), i.last_copied_at DESC";
+
+        return $"""
+            SELECT i.* FROM items_fts f
+            JOIN items i ON i.id = f.rowid
+            {whereSql}
+            ORDER BY {orderBy}
+            LIMIT $limit;
+            """;
     }
 
     /// <summary>Keyset paging, never OFFSET.</summary>
@@ -148,6 +225,19 @@ public sealed class ClipboardItemRepository(Database database)
     public IReadOnlyList<ClipboardItem> Search(string query, int limit = 100) =>
         Query(new HistoryQuery { SearchText = query, Limit = limit });
 
+    /// <summary>
+    /// RF-P2.10: sobrecarga com escolha de ordenacao. orderByRecency = true pula bm25()
+    /// e ordena so por recencia (busca incremental). A sobrecarga antiga continua valendo
+    /// como relevancia, para nao mexer nos chamadores existentes.
+    /// </summary>
+    public IReadOnlyList<ClipboardItem> Search(string query, int limit, bool orderByRecency) =>
+        Query(new HistoryQuery
+        {
+            SearchText = query,
+            Limit = limit,
+            OrderBySearchRecency = orderByRecency,
+        });
+
     public void SetPinned(long id, bool pinned) => SetFlag(id, "pinned", pinned);
     public void SetFavorite(long id, bool favorite) => SetFlag(id, "favorite", favorite);
 
@@ -161,8 +251,8 @@ public sealed class ClipboardItemRepository(Database database)
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "UPDATE items SET ocr_text = $ocr WHERE id = $id;";
-        cmd.Parameters.AddWithValue("$ocr", ocrText);
-        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.Add("$ocr", SqliteType.Text).Value = ocrText;
+        cmd.Parameters.Add("$id", SqliteType.Integer).Value = id;
         cmd.ExecuteNonQuery();
     }
 
@@ -175,7 +265,7 @@ public sealed class ClipboardItemRepository(Database database)
         using (var read = conn.CreateCommand())
         {
             read.CommandText = "SELECT file_path FROM items WHERE id = $id;";
-            read.Parameters.AddWithValue("$id", id);
+            read.Parameters.Add("$id", SqliteType.Integer).Value = id;
             oldPath = read.ExecuteScalar() as string;
         }
 
@@ -186,13 +276,13 @@ public sealed class ClipboardItemRepository(Database database)
                 width = $w, height = $h, last_copied_at = $now
             WHERE id = $id;
             """;
-        cmd.Parameters.AddWithValue("$hash", contentHash);
-        cmd.Parameters.AddWithValue("$size", byteSize);
-        cmd.Parameters.AddWithValue("$file", filePath);
-        cmd.Parameters.AddWithValue("$w", width);
-        cmd.Parameters.AddWithValue("$h", height);
-        cmd.Parameters.AddWithValue("$now", DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.Add("$hash", SqliteType.Text).Value = contentHash;
+        cmd.Parameters.Add("$size", SqliteType.Integer).Value = byteSize;
+        cmd.Parameters.Add("$file", SqliteType.Text).Value = filePath;
+        cmd.Parameters.Add("$w", SqliteType.Integer).Value = width;
+        cmd.Parameters.Add("$h", SqliteType.Integer).Value = height;
+        cmd.Parameters.Add("$now", SqliteType.Integer).Value = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        cmd.Parameters.Add("$id", SqliteType.Integer).Value = id;
         try
         {
             cmd.ExecuteNonQuery();
@@ -210,7 +300,7 @@ public sealed class ClipboardItemRepository(Database database)
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT * FROM items WHERE id = $id;";
-        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.Add("$id", SqliteType.Integer).Value = id;
         var list = ReadAll(cmd);
         return list.Count > 0 ? list[0] : null;
     }
@@ -220,7 +310,7 @@ public sealed class ClipboardItemRepository(Database database)
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "DELETE FROM items WHERE id = $id;";
-        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.Add("$id", SqliteType.Integer).Value = id;
         cmd.ExecuteNonQuery();
     }
 
@@ -233,13 +323,35 @@ public sealed class ClipboardItemRepository(Database database)
         return cmd.ExecuteNonQuery();
     }
 
-    /// <summary>Compacta o banco pra recuperar o espa[co que sobrou depois das delecoes.</summary>
+    /// <summary>Compacta o banco pra recuperar o espaco que sobrou depois das delecoes.</summary>
     public void Vacuum()
     {
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "VACUUM;";
         cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>
+    /// RF-P2.10: funde os b-trees incrementais do FTS5 em um so. Depois de muita ingestao o
+    /// indice fica fragmentado em varios segmentos e toda busca precisa varrer todos eles.
+    /// Q-P.4: o schema declara prefix='2 3', que grava DOIS indices de prefixo extras a cada
+    /// insercao (encarece escrita e disco). Tirar isso agora exigiria rebuild completo do
+    /// indice, entao fica como questao em aberto no plano - aqui so registramos o custo.
+    /// </summary>
+    public void OptimizeFullTextIndex()
+    {
+        try
+        {
+            using var conn = database.OpenConnection();
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = "INSERT INTO items_fts(items_fts) VALUES('optimize');";
+            cmd.ExecuteNonQuery();
+        }
+        catch (SqliteException)
+        {
+            // otimizacao e oportunista: banco ocupado ou indice ausente nao pode derrubar o app
+        }
     }
 
     public long Count()
@@ -265,105 +377,147 @@ public sealed class ClipboardItemRepository(Database database)
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "SELECT 1 FROM items WHERE content_hash = $h LIMIT 1;";
-        cmd.Parameters.AddWithValue("$h", contentHash);
+        cmd.Parameters.Add("$h", SqliteType.Text).Value = contentHash;
         return cmd.ExecuteScalar() is not null;
     }
 
     /// <summary>
     /// Retention: drops the oldest first, never pinned/favorite ones.
     /// Returns the orphan file paths so the caller can wipe them off disk.
+    /// RF-P2.09: nenhuma etapa varre a tabela inteira e nenhum valor entra no SQL por
+    /// interpolacao de string.
     /// </summary>
     public IReadOnlyList<string> ApplyRetention(int maxItems, int maxAgeDays, long maxTotalBytes = 0)
     {
         var orphans = new List<string>();
+        // RF-P2.09: quem consome apaga arquivo por arquivo, entao nada de null nem repetido
+        var seen = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
         using var conn = database.OpenConnection();
-        using var tx = conn.BeginTransaction();
+        // RF-P2.08: BEGIN IMMEDIATE. Uma transacao DEFERRED abre em modo leitura e so pede o
+        // write-lock no primeiro DELETE; se outro escritor entrou nesse intervalo o upgrade
+        // falha com SQLITE_BUSY sem chance de retry - classico em WAL.
+        using var tx = conn.BeginTransaction(deferred: false);
 
         if (maxAgeDays > 0)
         {
+            // RF-P2.09: DELETE ... RETURNING resolve corte e coleta de arquivos em UM
+            // statement. Antes eram dois com o mesmo WHERE (um SELECT dos paths, um DELETE).
             var cutoff = DateTimeOffset.UtcNow.AddDays(-maxAgeDays).ToUnixTimeMilliseconds();
-            CollectFiles(conn, tx, $"pinned = 0 AND favorite = 0 AND last_copied_at < {cutoff}", orphans);
             using var cmd = conn.CreateCommand();
             cmd.Transaction = tx;
-            cmd.CommandText = "DELETE FROM items WHERE pinned = 0 AND favorite = 0 AND last_copied_at < $cutoff;";
-            cmd.Parameters.AddWithValue("$cutoff", cutoff);
-            cmd.ExecuteNonQuery();
+            cmd.CommandText = """
+                DELETE FROM items
+                WHERE pinned = 0 AND favorite = 0 AND last_copied_at < $cutoff
+                RETURNING file_path, thumb_path;
+                """;
+            cmd.Parameters.Add("$cutoff", SqliteType.Integer).Value = cutoff;
+            using var reader = cmd.ExecuteReader();
+            while (reader.Read())
+                CollectPaths(reader, fileOrdinal: 0, thumbOrdinal: 1, orphans, seen);
         }
 
         if (maxItems > 0)
         {
-            const string overflow = """
-                id IN (SELECT id FROM items WHERE pinned = 0 AND favorite = 0
-                       ORDER BY last_copied_at DESC LIMIT -1 OFFSET $max)
-                """;
+            // RF-P2.09: a subquery ordenada com OFFSET rodava DUAS vezes (uma para coletar os
+            // arquivos, outra dentro do DELETE). Agora roda uma vez so e os ids ficam
+            // materializados para o delete em lotes.
+            var ids = new List<long>();
             using (var collect = conn.CreateCommand())
             {
                 collect.Transaction = tx;
-                collect.CommandText = $"SELECT file_path, thumb_path FROM items WHERE {overflow};";
-                collect.Parameters.AddWithValue("$max", maxItems);
+                collect.CommandText = """
+                    SELECT id, file_path, thumb_path FROM items
+                    WHERE pinned = 0 AND favorite = 0
+                    ORDER BY last_copied_at DESC
+                    LIMIT -1 OFFSET $max;
+                    """;
+                collect.Parameters.Add("$max", SqliteType.Integer).Value = maxItems;
                 using var reader = collect.ExecuteReader();
                 while (reader.Read())
                 {
-                    if (!reader.IsDBNull(0)) orphans.Add(reader.GetString(0));
-                    if (!reader.IsDBNull(1)) orphans.Add(reader.GetString(1));
+                    ids.Add(reader.GetInt64(0));
+                    CollectPaths(reader, fileOrdinal: 1, thumbOrdinal: 2, orphans, seen);
                 }
             }
-            using var del = conn.CreateCommand();
-            del.Transaction = tx;
-            del.CommandText = $"DELETE FROM items WHERE {overflow};";
-            del.Parameters.AddWithValue("$max", maxItems);
-            del.ExecuteNonQuery();
+            DeleteByIds(conn, tx, ids);
         }
 
         if (maxTotalBytes > 0)
         {
-            // walk oldest to newest (skipping pinned/favorites), drop until the
-            // running total of byte_size fits under the cap
-            var toDelete = new List<long>();
+            // RF-P2.09: o soma-acumulada saiu do C# e virou window function. Antes o SELECT
+            // vinha SEM LIMIT e trazia TODAS as linhas nao fixadas para o processo so para
+            // somar byte_size; agora o SQLite so devolve as linhas que ja estouraram o teto.
+            var ids = new List<long>();
             using (var scan = conn.CreateCommand())
             {
                 scan.Transaction = tx;
                 scan.CommandText = """
-                    SELECT id, file_path, thumb_path, byte_size FROM items
-                    WHERE pinned = 0 AND favorite = 0
-                    ORDER BY last_copied_at DESC;
+                    WITH ranked AS (
+                        SELECT id, file_path, thumb_path,
+                               SUM(byte_size) OVER (ORDER BY last_copied_at DESC
+                                                    ROWS BETWEEN UNBOUNDED PRECEDING AND CURRENT ROW) AS running
+                        FROM items WHERE pinned = 0 AND favorite = 0
+                    )
+                    SELECT id, file_path, thumb_path FROM ranked WHERE running > $maxTotalBytes;
                     """;
+                scan.Parameters.Add("$maxTotalBytes", SqliteType.Integer).Value = maxTotalBytes;
                 using var reader = scan.ExecuteReader();
-                long running = 0;
                 while (reader.Read())
                 {
-                    running += reader.IsDBNull(3) ? 0 : reader.GetInt64(3);
-                    if (running <= maxTotalBytes)
-                        continue;
-                    toDelete.Add(reader.GetInt64(0));
-                    if (!reader.IsDBNull(1)) orphans.Add(reader.GetString(1));
-                    if (!reader.IsDBNull(2)) orphans.Add(reader.GetString(2));
+                    ids.Add(reader.GetInt64(0));
+                    CollectPaths(reader, fileOrdinal: 1, thumbOrdinal: 2, orphans, seen);
                 }
             }
-            if (toDelete.Count > 0)
-            {
-                using var del = conn.CreateCommand();
-                del.Transaction = tx;
-                del.CommandText = $"DELETE FROM items WHERE id IN ({string.Join(',', toDelete)});";
-                del.ExecuteNonQuery();
-            }
+            DeleteByIds(conn, tx, ids);
         }
 
         tx.Commit();
         return orphans;
     }
 
-    private static void CollectFiles(SqliteConnection conn, SqliteTransaction tx, string where, List<string> into)
+    /// <summary>
+    /// RF-P2.09: DELETE por lista de ids sem interpolar valor nenhum no SQL. Os placeholders
+    /// sao numerados ($id0, $id1, ...) e vao em lotes de DeleteBatchSize.
+    /// </summary>
+    private static void DeleteByIds(SqliteConnection conn, SqliteTransaction tx, List<long> ids)
     {
-        using var cmd = conn.CreateCommand();
-        cmd.Transaction = tx;
-        cmd.CommandText = $"SELECT file_path, thumb_path FROM items WHERE {where};";
-        using var reader = cmd.ExecuteReader();
-        while (reader.Read())
+        for (var offset = 0; offset < ids.Count; offset += DeleteBatchSize)
         {
-            if (!reader.IsDBNull(0)) into.Add(reader.GetString(0));
-            if (!reader.IsDBNull(1)) into.Add(reader.GetString(1));
+            var count = Math.Min(DeleteBatchSize, ids.Count - offset);
+            var sql = new StringBuilder("DELETE FROM items WHERE id IN (", 40 + count * 7);
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+
+            for (var i = 0; i < count; i++)
+            {
+                var name = "$id" + i.ToString(CultureInfo.InvariantCulture);
+                if (i > 0)
+                    sql.Append(',');
+                sql.Append(name);
+                cmd.Parameters.Add(name, SqliteType.Integer).Value = ids[offset + i];
+            }
+
+            sql.Append(");");
+            cmd.CommandText = sql.ToString();
+            cmd.ExecuteNonQuery();
         }
+    }
+
+    private static void CollectPaths(SqliteDataReader reader, int fileOrdinal, int thumbOrdinal,
+        List<string> orphans, HashSet<string> seen)
+    {
+        AddPath(reader, fileOrdinal, orphans, seen);
+        AddPath(reader, thumbOrdinal, orphans, seen);
+    }
+
+    private static void AddPath(SqliteDataReader reader, int ordinal, List<string> orphans, HashSet<string> seen)
+    {
+        if (reader.IsDBNull(ordinal))
+            return;
+        var path = reader.GetString(ordinal);
+        if (path.Length > 0 && seen.Add(path))
+            orphans.Add(path);
     }
 
     private void SetFlag(long id, string column, bool value)
@@ -371,8 +525,8 @@ public sealed class ClipboardItemRepository(Database database)
         using var conn = database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"UPDATE items SET {column} = $v WHERE id = $id;";
-        cmd.Parameters.AddWithValue("$v", value ? 1 : 0);
-        cmd.Parameters.AddWithValue("$id", id);
+        cmd.Parameters.Add("$v", SqliteType.Integer).Value = value ? 1L : 0L;
+        cmd.Parameters.Add("$id", SqliteType.Integer).Value = id;
         cmd.ExecuteNonQuery();
     }
 
@@ -380,34 +534,54 @@ public sealed class ClipboardItemRepository(Database database)
     {
         var result = new List<ClipboardItem>();
         using var reader = cmd.ExecuteReader();
-        var o = new Dictionary<string, int>();
-        for (var i = 0; i < reader.FieldCount; i++)
-            o[reader.GetName(i)] = i;
+
+        // RF-P2.08: ordinais resolvidos UMA vez por query. Antes montava um
+        // Dictionary<string,int> a cada chamada e pagava ~21 hashes de string por linha.
+        var oId = reader.GetOrdinal("id");
+        var oType = reader.GetOrdinal("type");
+        var oCreated = reader.GetOrdinal("created_at");
+        var oCopied = reader.GetOrdinal("last_copied_at");
+        var oApp = reader.GetOrdinal("source_app");
+        var oTitle = reader.GetOrdinal("source_title");
+        var oOrigin = reader.GetOrdinal("origin");
+        var oPinned = reader.GetOrdinal("pinned");
+        var oFavorite = reader.GetOrdinal("favorite");
+        var oHash = reader.GetOrdinal("content_hash");
+        var oSize = reader.GetOrdinal("byte_size");
+        var oText = reader.GetOrdinal("text_content");
+        var oHtml = reader.GetOrdinal("html_content");
+        var oRtf = reader.GetOrdinal("rtf_content");
+        var oFile = reader.GetOrdinal("file_path");
+        var oThumb = reader.GetOrdinal("thumb_path");
+        var oFiles = reader.GetOrdinal("files_json");
+        var oOcr = reader.GetOrdinal("ocr_text");
+        var oWidth = reader.GetOrdinal("width");
+        var oHeight = reader.GetOrdinal("height");
 
         while (reader.Read())
         {
             result.Add(new ClipboardItem
             {
-                Id = reader.GetInt64(o["id"]),
-                Type = TypeFromDb(reader.GetString(o["type"])),
-                CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(o["created_at"])),
-                LastCopiedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(o["last_copied_at"])),
-                SourceApp = reader.IsDBNull(o["source_app"]) ? null : reader.GetString(o["source_app"]),
-                SourceTitle = reader.IsDBNull(o["source_title"]) ? null : reader.GetString(o["source_title"]),
-                Origin = Enum.Parse<ClipboardItemOrigin>(reader.GetString(o["origin"]), ignoreCase: true),
-                Pinned = reader.GetInt64(o["pinned"]) == 1,
-                Favorite = reader.GetInt64(o["favorite"]) == 1,
-                ContentHash = reader.GetString(o["content_hash"]),
-                ByteSize = reader.GetInt64(o["byte_size"]),
-                TextContent = reader.IsDBNull(o["text_content"]) ? null : reader.GetString(o["text_content"]),
-                HtmlContent = reader.IsDBNull(o["html_content"]) ? null : reader.GetString(o["html_content"]),
-                RtfContent = reader.IsDBNull(o["rtf_content"]) ? null : reader.GetString(o["rtf_content"]),
-                FilePath = reader.IsDBNull(o["file_path"]) ? null : reader.GetString(o["file_path"]),
-                ThumbPath = reader.IsDBNull(o["thumb_path"]) ? null : reader.GetString(o["thumb_path"]),
-                FilesJson = reader.IsDBNull(o["files_json"]) ? null : reader.GetString(o["files_json"]),
-                OcrText = reader.IsDBNull(o["ocr_text"]) ? null : reader.GetString(o["ocr_text"]),
-                Width = reader.IsDBNull(o["width"]) ? null : (int)reader.GetInt64(o["width"]),
-                Height = reader.IsDBNull(o["height"]) ? null : (int)reader.GetInt64(o["height"]),
+                Id = reader.GetInt64(oId),
+                Type = TypeFromDb(reader.GetString(oType)),
+                CreatedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(oCreated)),
+                LastCopiedAt = DateTimeOffset.FromUnixTimeMilliseconds(reader.GetInt64(oCopied)),
+                SourceApp = reader.IsDBNull(oApp) ? null : reader.GetString(oApp),
+                SourceTitle = reader.IsDBNull(oTitle) ? null : reader.GetString(oTitle),
+                Origin = OriginFromDb(reader.GetString(oOrigin)),
+                Pinned = reader.GetInt64(oPinned) == 1,
+                Favorite = reader.GetInt64(oFavorite) == 1,
+                ContentHash = reader.GetString(oHash),
+                ByteSize = reader.GetInt64(oSize),
+                TextContent = reader.IsDBNull(oText) ? null : reader.GetString(oText),
+                HtmlContent = reader.IsDBNull(oHtml) ? null : reader.GetString(oHtml),
+                RtfContent = reader.IsDBNull(oRtf) ? null : reader.GetString(oRtf),
+                FilePath = reader.IsDBNull(oFile) ? null : reader.GetString(oFile),
+                ThumbPath = reader.IsDBNull(oThumb) ? null : reader.GetString(oThumb),
+                FilesJson = reader.IsDBNull(oFiles) ? null : reader.GetString(oFiles),
+                OcrText = reader.IsDBNull(oOcr) ? null : reader.GetString(oOcr),
+                Width = reader.IsDBNull(oWidth) ? null : (int)reader.GetInt64(oWidth),
+                Height = reader.IsDBNull(oHeight) ? null : (int)reader.GetInt64(oHeight),
             });
         }
         return result;
@@ -431,10 +605,49 @@ public sealed class ClipboardItemRepository(Database database)
         _ => ClipboardItemType.Text,
     };
 
-    /// <summary>Wraps each user term as a quoted phrase with a prefix (type-ahead).</summary>
+    /// <summary>
+    /// RF-P2.08: mesmo resultado do antigo Origin.ToString().ToLowerInvariant(), sem as duas
+    /// alocacoes de string por gravacao.
+    /// </summary>
+    private static string OriginToDb(ClipboardItemOrigin origin) => origin switch
+    {
+        ClipboardItemOrigin.Clipboard => "clipboard",
+        ClipboardItemOrigin.Capture => "capture",
+        ClipboardItemOrigin.Editor => "editor",
+        ClipboardItemOrigin.Recording => "recording",
+        _ => "clipboard",
+    };
+
+    /// <summary>
+    /// RF-P2.08: substitui Enum.Parse&lt;ClipboardItemOrigin&gt;(reflexao + alocacao) que rodava
+    /// POR LINHA lida. Os valores gravados sao sempre minusculos (ver OriginToDb); qualquer
+    /// outra caixa vinda de base antiga/importacao cai no TryParse, que e o caminho raro.
+    /// </summary>
+    private static ClipboardItemOrigin OriginFromDb(string value) => value switch
+    {
+        "clipboard" => ClipboardItemOrigin.Clipboard,
+        "capture" => ClipboardItemOrigin.Capture,
+        "editor" => ClipboardItemOrigin.Editor,
+        "recording" => ClipboardItemOrigin.Recording,
+        _ => Enum.TryParse<ClipboardItemOrigin>(value, ignoreCase: true, out var parsed)
+            ? parsed
+            : ClipboardItemOrigin.Clipboard,
+    };
+
+    /// <summary>
+    /// Wraps each user term as a quoted phrase.
+    /// RF-P2.10: o curinga de prefixo so entra em termos com 3+ caracteres. Um "a*" casa com
+    /// praticamente todo token do indice, e o FTS5 ainda precisa unir todas essas listas de
+    /// documentos antes de descartar o resultado - custo alto para um filtro que nao filtra.
+    /// Termos de 1 ou 2 caracteres viram busca exata entre aspas.
+    /// </summary>
     internal static string SanitizeFtsQuery(string query)
     {
         var terms = query.Split(' ', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-        return string.Join(" ", terms.Select(t => $"\"{t.Replace("\"", "\"\"")}\"*"));
+        return string.Join(" ", terms.Select(t =>
+        {
+            var quoted = t.Replace("\"", "\"\"");
+            return t.Length >= 3 ? $"\"{quoted}\"*" : $"\"{quoted}\"";
+        }));
     }
 }

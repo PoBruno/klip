@@ -42,14 +42,15 @@ public class SettingsServiceTests : IDisposable
     [Fact]
     public void SaveAndLoad_Roundtrip()
     {
-        var service = new SettingsService(_path);
+        using var service = new SettingsService(_path);
         service.Update(s =>
         {
             s.HotkeyHistory = "Win+V";
             s.RetentionMaxItems = 42;
         });
+        service.Flush(); // RF-P3.06: Update so agenda; o disco espera o debounce
 
-        var reloaded = new SettingsService(_path);
+        using var reloaded = new SettingsService(_path);
         Assert.Equal("Win+V", reloaded.Current.HotkeyHistory);
         Assert.Equal(42, reloaded.Current.RetentionMaxItems);
     }
@@ -58,9 +59,47 @@ public class SettingsServiceTests : IDisposable
     public void Load_CorruptFile_FallsBackToDefaults()
     {
         File.WriteAllText(_path, "{ isso não é json válido ");
-        var service = new SettingsService(_path);
+        using var service = new SettingsService(_path);
         Assert.Equal("Ctrl+Shift+V", service.Current.HotkeyHistory);
         Assert.True(File.Exists(_path + ".corrupt"));
+    }
+
+    [Fact]
+    public void Load_MissingFile_UsesDefaultsWithoutCreatingIt()
+    {
+        using var service = new SettingsService(_path);
+
+        Assert.Equal("Ctrl+Shift+V", service.Current.HotkeyHistory);
+        Assert.Equal("Ctrl+Shift+S", service.Current.HotkeyCapture);
+        Assert.False(File.Exists(_path));
+    }
+
+    [Fact]
+    public void UpdateAndFlush_PersistsWithoutWaitingForDebounce()
+    {
+        // RF-P3.06: caminho usado pelo takeover de registro, onde o backup
+        // precisa estar em disco antes de mexer nas chaves
+        using var service = new SettingsService(_path);
+        service.UpdateAndFlush(s =>
+        {
+            s.RegistryBackupTaken = true;
+            s.RegistryBackupDisabledHotkeys = "Win+V";
+        });
+
+        using var reloaded = new SettingsService(_path);
+        Assert.True(reloaded.Current.RegistryBackupTaken);
+        Assert.Equal("Win+V", reloaded.Current.RegistryBackupDisabledHotkeys);
+    }
+
+    [Fact]
+    public void Dispose_PersistsPendingUpdate()
+    {
+        var service = new SettingsService(_path);
+        service.Update(s => s.RetentionMaxAgeDays = 30);
+        service.Dispose();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal(30, reloaded.Current.RetentionMaxAgeDays);
     }
 
     public void Dispose()
@@ -68,5 +107,7 @@ public class SettingsServiceTests : IDisposable
         File.Delete(_path);
         if (File.Exists(_path + ".corrupt"))
             File.Delete(_path + ".corrupt");
+        if (File.Exists(_path + ".tmp"))
+            File.Delete(_path + ".tmp");
     }
 }
