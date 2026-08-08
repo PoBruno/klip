@@ -12,3 +12,6 @@ dist/
 *.db-shm
 TestResults/
 screenshots-teste/
+
+# csproj temporario que o SDK do WPF gera durante o build
+*_wpftmp.csproj

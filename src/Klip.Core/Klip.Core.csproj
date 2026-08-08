@@ -5,6 +5,9 @@
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Klip.Core</RootNamespace>
+    <!-- RF-P3.02: PGO dinamico. Vale por assembly - o Core carrega o codigo quente
+         de ingestao/storage, entao precisa da propria flag (nao herda do App). -->
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>

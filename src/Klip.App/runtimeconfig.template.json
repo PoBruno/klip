@@ -1,0 +1,93 @@
+{
+  // RF-P3.01: knobs de runtime do Klip. O SDK funde este template no
+  // Klip.runtimeconfig.json gerado (alvo: bin/<cfg>/<tfm>/Klip.runtimeconfig.json).
+  // Todos os valores aqui sao DECIMAIS; as variaveis de ambiente equivalentes
+  // (DOTNET_GCgen0size, DOTNET_GCConserveMemory, ...) usariam hexadecimal.
+  "configProperties": {
+    // Workstation GC. Server GC criaria UM heap + UMA thread dedicada de GC em
+    // THREAD_PRIORITY_HIGHEST por CPU logica; num desktop de 16/24 threads isso
+    // significa 16/24 heaps e 16/24 threads de alta prioridade para um working set
+    // de poucas dezenas de MB. O oposto (true) so compensa em servidor com muitos
+    // cores dedicados ao processo e taxa de alocacao sustentada - o Klip fica ocioso
+    // na bandeja quase o tempo todo e disputaria CPU com o app em foco.
+    "System.GC.Server": false,
+
+    // Background GC ligado. Com Concurrent=false toda coleta gen2 vira blocking e
+    // roda na thread que alocou, com pausa proporcional ao heap inteiro. O Klip tem
+    // hook de input de baixo nivel (WH_KEYBOARD_LL/WH_MOUSE_LL): se o callback nao
+    // responde dentro do LowLevelHooksTimeout, o Windows desinstala o hook - e, ate
+    // la, a fila de input do SISTEMA inteiro trava. Pausa de gen2 blocking nao e
+    // aceitavel aqui, entao o oposto (false) esta fora de questao.
+    "System.GC.Concurrent": true,
+
+    // Nao reter memoria virtual. Com RetainVM=true o GC guarda os segmentos/regions
+    // esvaziados numa standby list para reusar depois, o que reduz custo de
+    // reservar/commitar de novo mas mantem a reserva presa ao processo. O Klip passa
+    // a maior parte da vida ocioso na bandeja; devolver as regions ao SO durante a
+    // ociosidade importa mais do que economizar um mmap eventual.
+    "System.GC.RetainVM": false,
+
+    // ConserveMemory 5 (escala 0-9). A partir de 1 o GC passa a compactar o LOH
+    // automaticamente quando vale a pena, em vez de so varrer e fragmentar. O Klip
+    // aloca bitmaps grandes o tempo todo (snapshot de clipboard, captura de tela,
+    // panoramica costurada) e esses buffers caem direto no LOH; sem compactacao o
+    // heap so cresce por fragmentacao. O oposto (0) e o default e deixaria o LOH
+    // fragmentar; valores acima de 7 trocam CPU demais por memoria. A doc sugere a
+    // faixa 5-7, ficamos no piso dela.
+    "System.GC.ConserveMemory": 5,
+
+    // DATAS desligado. Dynamic Adaptation To Application Sizes esta documentado
+    // como recurso do Server GC (ligado por default no .NET 9 SO com Server GC);
+    // em Workstation nao ha heaps por core para ele ajustar, entao o oposto (1)
+    // nao teria efeito pratico - so mascararia a intencao da configuracao.
+    "System.GC.DynamicAdaptationMode": 0,
+
+    // Tiered compilation ligado (default). Desligar mandaria tudo direto para o
+    // JIT otimizado: startup MUITO mais lento, e o Klip inicia junto com o Windows,
+    // competindo com todo o resto do logon. O tier 1 chega sozinho no codigo quente.
+    "System.Runtime.TieredCompilation": true,
+
+    // QuickJit ligado (default): tier 0 compila rapido, sem otimizacao. E o que
+    // torna o startup barato. O oposto (false) forcaria o JIT otimizado ja na
+    // primeira execucao de cada metodo.
+    "System.Runtime.TieredCompilation.QuickJit": true,
+
+    // QuickJit tambem para metodos com loop (default no .NET 7+). Com false, todo
+    // metodo que tem loop pula o tier 0 e vai para o JIT otimizado - e a maior parte
+    // do codigo de parsing/costura do Klip tem loop, o que anularia o beneficio de
+    // startup. O risco classico do true (ficar preso em tier 0 num loop longo) e
+    // coberto pelo OSR, ligado por default.
+    "System.Runtime.TieredCompilation.QuickJitForLoops": true,
+
+    // Globalizacao completa (ICU). NAO usar invariant mode: a UI do Klip tem 15
+    // idiomas e o historico e ordenado/comparado/pesquisado com regras de cultura
+    // (ToUpper turco, acentos, CJK). Com o oposto (true) toda comparacao viraria
+    // ordinal, a busca perderia acento-insensibilidade e as culturas nao-invariantes
+    // deixariam de existir - alem de o ICU nao ser mais carregado.
+    "System.Globalization.Invariant": false,
+
+    // Novo motor de tratamento de excecoes (default no .NET 9). O oposto (true)
+    // volta para o unwinder legado, que existe apenas como escape temporario para
+    // regressao de compatibilidade e deve sumir em versoes futuras. Deixamos
+    // explicito para documentar que o Klip nao depende do comportamento legado.
+    "System.Runtime.LegacyExceptionHandling": false
+
+    // --- DELIBERADAMENTE NAO ATIVADOS ---
+    //
+    // "System.GC.HeapHardLimit": <bytes>
+    //   Teto rigido do heap gerenciado. Estourar o limite NAO gera coleta extra
+    //   agressiva: gera OutOfMemoryException. Uma unica captura panoramica grande ou
+    //   um bitmap 8K colado no clipboard passaria de qualquer teto conservador que a
+    //   gente escolhesse. Alem disso, definir o hard limit faz o GC RESERVAR memoria
+    //   virtual em torno de 5x o limite adiantado, o que piora exatamente a metrica
+    //   (footprint aparente) que se tentaria melhorar. ConserveMemory + RetainVM=false
+    //   acima resolvem o caso real sem risco de OOM.
+    //
+    // "System.GC.RegionSize": <bytes>
+    //   Nao existe como configProperty no .NET 9 - a chave de runtimeconfig so foi
+    //   introduzida no .NET 10. No .NET 9 o unico jeito e a variavel de ambiente
+    //   DOTNET_GCRegionSize, cujo valor e HEXADECIMAL (ex.: 400000 = 4 MB), e que
+    //   teria de ser setada antes do processo iniciar. Colocar a chave aqui seria
+    //   silenciosamente ignorado, entao fica documentado em vez de ativo.
+  }
+}

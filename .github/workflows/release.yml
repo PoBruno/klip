@@ -41,10 +41,18 @@ jobs:
 
       - name: Publicar executavel standalone
         shell: pwsh
+        # ADR-P.09: mesmas flags de tools\build-exe.ps1 (ver os comentarios de la).
+        # R2R corta o JIT do startup; EnableCompressionInSingleFile=false evita
+        # descomprimir dezenas de MB em memoria a cada boot (o app sobe com o Windows).
+        # IncludeNativeLibrariesForSelfExtract fica TRUE de proposito: com false o
+        # publish deixa 6 DLLs nativas soltas ao lado do exe, e tanto o instalador
+        # (installer\Klip.iss copia so publish\Klip.exe) quanto o artefato portable
+        # publicado abaixo passariam a entregar um app que nao inicia.
         run: |
           dotnet publish src/Klip.App -c Release -r win-x64 --self-contained true `
-            -p:PublishSingleFile=true -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:EnableCompressionInSingleFile=true -p:PublishTrimmed=false `
+            -p:PublishReadyToRun=true -p:PublishSingleFile=true `
+            -p:EnableCompressionInSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=true `
+            -p:PublishTrimmed=false `
             -p:Version=${{ steps.version.outputs.version }} -o publish
           Remove-Item publish\*.pdb -ErrorAction SilentlyContinue
 

@@ -9,6 +9,8 @@
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Klip.Interop</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <!-- RF-P3.02: PGO dinamico tambem no Interop (loops de captura/encode). -->
+    <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
   <ItemGroup>

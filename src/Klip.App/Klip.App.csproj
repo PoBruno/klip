@@ -25,6 +25,22 @@
     <!-- publish options (self-contained, single-file) live in the build scripts,
          not here, so the debug build keeps the default output path (no RID subfolder). -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+
+    <!-- RF-P3.02: R2R pre-compila o codigo do Klip + WPF-UI + Mvvm. As libs do framework ja vem R2R.
+         Exige RID no publish (os scripts em tools/ e o release.yml sempre passam -r win-x64). -->
+    <PublishReadyToRun>true</PublishReadyToRun>
+    <!-- Composite so e recomendado para apps que DESLIGAM tiering; aqui pioraria:
+         geraria uma unica imagem gigante e invalidaria o R2R que ja vem com o framework. -->
+    <PublishReadyToRunComposite>false</PublishReadyToRunComposite>
+    <!-- PGO dinamico: o tier 0 instrumenta e o tier 1 reotimiza com os dados reais. -->
+    <TieredPGO>true</TieredPGO>
+    <!-- Feature switches: desativam codigo em runtime mesmo sem trimming.
+         O Klip nao publica EventSource nem Meter (nenhum uso no codigo). -->
+    <EventSourceSupport>false</EventSourceSupport>
+    <MetricsSupport>false</MetricsSupport>
+    <!-- Trimming e AOT sao IMPOSSIVEIS com WPF: o SDK emite TrimmingWpfIsNotSupported (erro, nao warning). -->
+    <PublishTrimmed>false</PublishTrimmed>
+    <PublishAot>false</PublishAot>
   </PropertyGroup>
 
   <ItemGroup>
