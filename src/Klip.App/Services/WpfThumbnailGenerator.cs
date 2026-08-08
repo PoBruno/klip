@@ -1,52 +1,40 @@
 using System.IO;
 using System.Windows.Media;
 using System.Windows.Media.Imaging;
-using System.Windows.Threading;
 using Klip.Core.Storage;
 
 namespace Klip.App.Services;
 
 /// <summary>
-/// Makes JPEG thumbnails with WIC/WPF. Decodes the PNG at a smaller width
-/// (cheap) and re-encodes as JPEG quality 80. Ingestion runs on a background
-/// thread (MTA), so the WPF encode gets marshalled to the dispatcher (STA).
+/// Gera miniaturas JPEG com WIC/WPF. Decodifica o PNG ja numa largura menor
+/// (barato) e reencoda como JPEG qualidade 80.
+///
+/// RF-P2.04: roda na thread do chamador (a ingestao, em Task.Run). Antes isso
+/// era marshalizado de volta para a UI thread com Dispatcher.Invoke e um
+/// timeout de 5 s - ou seja, o decode+encode de cada imagem copiada caia na UI
+/// thread e a thread de ingestao ficava parada esperando ate 5 s.
+///
+/// BitmapImage, TransformedBitmap e JpegBitmapEncoder sao objetos WIC: nao
+/// exigem STA nem dispatcher, basta congelar tudo que atravessa thread - o que
+/// este codigo ja fazia. Congelar tambem e o que permite o BitmapSource ser
+/// entregue ao encoder de outra thread sem afinidade de dispatcher.
 /// </summary>
 public sealed class WpfThumbnailGenerator : IThumbnailGenerator
 {
-    private readonly Dispatcher _dispatcher = System.Windows.Application.Current?.Dispatcher
-        ?? Dispatcher.CurrentDispatcher;
-
     public byte[]? CreateJpegThumbnail(byte[] pngBytes, int maxSize = 256)
-    {
-        // WPF encode needs STA, so run it on the UI dispatcher when we're off it.
-        // the timeout keeps ingestion from stalling if the UI is busy.
-        if (_dispatcher.CheckAccess())
-            return Encode(pngBytes, maxSize);
-        try
-        {
-            return _dispatcher.Invoke(() => Encode(pngBytes, maxSize),
-                DispatcherPriority.Background, CancellationToken.None, TimeSpan.FromSeconds(5));
-        }
-        catch (TimeoutException)
-        {
-            return null; // no thumbnail, the card falls back to the original PNG
-        }
-    }
-
-    private static byte[]? Encode(byte[] pngBytes, int maxSize)
     {
         try
         {
             var decoder = new BitmapImage();
             decoder.BeginInit();
             decoder.CacheOption = BitmapCacheOption.OnLoad;
-            decoder.DecodePixelWidth = maxSize; // decode already downscaled (long edge <= maxSize on width)
+            decoder.DecodePixelWidth = maxSize; // ja decodifica reduzido (lado longo <= maxSize na largura)
             decoder.StreamSource = new MemoryStream(pngBytes);
             decoder.EndInit();
             decoder.Freeze();
 
             BitmapSource source = decoder;
-            // if the height still goes over (very tall image), scale it down proportionally
+            // se a altura ainda passar (imagem muito alta), reduz proporcionalmente
             if (source.PixelHeight > maxSize)
             {
                 var scale = (double)maxSize / source.PixelHeight;
@@ -64,7 +52,7 @@ public sealed class WpfThumbnailGenerator : IThumbnailGenerator
         catch (Exception ex)
         {
             StartupLog.WriteException("Thumbnail", ex);
-            return null;
+            return null; // sem miniatura, o card cai no PNG original
         }
     }
 }

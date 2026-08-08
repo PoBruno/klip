@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Klip.App.Diagnostics;
 using Klip.App.Localization;
 using Klip.App.Services;
 using Klip.App.ViewModels;
@@ -9,6 +10,8 @@ using Klip.Core.Common;
 using Klip.Core.Hotkeys;
 using Klip.Core.Settings;
 using Klip.Core.Storage;
+using Klip.Interop;
+using Klip.Interop.Input;
 using Klip.Interop.SystemIntegration;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
@@ -32,6 +35,16 @@ public partial class App : Application
     private ClipboardMonitorService? _clipboardMonitor;
     private CaptureController? _captureController;
     private RecordingController? _recordingController;
+
+    // RF-P1.06 / ADR-P.07: rede de seguranca contra interferencia com jogos.
+    private SystemActivityMonitor? _activityMonitor;
+
+    // RF-P0.02: transforma travamento da UI thread em evidencia rastreavel.
+    private UiThreadWatchdog? _uiWatchdog;
+
+    // RF-P2.09: retencao fora do DispatcherTimer (nao acordar a UI thread num app
+    // que fica horas ocioso) e pulada enquanto houver jogo em tela cheia.
+    private System.Threading.Timer? _retentionTimer;
 
     // pasta do ultimo toast de gravacao: clique no balao abre a pasta (RF-F3.16)
     private string? _recordingToastFolder;
@@ -81,7 +94,25 @@ public partial class App : Application
             StartupLog.WriteException("UnobservedTaskException", args.Exception);
 
         AppPaths.EnsureCreated();
+        // RF-P3.05: --verbose liga o log de alta frequencia (ingestao, estado dos hooks).
+        // Desligado por padrao: em uso normal o log so registra transicoes e erros.
+        StartupLog.VerboseEnabled = e.Args.Contains("--verbose");
         StartupLog.Write("OnStartup: iniciando");
+
+        // ADR-P.08: o app nasce ocioso na bandeja. EcoQoS pede frequencia eficiente e
+        // agendamento em efficient cores INCLUSIVE na tomada (o nivel Low automatico por
+        // visibilidade so vale na bateria). Prioridade de memoria baixa faz o gerenciador
+        // aparar as NOSSAS paginas antes das dos outros sob pressao - alternativa correta
+        // e nao destrutiva ao EmptyWorkingSet.
+        PowerEfficiency.SetProcessMemoryPriorityLow();
+        PowerEfficiency.EnterProcessEcoQos();
+        // Defesa contra dependencia que chame timeBeginPeriod: no Win11 o efeito e por
+        // processo e some quando estamos ocultos, mas o custo de troca de contexto fica.
+        PowerEfficiency.IgnoreTimerResolutionRequests(true);
+
+        // ADR-P.01: sobe a thread dedicada dos hooks LL ja no startup. Nenhum hook e
+        // instalado aqui - so o pump fica pronto, para o primeiro Acquire ser instantaneo.
+        LowLevelHookHost.Shared.Start();
 
         var builder = Host.CreateApplicationBuilder();
         builder.Services.AddSingleton<SettingsService>();
@@ -97,12 +128,15 @@ public partial class App : Application
         builder.Services.AddSingleton<Klip.Core.Storage.IThumbnailGenerator, WpfThumbnailGenerator>();
         builder.Services.AddSingleton<OcrService>();
         builder.Services.AddSingleton<Klip.Core.Storage.IImageTextExtractor>(sp => sp.GetRequiredService<OcrService>());
-        builder.Services.AddSingleton(sp => new ClipboardIngestService(
+        builder.Services.AddSingleton<ClipboardIngestService>(sp => new ClipboardIngestService(
             sp.GetRequiredService<ClipboardItemRepository>(),
             sp.GetRequiredService<MediaStore>(),
             sp.GetRequiredService<SettingsService>(),
             sp.GetRequiredService<Klip.Core.Storage.IThumbnailGenerator>(),
             sp.GetRequiredService<Klip.Core.Storage.IImageTextExtractor>()));
+        // ADR-P.05: thread STA dedicada dona de todo acesso ao clipboard. Precisa vir
+        // antes do WriteGuard/Monitor, que a recebem por injecao.
+        builder.Services.AddSingleton<ClipboardThread>();
         builder.Services.AddSingleton<ClipboardWriteGuard>();
         builder.Services.AddSingleton<ClipboardMonitorService>();
         builder.Services.AddSingleton<PasteService>();
@@ -122,11 +156,26 @@ public partial class App : Application
         builder.Services.AddSingleton<SystemHotkeyService>();
         builder.Services.AddSingleton<HistoryFlyoutViewModel>();
         builder.Services.AddSingleton<HistoryFlyoutWindow>();
+        // RF-P1.06 / RF-P0.02: rede de seguranca e instrumentacao.
+        builder.Services.AddSingleton<SystemActivityMonitor>();
+        builder.Services.AddSingleton(_ => new UiThreadWatchdog(Dispatcher));
         builder.Services.AddTransient<EditorWindow>(); // one window per edit
         builder.Services.AddSingleton<MainWindow>();
         _host = builder.Build();
         _host.Start();
         StartupLog.Write("OnStartup: host iniciado");
+
+        // RF-P0.02: mede a latencia da UI thread. Um bloqueio longo aqui e o que
+        // congela o input do sistema quando ha hook LL instalado.
+        _uiWatchdog = _host.Services.GetRequiredService<UiThreadWatchdog>();
+        _uiWatchdog.Start();
+
+        // RF-P1.06: polling de 3 s. O Windows NAO notifica entrada/saida de app em
+        // tela cheia (doc de SHQueryUserNotificationState), entao polling e obrigatorio.
+        _activityMonitor = _host.Services.GetRequiredService<SystemActivityMonitor>();
+        _activityMonitor.StateChanged += state =>
+            Dispatcher.BeginInvoke(new Action(() => OnActivityStateChanged(state)));
+        _activityMonitor.Start();
 
         var settings = _host.Services.GetRequiredService<SettingsService>();
 
@@ -145,8 +194,11 @@ public partial class App : Application
             StartupLog.WriteException("Autostart", ex);
         }
 
-        _mainWindow = _host.Services.GetRequiredService<MainWindow>();
-        StartupLog.Write("OnStartup: MainWindow criada (banco inicializado)");
+        // ADR-S.01: a tela de Configuracoes NAO e mais construida no startup. A antiga
+        // MainWindow montava ~247 elementos e 31 cards mesmo com o app iniciando
+        // minimizado - o UiThreadWatchdog media 793 ms de UI thread travada por causa
+        // disso. Agora a janela nasce na primeira abertura (ver ShowMainWindow).
+        // O banco continua sendo inicializado aqui perto, pelo ClipboardMonitorService.
 
         // clipboard engine + flyout
         _pasteService = _host.Services.GetRequiredService<PasteService>();
@@ -154,6 +206,10 @@ public partial class App : Application
         _pasteService.PasteFailed += () =>
             _tray?.ShowNotification("Klip", Loc.PasteFailedToast);
         _flyout = _host.Services.GetRequiredService<HistoryFlyoutWindow>();
+        // ADR-P.08: o flyout fecha por varios caminhos (Esc, clique fora, colar,
+        // hotkey). Ao inves de espalhar EnterProcessEcoQos por todos eles, reage a
+        // visibilidade: sem janela visivel, o app volta ao estado de repouso.
+        _flyout.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
         _clipboardMonitor = _host.Services.GetRequiredService<ClipboardMonitorService>();
         StartupLog.Write("OnStartup: clipboard monitor ativo");
 
@@ -211,6 +267,8 @@ public partial class App : Application
         RegisterHotkeys(settings);
         CreateTrayIcon();
         StartupLog.Write("OnStartup: tray e hotkeys prontos");
+        // RF-P0.01 / CA-P1.3: em idle nenhum hook LL pode estar instalado
+        StartupLog.Write($"OnStartup: {HookHealth.FormatSummary()}");
 
         RunRetentionInBackground(settings);
 
@@ -236,10 +294,14 @@ public partial class App : Application
 
     private void HandleElevatedRegistryOperation(string operation)
     {
+        // RF-P3.06: este processo faz uma operacao e morre. O Update do SettingsService
+        // agora tem debounce de 500 ms, entao a instancia precisa ser descartada
+        // explicitamente (Dispose faz Flush) antes do Shutdown, senao a escrita se perde.
+        using var settings = new SettingsService();
         try
         {
             AppPaths.EnsureCreated();
-            var service = new SystemHotkeyService(new SettingsService());
+            var service = new SystemHotkeyService(settings);
             switch (operation)
             {
                 case "clipboard-feature-off":
@@ -252,6 +314,7 @@ public partial class App : Application
                     Shutdown(2);
                     return;
             }
+            settings.Flush();
             Shutdown(0);
         }
         catch (Exception ex)
@@ -268,14 +331,17 @@ public partial class App : Application
     /// </summary>
     private void RevertRegistrySilently()
     {
+        // RF-P3.06: mesmo motivo do metodo acima - o processo morre logo em seguida.
+        using var settings = new SettingsService();
         try
         {
             AppPaths.EnsureCreated();
-            var settings = new SettingsService();
             var service = new SystemHotkeyService(settings);
             service.RestoreDisabledHotkeys();
             service.SetPrintScreenFreed(false);
+            settings.Flush();
             StartupLog.Write("Uninstall: registro HKCU restaurado");
+            StartupLog.Flush();
         }
         catch (Exception ex)
         {
@@ -346,7 +412,7 @@ public partial class App : Application
 
         if (await TryRegisterWithRetryAsync("Win+V", ToggleHistoryFlyout, isHistory: true))
         {
-            settings.Update(s => s.HotkeyHistory = "Win+V");
+            settings.UpdateAndFlush(s => s.HotkeyHistory = "Win+V");
             return "ok";
         }
 
@@ -361,12 +427,12 @@ public partial class App : Application
 
         if (!SystemHotkeyService.RunElevated("clipboard-feature-off"))
             return "uac-cancelado";
-        settings.Update(s => s.RegistryHklmClipboardOffApplied = true);
+        settings.UpdateAndFlush(s => s.RegistryHklmClipboardOffApplied = true);
 
         await SystemHotkeyService.RestartExplorerAsync();
         if (await TryRegisterWithRetryAsync("Win+V", ToggleHistoryFlyout, isHistory: true))
         {
-            settings.Update(s => s.HotkeyHistory = "Win+V");
+            settings.UpdateAndFlush(s => s.HotkeyHistory = "Win+V");
             return "ok";
         }
         return "falhou";
@@ -379,7 +445,7 @@ public partial class App : Application
         var registry = _host.Services.GetRequiredService<SystemHotkeyService>();
 
         registry.SetPrintScreenFreed(true);
-        settings.Update(s => s.HotkeyCapture = "PrintScreen");
+        settings.UpdateAndFlush(s => s.HotkeyCapture = "PrintScreen");
         return ApplyHotkeys(settings) ? "ok" : "conflito";
     }
 
@@ -394,7 +460,7 @@ public partial class App : Application
 
         if (await TryRegisterWithRetryAsync("Win+Shift+S", StartCapture, isHistory: false))
         {
-            settings.Update(s => s.HotkeyCapture = "Win+Shift+S");
+            settings.UpdateAndFlush(s => s.HotkeyCapture = "Win+Shift+S");
             return "ok";
         }
         return "falhou";
@@ -411,10 +477,10 @@ public partial class App : Application
         if (settings.Current.RegistryHklmClipboardOffApplied &&
             SystemHotkeyService.RunElevated("clipboard-feature-restore"))
         {
-            settings.Update(s => s.RegistryHklmClipboardOffApplied = false);
+            settings.UpdateAndFlush(s => s.RegistryHklmClipboardOffApplied = false);
         }
 
-        settings.Update(s =>
+        settings.UpdateAndFlush(s =>
         {
             s.HotkeyHistory = "Ctrl+Shift+V";
             s.HotkeyCapture = "Ctrl+Shift+S";
@@ -462,8 +528,37 @@ public partial class App : Application
     /// <summary>Opens the capture overlay.</summary>
     private void StartCapture()
     {
+        // Aqui NAO ha bloqueio por jogo em tela cheia de proposito. Capturar um jogo ou
+        // um video em tela cheia e caso de uso primario de uma ferramenta de captura;
+        // recusar a hotkey seria uma regressao muito pior do que o custo de composicao
+        // de um overlay que o usuario acabou de pedir. O que a auto-suspensao corta e o
+        // custo em REPOUSO (RF-P1.06), nao acao explicita do usuario.
+        if (_activityMonitor?.State == SystemActivityState.Suspended)
+            StartupLog.WriteVerbose("Captura sobre app em tela cheia (a pedido do usuario)");
+
         _flyout?.HideFlyout(); // overlay cant capture the flyout while its open
+        PowerEfficiency.EnterProcessHighQos(); // ADR-P.08: UI a frente, sai do Eco
         _captureController?.StartCapture();
+    }
+
+    /// <summary>
+    /// RF-P1.06 / ADR-P.07: reage a entrada e saida de jogo em tela cheia. O
+    /// SystemActivityMonitor ja removeu os hooks LL ociosos e aplicou EcoQoS na thread
+    /// dele; aqui cuidamos apenas do que precisa da UI thread.
+    ///
+    /// De proposito NAO fechamos o flyout aberto: com um video ou um jogo em tela cheia
+    /// em primeiro plano, "Win+V para de funcionar" seria uma regressao pior do que o
+    /// custo de composicao de um painel pequeno que o usuario acabou de pedir. O que
+    /// bloqueamos e a CAPTURA (StartCapture), que abre uma janela Topmost do tamanho do
+    /// monitor e usa GDI de tela cheia - essa sim derruba o DWM de Independent Flip.
+    /// </summary>
+    private void OnActivityStateChanged(SystemActivityState state)
+    {
+        if (IsExiting)
+            return;
+
+        // reservado para reagir na UI thread; hoje a politica inteira e do monitor
+        _ = state;
     }
 
     /// <summary>Abre a pasta de gravacoes no Explorer (acao do toast, RF-F3.16).</summary>
@@ -483,12 +578,30 @@ public partial class App : Application
         }
     }
 
+    /// <summary>
+    /// ADR-P.08: devolve o processo ao EcoQoS quando nenhuma janela do Klip esta
+    /// visivel. Chamado pelas transicoes de visibilidade; e barato e idempotente.
+    /// Nao rebaixa enquanto houver gravacao em andamento nem durante o shutdown.
+    /// </summary>
+    private void ApplyIdleQosIfNoWindowVisible()
+    {
+        if (IsExiting || _recordingController?.IsActive == true)
+            return;
+        foreach (Window window in Windows)
+        {
+            if (window.IsVisible)
+                return;
+        }
+        PowerEfficiency.EnterProcessEcoQos();
+    }
+
     /// <summary>Opens the editor with an image from history or capture.</summary>
     private void OpenEditor(ClipboardItem item)    {
         if (item.FilePath is null || _host is null)
             return;
         try
         {
+            PowerEfficiency.EnterProcessHighQos(); // ADR-P.08: janela a frente
             var mediaStore = _host.Services.GetRequiredService<MediaStore>();
             var editor = _host.Services.GetRequiredService<EditorWindow>();
             editor.OpenFromHistory(mediaStore.ToAbsolute(item.FilePath));
@@ -511,6 +624,7 @@ public partial class App : Application
             return;
         try
         {
+            PowerEfficiency.EnterProcessHighQos(); // ADR-P.08: janela a frente
             if (_mediaEditors.TryGetValue(filePath, out var existing))
             {
                 existing.Show();
@@ -556,31 +670,41 @@ public partial class App : Application
         if (_flyout.IsVisible)
         {
             _flyout.HideFlyout();
+            PowerEfficiency.EnterProcessEcoQos(); // ADR-P.08: sem UI visivel, volta ao Eco
             return;
         }
+        // ADR-P.08: HighQoS ANTES de montar/mostrar a janela, senao o primeiro layout
+        // e a composicao Mica rodam num efficient core e o painel abre devagar.
+        PowerEfficiency.EnterProcessHighQos();
         _pasteService?.CaptureForegroundTarget(_flyout.Hwnd);
         _flyout.ShowFlyout();
     }
 
-    /// <summary>Runs retention in the background on startup.</summary>
+    /// <summary>
+    /// RF-P2.09: retencao em timer de background (nao DispatcherTimer) e pulada
+    /// enquanto houver jogo em tela cheia. A primeira execucao e adiada 60 s para
+    /// nao disputar IO com o boot do Windows.
+    /// </summary>
     private void RunRetentionInBackground(SettingsService settings)
     {
-        RunRetentionOnce(settings);
-
-        // roda de novo a cada 30 min pra quem deixa o PC ligado por dias
-        var timer = new System.Windows.Threading.DispatcherTimer
-        {
-            Interval = TimeSpan.FromMinutes(30),
-        };
-        timer.Tick += (_, _) => RunRetentionOnce(settings);
-        timer.Start();
+        _retentionTimer = new System.Threading.Timer(
+            _ => RunRetentionOnce(settings),
+            state: null,
+            dueTime: TimeSpan.FromSeconds(60),
+            period: TimeSpan.FromMinutes(30));
     }
 
     private void RunRetentionOnce(SettingsService settings)
     {
+        // nao disputar CPU e IO com um jogo; o proximo tick pega
+        if (_activityMonitor?.State == SystemActivityState.Suspended || IsExiting)
+            return;
+
         var repository = _host!.Services.GetRequiredService<ClipboardItemRepository>();
         var mediaStore = _host.Services.GetRequiredService<MediaStore>();
-        _ = Task.Run(() =>
+        var database = _host.Services.GetRequiredService<Database>();
+        // ADR-P.08: prioridade de CPU, IO e memoria baixas nesta varredura
+        PowerEfficiency.RunAsBackgroundIo(() =>
         {
             try
             {
@@ -590,11 +714,19 @@ public partial class App : Application
                     settings.Current.RetentionMaxTotalBytes);
                 mediaStore.DeleteFiles(orphans);
                 if (orphans.Count > 0)
-                    StartupLog.Write($"Retenção: {orphans.Count} arquivo(s) removido(s)");
+                    StartupLog.Write($"Retencao: {orphans.Count} arquivo(s) removido(s)");
+
+                // RF-P2.07 / RF-P2.10: manutencao periodica junto da retencao, na mesma
+                // thread de background. PRAGMA optimize atualiza as estatisticas do
+                // planner, wal_checkpoint(TRUNCATE) impede o arquivo -wal crescer sem
+                // limite num app que fica dias ligado, e o optimize do FTS5 compacta os
+                // segmentos do indice.
+                repository.OptimizeFullTextIndex();
+                database.RunMaintenance();
             }
             catch (Exception ex)
             {
-                StartupLog.WriteException("Retenção", ex);
+                StartupLog.WriteException("Retencao", ex);
             }
         });
     }
@@ -692,10 +824,25 @@ public partial class App : Application
         return item;
     }
 
+    /// <summary>
+    /// ADR-S.01: cria a janela de Configuracoes sob demanda. O shell so monta a si
+    /// mesmo e a pagina ativa (ADR-S.03: as outras 6 nascem na primeira navegacao),
+    /// entao o custo e uma fracao da tela monolitica anterior.
+    /// </summary>
     private void ShowMainWindow()
     {
-        if (_mainWindow is null)
+        if (_host is null || IsExiting)
             return;
+        // ADR-P.08: sai do Eco antes de montar/mostrar (senao o layout roda em E-core)
+        PowerEfficiency.EnterProcessHighQos();
+
+        if (_mainWindow is null)
+        {
+            _mainWindow = _host.Services.GetRequiredService<MainWindow>();
+            _mainWindow.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
+            StartupLog.Write("Configuracoes: janela criada sob demanda");
+        }
+
         _mainWindow.RefreshStatus();
         _mainWindow.Show();
         if (_mainWindow.WindowState == WindowState.Minimized)
@@ -760,6 +907,9 @@ public partial class App : Application
             _recordingFinalizeHandled = true;
             PumpRecordingFinalize(TimeSpan.FromSeconds(5));
         }
+        // RF-P3.05 / RF-P3.06: shutdown do Windows nao espera - persiste o pendente agora
+        _host?.Services.GetService<SettingsService>()?.Flush();
+        StartupLog.Flush();
     }
 
     /// <summary>Espera a finalizacao da gravacao sem bloquear o dispatcher (RF-F3.16).</summary>
@@ -837,6 +987,12 @@ public partial class App : Application
         }
 
         _tray?.Dispose();
+
+        // RF-P1.06 / RF-P0.02: parar antes de derrubar o host
+        _retentionTimer?.Dispose();
+        _activityMonitor?.Dispose();
+        _uiWatchdog?.Dispose();
+
         _clipboardMonitor?.Dispose();
         if (_host is not null)
         {
@@ -850,6 +1006,8 @@ public partial class App : Application
                     repo?.ClearAll();
                     repo?.Vacuum();
                 }
+                // RF-P3.06: grava o que o debounce ainda nao persistiu
+                settings?.Flush();
             }
             catch (Exception ex)
             {
@@ -858,10 +1016,19 @@ public partial class App : Application
 
             _host.Services.GetService<PasteQueueService>()?.Dispose();
             _host.Services.GetService<HotkeyService>()?.Dispose();
+            // ADR-P.05: a thread do clipboard vai DEPOIS do monitor, que precisa dela
+            // viva para remover o listener na mesma thread que o registrou.
+            _host.Services.GetService<ClipboardThread>()?.Dispose();
             _host.Services.GetService<Database>()?.Dispose();
             _host.Dispose();
         }
+        // ADR-P.01: derruba o pump e o worker dos hooks LL
+        LowLevelHookHost.Shared.Dispose();
         _mutex?.Dispose();
         base.OnExit(e);
+
+        // RF-P3.05: por ultimo - qualquer Write depois disso cai no append sincrono
+        StartupLog.Flush();
+        StartupLog.Shutdown();
     }
 }

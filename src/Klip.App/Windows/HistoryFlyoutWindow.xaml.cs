@@ -5,6 +5,7 @@ using System.Windows.Input;
 using System.Windows.Interop;
 using Klip.App.ViewModels;
 using Klip.Interop;
+using Klip.Interop.Input;
 using Wpf.Ui.Appearance;
 
 namespace Klip.App.Windows;
@@ -21,12 +22,15 @@ public partial class HistoryFlyoutWindow
     private readonly Klip.Core.Settings.SettingsService _settings;
     private bool _closing;
     private bool _suppressTabEvents;
-    // keyboard hook: the flyout never takes focus (so the app below keeps its
-    // caret), so we drive its navigation keys through a global hook instead
-    private readonly Klip.Interop.GlobalKeyboardListener _keys = new();
-    // mouse hook: same reason. no-activate windows don't get Deactivated, so we
-    // watch for a click outside the flyout to close it
-    private readonly Klip.Interop.GlobalMouseListener _mouse = new();
+
+    // RF-P1.03 / ADR-P.02: escopos dos hooks de baixo nivel. Ficam nulos enquanto o
+    // flyout esta fechado - o hook nao e "desativado", ele e REMOVIDO do sistema. Um
+    // WH_KEYBOARD_LL/WH_MOUSE_LL instalado continua sendo chamado pela Raw Input Thread
+    // a cada evento do sistema inteiro, mesmo que o callback so retorne.
+    // O flyout nunca recebe foco (para o app de baixo manter o caret), entao a navegacao
+    // por teclado e o clique fora so chegam por esses hooks.
+    private IDisposable? _keyboardScope;
+    private IDisposable? _mouseScope;
 
     // true while we're warming the window up off-screen at startup, so the
     // size-changed handler ignores those layout passes
@@ -58,23 +62,12 @@ public partial class HistoryFlyoutWindow
         viewModel.GroupingChanged += ApplyGrouping;
         ItemsList.PreviewMouseLeftButtonUp += OnListClick;
 
-        // route hooked keys onto the UI thread; returns true when we consumed it
-        _keys.OnKeyDown = vk =>
-        {
-            // when a click gave us focus, WPF handles typing; skip the UI-thread
-            // round trip entirely so typing in the search box never stalls on the
-            // hook thread. read a volatile bool, no dispatcher hop.
-            if (System.Threading.Volatile.Read(ref _hasFocus))
-                return false;
-            return Dispatcher.Invoke(() => HandleHookedKey(vk));
-        };
-        _keys.Install();
-
-        // click outside the flyout closes it (screen point in physical px)
-        // click outside the flyout closes it. BeginInvoke (async) so the mouse
-        // hook returns instantly and never stalls the whole system's input.
-        _mouse.OnButtonDown = (x, y) => Dispatcher.BeginInvoke(() => OnGlobalClick(x, y));
-        _mouse.Install();
+        // RF-P1.01 / RF-P1.04: os hooks vivem no host, numa thread dedicada com message
+        // loop proprio. Start e idempotente e precisa ter rodado antes do primeiro
+        // Acquire. A assinatura e unica e dura a vida do processo: esta janela e
+        // singleton e nunca fecha de verdade (OnClosing cancela e apenas esconde).
+        LowLevelHookHost.Shared.Start();
+        LowLevelHookHost.Shared.Observed += OnHookEvent;
 
         // switching language rebuilds the date menu right away
         Localization.Loc.LanguageChanged += () =>
@@ -182,6 +175,9 @@ public partial class HistoryFlyoutWindow
             // tracking this explicitly (instead of polling GetForegroundWindow)
             // avoids the race where the hook and WPF fight over the first keys.
             System.Threading.Volatile.Write(ref _hasFocus, true);
+            // RF-P1.04: desarma o hook de teclado NO MESMO instante da ativacao, senao
+            // o callback e o WPF disputam as teclas ate a proxima troca de estado.
+            UpdateSwallowMasks();
             handled = true;
             return NativeMethods.MA_ACTIVATE;
         }
@@ -190,7 +186,10 @@ public partial class HistoryFlyoutWindow
         {
             const int WA_INACTIVE = 0;
             if ((wParam & 0xFFFF) == WA_INACTIVE)
+            {
                 System.Threading.Volatile.Write(ref _hasFocus, false);
+                UpdateSwallowMasks(); // RF-P1.04: devolve as teclas de navegacao ao hook
+            }
         }
         return nint.Zero;
     }
@@ -237,6 +236,9 @@ public partial class HistoryFlyoutWindow
             BuildEmojiPanel();
         if (show)
             EmojiSearchBox.Focus();
+        // RF-P1.04: o conjunto de teclas engolidas depende do painel de emoji, entao
+        // toda abertura/fechamento republica a mascara.
+        UpdateSwallowMasks();
     }
 
     private void BuildEmojiPanel()
@@ -475,8 +477,22 @@ public partial class HistoryFlyoutWindow
         Show();
         if (ItemsList.Items.Count > 0)
             ItemsList.SelectedIndex = 0;
-        _keys.Active = true;  // start routing keys to the flyout
-        _mouse.Active = true; // start watching for outside clicks
+
+        // RF-P1.03 / ADR-P.02: instala os hooks AGORA. Eles nao existem enquanto o
+        // flyout esta fechado, que e o ponto todo do requisito.
+        // Depois do Show() de proposito: Acquire espera o pump confirmar o install e
+        // atrasaria a janela aparecer, e um hook ja armado antes de a janela existir
+        // engoliria Esc/Enter do app de baixo sem ter nada para tratar. A janela de
+        // perda e submilissegundo - o usuario ainda esta soltando o Win+V.
+        // ??= porque um Show duplicado nao pode vazar um escopo orfao.
+        _keyboardScope ??= LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Keyboard);
+        _mouseScope ??= LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Mouse);
+        HookPolicy.MouseActive = true; // passa a observar clique fora
+        // KeyboardActive e as mascaras sao definidos aqui dentro: ligar antes deixaria
+        // o callback enxergar a mascara do estado anterior.
+        UpdateSwallowMasks();
+        // RF-P0.01: prova rastreavel de que os hooks so existem com o flyout aberto
+        Diagnostics.StartupLogHookTrace.Trace("flyout aberto");
     }
 
     /// <summary>
@@ -513,8 +529,19 @@ public partial class HistoryFlyoutWindow
         if (_closing)
             return;
         _closing = true;
-        _keys.Active = false;  // stop routing keys once hidden
-        _mouse.Active = false; // stop watching clicks
+
+        // RF-P1.03 / ADR-P.02: para de observar E remove os hooks do sistema. So baixar
+        // os flags nao resolveria: um hook instalado continua sendo chamado a cada
+        // tecla e a cada clique do sistema inteiro, mesmo com o callback so retornando.
+        HookPolicy.KeyboardActive = false;
+        HookPolicy.MouseActive = false;
+        HookPolicy.ClearSwallowKeys();
+        _keyboardScope?.Dispose();
+        _keyboardScope = null;
+        _mouseScope?.Dispose();
+        _mouseScope = null;
+        // RF-P0.01: aqui os dois precisam voltar a "nao" - se aparecer "sim", o escopo vazou
+        Diagnostics.StartupLogHookTrace.Trace("flyout fechado");
 
         // if we're still in multi-select here, the flyout is closing with a
         // pending selection (click outside, alt-tab, etc). that arms the queue,
@@ -608,40 +635,113 @@ public partial class HistoryFlyoutWindow
     private const int VK_E = 0x45;
     private const int VK_F = 0x46;
 
+    // RF-P1.04: conjuntos de descarte pre-calculados. Estaticos para que
+    // UpdateSwallowMasks nao aloque nada a cada troca de estado.
+    private static readonly int[] SwallowAlways = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_DELETE];
+    private static readonly int[] SwallowWithCtrl = [VK_TAB, VK_P, VK_D, VK_E, VK_F];
+    private static readonly int[] SwallowAlwaysOnEmoji = [VK_ESCAPE, VK_UP, VK_DOWN];
+
+    /// <summary>Superconjunto das mascaras: teclas que <see cref="ExecuteHookedKey"/> trata em algum estado.</summary>
+    private static bool IsHookedKey(int vk) => vk is VK_ESCAPE or VK_RETURN or VK_UP or VK_DOWN
+        or VK_DELETE or VK_TAB or VK_P or VK_D or VK_E or VK_F;
+
     /// <summary>
-    /// Handles a key routed from the global hook while the flyout is visible.
-    /// Returns true when we consumed it (so it does NOT reach the app underneath).
-    /// This mirrors OnPreviewKeyDown, but the flyout has no focus so we read the
-    /// modifier state from the OS instead of WPF's Keyboard.Modifiers.
+    /// RF-P1.04 / ADR-P.01: roda na thread WORKER do host, NUNCA na UI thread. Aqui so
+    /// pode existir despacho assincrono - o Dispatcher.Invoke sincrono que existia antes
+    /// segurava a Raw Input Thread do Windows a cada tecla do sistema inteiro enquanto
+    /// SQLite e clipboard rodavam na UI thread.
     /// </summary>
-    private bool HandleHookedKey(int vk)
+    private void OnHookEvent(Klip.Core.Input.InputEvent ev)
     {
+        switch (ev.Message)
+        {
+            case NativeMethods.WM_KEYDOWN:
+            case NativeMethods.WM_SYSKEYDOWN:
+                int vk = ev.A;
+                // o host publica TODA tecla enquanto KeyboardActive; filtrar aqui evita
+                // um hop de Dispatcher por caractere digitado no app de baixo. E um
+                // superconjunto das mascaras, entao nenhuma tecla engolida fica sem acao.
+                if (!IsHookedKey(vk))
+                    return;
+                Dispatcher.BeginInvoke(() => ExecuteHookedKey(vk));
+                return;
+
+            case NativeMethods.WM_LBUTTONDOWN:
+            case NativeMethods.WM_RBUTTONDOWN:
+            case NativeMethods.WM_MBUTTONDOWN:
+                // ponto de tela em pixels fisicos, como o MSLLHOOKSTRUCT entrega
+                int x = ev.A;
+                int y = ev.B;
+                Dispatcher.BeginInvoke(() => OnGlobalClick(x, y));
+                return;
+        }
+    }
+
+    /// <summary>
+    /// RF-P1.04: publica no <see cref="HookPolicy"/> a decisao "engolir ou nao" que o
+    /// callback do hook precisa tomar em O(1). Roda na UI thread e e chamada sempre que
+    /// muda algo de que a decisao depende: abrir/fechar o flyout, ganhar/perder foco
+    /// (WndProc) e abrir/fechar o painel de emoji.
+    /// <para>
+    /// Espelha exatamente as guardas do antigo HandleHookedKey, so que antecipadas: o
+    /// callback nao pode mais perguntar nada a UI para decidir.
+    /// </para>
+    /// </summary>
+    private void UpdateSwallowMasks()
+    {
+        // Sem escopo nao ha hook instalado (inclusive durante o WarmUp, que mostra e
+        // esconde a janela fora da tela). Com foco, o WPF trata a digitacao normalmente:
+        // e o mesmo curto-circuito por _hasFocus que existia no inicio do callback.
+        if (_keyboardScope is null || !IsVisible || System.Threading.Volatile.Read(ref _hasFocus))
+        {
+            HookPolicy.KeyboardActive = false;
+            HookPolicy.ClearSwallowKeys();
+            return;
+        }
+
+        if (EmojiPanel.Visibility == Visibility.Visible)
+        {
+            // Painel de emoji: Esc volta para Recentes e as setas somem; o resto passa
+            // adiante (nenhuma combinacao com Ctrl e tratada neste estado).
+            HookPolicy.SetSwallowKeys(SwallowAlwaysOnEmoji);
+            HookPolicy.SetSwallowKeysWithCtrl(ReadOnlySpan<int>.Empty);
+        }
+        else
+        {
+            HookPolicy.SetSwallowKeys(SwallowAlways);
+            HookPolicy.SetSwallowKeysWithCtrl(SwallowWithCtrl);
+        }
+
+        // Ativa por ultimo: assim o callback nunca enxerga a mascara do estado anterior.
+        HookPolicy.KeyboardActive = true;
+    }
+
+    /// <summary>
+    /// RF-P1.04: o EFEITO da tecla, ja na UI thread via BeginInvoke. Nao retorna nada -
+    /// quem decidiu o descarte foi a mascara publicada por <see cref="UpdateSwallowMasks"/>.
+    /// Mantem as mesmas acoes do antigo HandleHookedKey; os modificadores sao relidos do
+    /// SO porque o flyout abre sem foco e Keyboard.Modifiers do WPF nao vale aqui.
+    /// </summary>
+    private void ExecuteHookedKey(int vk)
+    {
+        // O evento agora e assincrono: entre o callback do hook e esta execucao o
+        // flyout pode ter fechado ou recebido foco (clique no campo de busca).
         if (!IsVisible)
-            return false;
+            return;
+        if (System.Threading.Volatile.Read(ref _hasFocus))
+            return;
 
-        // if a click already activated the flyout, WPF owns the keyboard. use the
-        // flag we set synchronously in WndProc, not GetForegroundWindow, so there's
-        // no race window right after the click where both sides grab the keys.
-        if (_hasFocus)
-            return false;
-
-        var ctrl = NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
-        var shift = NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
-
-        // the search box only has focus after a click, which sets _hasFocus above,
-        // so at this point typing is always false; keep the check for clarity
-        var typing = SearchBox.IsKeyboardFocusWithin || EmojiSearchBox.IsKeyboardFocusWithin;
-
-        // emoji panel open: only Esc matters, back to history
+        // emoji panel open: only Esc matters, back to history. as setas sao engolidas
+        // pela mascara e continuam sem acao, igual ao comportamento anterior.
         if (EmojiPanel.Visibility == Visibility.Visible)
         {
             if (vk == VK_ESCAPE)
-            {
                 TabRecent.IsChecked = true;
-                return true;
-            }
-            return typing ? false : vk is VK_UP or VK_DOWN; // swallow arrows, pass the rest to the search box
+            return;
         }
+
+        var ctrl = NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
+        var shift = NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
 
         switch (vk)
         {
@@ -652,7 +752,7 @@ public partial class HistoryFlyoutWindow
                     SearchBox.Text = "";
                 else
                     HideFlyout();
-                return true;
+                return;
 
             case VK_RETURN:
                 if (_viewModel.IsMultiSelectMode)
@@ -663,38 +763,45 @@ public partial class HistoryFlyoutWindow
                     _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
                 else
                     _viewModel.PasteCommand.Execute(ItemsList.SelectedItem);
-                return true;
+                return;
 
             case VK_DOWN:
                 MoveSelection(+1);
-                return true;
+                return;
             case VK_UP:
                 MoveSelection(-1);
-                return true;
+                return;
 
             case VK_TAB when ctrl:
                 _viewModel.CycleTab(shift ? -1 : +1);
-                return true;
+                return;
 
-            case VK_DELETE when !typing:
+            // A guarda "!typing" do codigo antigo era sempre verdadeira neste caminho: o
+            // callback so chega aqui com _hasFocus == false, ou seja com o flyout sem
+            // ativacao, quando nenhum TextBox do WPF detem o teclado. Mante-la agora
+            // faria a tecla SUMIR nos casos de borda - a mascara ja engoliu o Delete e
+            // a acao o ignoraria. Mascara e acao precisam concordar.
+            case VK_DELETE:
                 _viewModel.DeleteCommand.Execute(ItemsList.SelectedItem);
-                return true;
+                return;
             case VK_P when ctrl:
                 _viewModel.TogglePinCommand.Execute(ItemsList.SelectedItem);
-                return true;
+                return;
             case VK_D when ctrl:
                 _viewModel.ToggleFavoriteCommand.Execute(ItemsList.SelectedItem);
-                return true;
+                return;
             case VK_E when ctrl:
                 _viewModel.OpenInEditorCommand.Execute(ItemsList.SelectedItem);
-                return true;
+                return;
             case VK_F when ctrl:
+                // RF-P1.04: dar foco ao campo de busca NAO muda a mascara. Enquanto o
+                // flyout nao for ativado (_hasFocus), o teclado continua chegando pelo
+                // hook e a navegacao segue funcionando - igual ao comportamento antigo.
                 SearchBox.Focus();
-                return true;
+                return;
         }
 
         // everything else passes through (so a click-focused search box can type)
-        return false;
     }
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)

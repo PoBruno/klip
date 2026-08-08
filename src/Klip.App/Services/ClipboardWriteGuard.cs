@@ -9,14 +9,41 @@ using Klip.Interop;
 namespace Klip.App.Services;
 
 /// <summary>
-/// Every write we make to the clipboard goes through here and records the sequence
-/// number so the monitor can ignore the echo. Call on the UI thread (STA).
+/// Toda gravacao nossa no clipboard passa por aqui e registra o sequence number
+/// para o monitor ignorar o eco (RF-03.09).
+///
+/// RF-P2.01 / ADR-P.05: pode ser chamado de QUALQUER thread - a chamada real ao
+/// clipboard e marshalizada para a <see cref="ClipboardThread"/>. Nenhum
+/// chamador abre o clipboard na UI thread. O trabalho caro (ler arquivo,
+/// decodificar imagem, montar CF_HTML) fica de fora do Invoke, na thread do
+/// chamador, para nao ocupar a thread do clipboard mais que o necessario.
 /// </summary>
-public sealed class ClipboardWriteGuard
+public sealed class ClipboardWriteGuard(ClipboardThread clipboardThread)
 {
+    /// <summary>
+    /// RF-P2.01: lista fixa dos formatos que o Klip sabe restaurar.
+    ///
+    /// MUDANCA DE COMPORTAMENTO: antes o snapshot enumerava GetFormats() e
+    /// chamava GetData em CADA formato. Copiando do Excel/Word isso sao dezenas
+    /// de round-trips COM ao app de origem (Excel publica ~25 formatos
+    /// proprietarios) so para restaurar coisas que o Klip nunca usa. Agora o
+    /// "colar sem sujar o clipboard" restaura apenas texto, HTML, RTF, imagem e
+    /// lista de arquivos; formatos proprietarios do app de origem se perdem.
+    /// </summary>
+    private static readonly (uint Id, string Name)[] SnapshotFormats =
+    [
+        (NativeMethods.CF_UNICODETEXT, DataFormats.UnicodeText),
+        (NativeMethods.RegisterClipboardFormat(DataFormats.Html), DataFormats.Html),
+        (NativeMethods.RegisterClipboardFormat(DataFormats.Rtf), DataFormats.Rtf),
+        (NativeMethods.RegisterClipboardFormat("PNG"), "PNG"),
+        (NativeMethods.CF_DIB, DataFormats.Bitmap),
+        (NativeMethods.CF_HDROP, DataFormats.FileDrop),
+    ];
+
+    /// <summary>So a thread do clipboard le e escreve isto.</summary>
     private uint _lastOwnSequence;
 
-    /// <summary>True when the clipboard update came from one of our own writes.</summary>
+    /// <summary>True quando a mudanca do clipboard veio de uma gravacao nossa.</summary>
     public bool IsOwnWrite(uint sequenceNumber) => sequenceNumber == _lastOwnSequence;
 
     public void WriteText(string text)
@@ -27,16 +54,16 @@ public sealed class ClipboardWriteGuard
     }
 
     /// <summary>
-    /// Paste with full fidelity. Writes text + HTML + RTF together when we have them
-    /// so the target app can pick the richest format it supports.
-    /// With <paramref name="plainTextOnly"/> it forces plain text only.
+    /// Colagem com fidelidade. Grava texto + HTML + RTF juntos quando existem,
+    /// para o app de destino escolher o formato mais rico que entende.
+    /// Com <paramref name="plainTextOnly"/> forca texto puro.
     /// </summary>
     public void WriteItem(ClipboardItem item, bool plainTextOnly = false)
     {
         switch (item.Type)
         {
             case ClipboardItemType.Image when item.FilePath is not null:
-                // caller (PasteService) already resolved FilePath to absolute
+                // o chamador (PasteService) ja resolveu FilePath para absoluto
                 WriteImageFromPngFile(item.FilePath);
                 return;
 
@@ -66,7 +93,7 @@ public sealed class ClipboardWriteGuard
         }
     }
 
-    /// <summary>Images go out as PNG + bitmap (DIB) for wider compatibility.</summary>
+    /// <summary>Le o arquivo, decodifica e grava. O decode NAO ocupa a thread do clipboard.</summary>
     public void WriteImageFromPngFile(string absolutePngPath)
     {
         var (bytes, bitmap) = DecodeImageFile(absolutePngPath);
@@ -74,9 +101,9 @@ public sealed class ClipboardWriteGuard
     }
 
     /// <summary>
-    /// Reads the file and decodes the bitmap. This is the heavy part (disk read +
-    /// full-size decode), so it can run on a background thread; the actual
-    /// clipboard write (SetImage) still has to happen on the UI thread.
+    /// Le o arquivo e decodifica o bitmap. E a parte pesada (disco + decode em
+    /// tamanho cheio), entao roda na thread do chamador; so a gravacao em si vai
+    /// para a thread do clipboard. O bitmap sai congelado, atravessa threads.
     /// </summary>
     public static (byte[] bytes, BitmapSource bitmap) DecodeImageFile(string absolutePngPath)
     {
@@ -90,12 +117,32 @@ public sealed class ClipboardWriteGuard
         return (bytes, bitmap);
     }
 
-    /// <summary>Writes PNG bytes + an already decoded bitmap (used after a capture).</summary>
+    /// <summary>
+    /// Grava bytes PNG + um bitmap ja decodificado (usado depois de uma captura).
+    ///
+    /// RF-P2.05 (parcial): NAO oferecemos CF_DIB nem CF_DIBV5 explicitamente. O
+    /// SetImage do WPF publica CF_BITMAP e o proprio Windows sintetiza
+    /// CF_DIB &lt;-&gt; CF_BITMAP &lt;-&gt; CF_DIBV5 sob demanda, entao anunciar
+    /// as variantes so faria o OleFlushClipboard materializar a mesma imagem
+    /// varias vezes (um screenshot 4K da ~33 MB por copia de DIB). Conferido:
+    /// SetImage + SetData("PNG") ja e o conjunto minimo, nao ha redundancia
+    /// para remover aqui.
+    ///
+    /// O copy: true (que dispara OleFlushClipboard e materializa tudo na hora)
+    /// continua por ora - trocar por delayed rendering exige implementar
+    /// IDataObject com TYMED sob demanda e fica no backlog.
+    /// </summary>
     public void WriteImageFromPng(byte[] pngBytes, BitmapSource bitmap)
     {
+        // RF-P2.01: congela AQUI, na thread que criou o bitmap - um BitmapSource
+        // vivo e um DispatcherObject e estouraria ao ser tocado na thread do
+        // clipboard. Todos os chamadores ja entregam congelado; isto e a rede.
+        if (!bitmap.IsFrozen && bitmap.CanFreeze)
+            bitmap.Freeze();
+
         var data = new DataObject();
-        data.SetImage(bitmap);                             // CF_BITMAP/CF_DIB through WPF
-        data.SetData("PNG", new MemoryStream(pngBytes));   // registered "PNG" format
+        data.SetImage(bitmap);                             // CF_BITMAP via WPF
+        data.SetData("PNG", new MemoryStream(pngBytes));   // formato registrado "PNG"
         SetAndRecord(data);
     }
 
@@ -104,33 +151,71 @@ public sealed class ClipboardWriteGuard
         var collection = new StringCollection();
         foreach (var path in paths)
             collection.Add(path);
-        System.Windows.Clipboard.SetFileDropList(collection);
-        RecordSequence();
+
+        OnClipboardThread(() =>
+        {
+            System.Windows.Clipboard.SetFileDropList(collection);
+            RecordSequence();
+        });
     }
 
-    // ----- snapshot/restore for "paste without clobbering the clipboard" -----
+    // ----- snapshot/restore para "colar sem sujar o clipboard" -----
 
-    /// <summary>Grabs the current clipboard content so we can put it back later.</summary>
+    /// <summary>Guarda o conteudo atual do clipboard para devolver depois.</summary>
     public IDataObject? SnapshotCurrent()
     {
         try
         {
+            return clipboardThread.Invoke<IDataObject?>(ReadSnapshotFormats);
+        }
+        catch (TimeoutException)
+        {
+            StartupLog.Write("[AVISO] Snapshot do clipboard abortado: thread STA ocupada");
+            return null;
+        }
+    }
+
+    private static IDataObject? ReadSnapshotFormats()
+    {
+        try
+        {
+            // RF-P2.01: sonda primeiro. IsClipboardFormatAvailable nao abre o
+            // clipboard e nao fala com o processo de origem; se nada da lista
+            // fixa estiver la, nem chegamos a pedir o IDataObject.
+            Span<bool> wanted = stackalloc bool[SnapshotFormats.Length];
+            var any = false;
+            for (var i = 0; i < SnapshotFormats.Length; i++)
+            {
+                var id = SnapshotFormats[i].Id;
+                wanted[i] = id != 0 && NativeMethods.IsClipboardFormatAvailable(id);
+                any |= wanted[i];
+            }
+            if (!any)
+                return null;
+
             var current = System.Windows.Clipboard.GetDataObject();
             if (current is null)
                 return null;
-            // copy the formats into our own DataObject, the original is volatile
+
+            // copia os formatos para um DataObject nosso, o original e volatil
             var copy = new DataObject();
-            foreach (var format in current.GetFormats())
+            for (var i = 0; i < SnapshotFormats.Length; i++)
             {
+                if (!wanted[i])
+                    continue;
                 try
                 {
-                    var value = current.GetData(format);
-                    if (value is not null)
-                        copy.SetData(format, value);
+                    var value = current.GetData(SnapshotFormats[i].Name);
+                    if (value is null)
+                        continue;
+                    // congela para o objeto poder atravessar threads sem afinidade
+                    if (value is BitmapSource { IsFrozen: false, CanFreeze: true } bitmap)
+                        bitmap.Freeze();
+                    copy.SetData(SnapshotFormats[i].Name, value);
                 }
                 catch (Exception)
                 {
-                    // can't read this format, just skip it
+                    // formato ilegivel, pula
                 }
             }
             return copy;
@@ -141,31 +226,54 @@ public sealed class ClipboardWriteGuard
         }
     }
 
-    /// <summary>Puts back a snapshot taken by <see cref="SnapshotCurrent"/>.</summary>
+    /// <summary>Devolve um snapshot tirado por <see cref="SnapshotCurrent"/>.</summary>
     public void Restore(IDataObject? snapshot)
     {
         if (snapshot is null)
             return;
         try
         {
-            TrySetDataObject(snapshot);
-            RecordSequence(); // counts as our own write (anti-loop)
+            OnClipboardThread(() =>
+            {
+                TrySetDataObject(snapshot);
+                RecordSequence(); // conta como gravacao nossa (anti-loop)
+            });
         }
         catch (Exception)
         {
-            // best effort, don't care if it fails
+            // best effort, tudo bem falhar
         }
     }
 
-    private void SetAndRecord(DataObject data)
+    private void SetAndRecord(DataObject data) => OnClipboardThread(() =>
     {
         TrySetDataObject(data);
         RecordSequence();
+    });
+
+    /// <summary>
+    /// RF-P2.01: unico ponto de marshalizacao das gravacoes. O timeout defensivo
+    /// do <see cref="ClipboardThread"/> vira log em vez de excecao - chamadores
+    /// como o editor e a captura rodam na UI thread e sempre trataram gravacao
+    /// no clipboard como best effort; deixar um TimeoutException subir ali
+    /// derrubaria o app por causa de um clipboard ocupado.
+    /// </summary>
+    private void OnClipboardThread(Action action)
+    {
+        try
+        {
+            clipboardThread.Invoke(action);
+        }
+        catch (TimeoutException)
+        {
+            StartupLog.Write("[AVISO] Gravacao no clipboard abortada: thread STA ocupada");
+        }
     }
 
     /// <summary>
-    /// SetDataObject can throw CLIPBRD_E_CANT_OPEN when another app is holding the
-    /// clipboard. A couple of short retries handle that without a long WPF stall.
+    /// SetDataObject pode estourar CLIPBRD_E_CANT_OPEN quando outro app esta com
+    /// o clipboard. Duas repeticoes curtas resolvem - e agora os Sleep caem na
+    /// thread do clipboard, nunca na UI (RF-P2.01).
     /// </summary>
     private static void TrySetDataObject(object data)
     {
@@ -178,7 +286,7 @@ public sealed class ClipboardWriteGuard
             }
             catch (Exception) when (attempt < 2)
             {
-                System.Threading.Thread.Sleep(20);
+                Thread.Sleep(20);
             }
         }
     }
