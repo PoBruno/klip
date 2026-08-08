@@ -87,6 +87,9 @@ jobs:
       # feito na 1.3.0 via wingetcreate submit - PR microsoft/winget-pkgs#401529).
       # Nota: o manifesto publicado tem SO o instalador Inno (o portable nao entra),
       # entao o update passa apenas a URL do Setup. Id com o case exato do manifesto.
+      # A arquitetura vai FIXADA em x64 no proprio --urls: o stub do Inno e um exe
+      # de 32 bits, entao o wingetcreate detecta x86 e nao consegue casar com o unico
+      # no do manifesto (Architecture: x64), falhando com "multiple matches found".
       # So roda se o token estiver configurado, entao nao quebra releases sem ele.
       - name: Atualizar winget
         env:
@@ -98,6 +101,6 @@ jobs:
           Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
           .\wingetcreate.exe update PoBruno.Klip `
             --version ${{ steps.version.outputs.version }} `
-            --urls "$installerUrl" `
+            --urls "$installerUrl|x64" `
             --submit `
             --token "$env:WINGET_TOKEN"
