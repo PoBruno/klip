@@ -121,7 +121,7 @@ public sealed class SystemHotkeyService(SettingsService settings)
             return; // backup is written once, never overwritten
         using var key = Registry.CurrentUser.OpenSubKey(ExplorerAdvancedKey);
         var current = key?.GetValue(DisabledHotkeysValue) as string;
-        settings.Update(s =>
+        settings.UpdateAndFlush(s =>
         {
             s.RegistryBackupDisabledHotkeys = current;
             s.RegistryBackupTaken = true;
@@ -137,7 +137,7 @@ public sealed class SystemHotkeyService(SettingsService settings)
         if (!settings.Current.RegistryBackupPrintScreenTaken)
         {
             var original = key.GetValue(PrintScreenValue);
-            settings.Update(s =>
+            settings.UpdateAndFlush(s =>
             {
                 s.RegistryBackupPrintScreen = original as int? ?? (original is string str && int.TryParse(str, out var v) ? v : null);
                 s.RegistryBackupPrintScreenTaken = true;
