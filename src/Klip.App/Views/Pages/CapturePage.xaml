@@ -1,0 +1,186 @@
+<Page
+    x:Class="Klip.App.Views.Pages.CapturePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+
+        <!-- ================= Captura (SectionCapture) =================
+             Ordem e redacao seguem o mockup marketing-screens/configuracoes.html.
+             O cartao "Nova captura" que o mockup mostra no topo e o atalho global:
+             mora na HotkeysPage (RF-S.06), nao aqui - duplica-lo daria dois donos
+             para a mesma setting. -->
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionCapture}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.AutoSaveTitle}"
+            Description="{DynamicResource Loc.AutoSaveCaption}"
+            Icon="&#xE74E;">
+            <ui:ToggleSwitch x:Name="AutoSaveToggle" />
+        </controls:SettingsCard>
+
+        <!-- Seletor de pasta: cartao "empilhado" do mockup - a caixa e o botao vao
+             no Footer, abaixo do titulo e da legenda (RF-S.02). -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ScreenshotFolderTitle}"
+            Description="{DynamicResource Loc.ScreenshotFolderCaption}"
+            Icon="&#xE8B7;">
+            <controls:SettingsCard.Footer>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <!-- somente leitura: quem edita e o dialogo, e o caminho de
+                         verdade vive num campo do code-behind, nao neste Text. -->
+                    <ui:TextBox
+                        x:Name="ScreenshotFolderBox"
+                        IsReadOnly="True"
+                        Style="{StaticResource SettingsTextBox}" />
+                    <ui:Button
+                        x:Name="ChooseFolderButton"
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Content="{DynamicResource Loc.ChooseFolder}" />
+                </Grid>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.CadenceTitle}"
+            Description="{DynamicResource Loc.CadenceCaption}"
+            Icon="&#xE916;">
+            <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                <Slider
+                    x:Name="ScrollDelaySlider"
+                    Width="140"
+                    VerticalAlignment="Center"
+                    IsSnapToTickEnabled="True"
+                    Maximum="2000"
+                    Minimum="100"
+                    TickFrequency="100" />
+                <!-- MinWidth reserva o pior caso ("2000 ms") para o slider nao
+                     escorregar enquanto o rotulo muda de largura durante o arrasto. -->
+                <TextBlock
+                    x:Name="ScrollDelayLabel"
+                    MinWidth="52"
+                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    TextAlignment="Right" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.EditorModifierTitle}"
+            Description="{DynamicResource Loc.EditorModifierCaption}"
+            Icon="&#xE765;">
+            <ComboBox
+                x:Name="EditorModifierCombo"
+                Width="140"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.AlwaysEditorTitle}"
+            Description="{DynamicResource Loc.AlwaysEditorCaption}"
+            Icon="&#xE70F;">
+            <ui:ToggleSwitch x:Name="AlwaysEditorToggle" />
+        </controls:SettingsCard>
+
+        <!-- ================= Gravacao de tela (SectionRecording) =================
+             Specs F3/F4. O cartao "Parar gravacao" do mockup e atalho global:
+             mora na HotkeysPage. -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionRecording}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RecordingsFolderTitle}"
+            Description="{DynamicResource Loc.RecordingsFolderCaption}"
+            Icon="&#xE8B7;">
+            <controls:SettingsCard.Footer>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox
+                        x:Name="RecordingsFolderBox"
+                        IsReadOnly="True"
+                        Style="{StaticResource SettingsTextBox}" />
+                    <ui:Button
+                        x:Name="ChooseRecordingsFolderButton"
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Content="{DynamicResource Loc.ChooseFolder}" />
+                </Grid>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.GifFpsTitle}"
+            Description="{DynamicResource Loc.GifFpsCaption}"
+            Icon="&#xF4A9;">
+            <ComboBox
+                x:Name="GifFpsCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.GifScaleTitle}"
+            Description="{DynamicResource Loc.GifScaleCaption}"
+            Icon="&#xE740;">
+            <ComboBox
+                x:Name="GifScaleCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.Mp4BitrateTitle}"
+            Description="{DynamicResource Loc.Mp4BitrateCaption}"
+            Icon="&#xE714;">
+            <ComboBox
+                x:Name="Mp4BitrateCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.HideRecordingBorderTitle}"
+            Description="{DynamicResource Loc.HideRecordingBorderCaption}"
+            Icon="&#xE7FB;">
+            <ui:ToggleSwitch x:Name="HideRecordingBorderToggle" />
+        </controls:SettingsCard>
+
+        <!-- RF-F5.14: caminho do ffmpeg.exe para o editor de midia -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.FfmpegPathTitle}"
+            Description="{DynamicResource Loc.FfmpegPathCaption}"
+            Icon="&#xE7C3;">
+            <controls:SettingsCard.Footer>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox
+                        x:Name="FfmpegPathBox"
+                        IsReadOnly="True"
+                        Style="{StaticResource SettingsTextBox}" />
+                    <ui:Button
+                        x:Name="ChooseFfmpegButton"
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Content="{DynamicResource Loc.FfmpegChoose}" />
+                </Grid>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

@@ -1,0 +1,182 @@
+<Page
+    x:Class="Klip.App.Views.Pages.ClipboardPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionClipboard}" />
+
+        <!-- DECISAO (RF-S.08): os dois ui:NumberBox FICAM.
+             Medido nesta versao (WPF-UI 4.3.0, harness fora do repo): o ui:NumberBox
+             monta 35 elementos visuais em ~4,0 ms; o ui:TextBox, 16 em ~1,4 ms. Trocar
+             os dois economizaria 38 elementos e ~5 ms - e so isso.
+             Com ADR-S.01/ADR-S.03 esta pagina so nasce na PRIMEIRA navegacao ate
+             "Historico de clipboard": os ~8 ms nao estao mais no startup, que e o que
+             RF-S.08 ataca, e sao pagos uma unica vez dentro de uma navegacao que o
+             proprio usuario pediu.
+             Do outro lado da conta, um ui:TextBox numerico exigiria reimplementar a
+             mao: clamp em Minimum/Maximum (o NumberBox ja corta 99999 para 3650 -
+             verificado), filtro de entrada, incremento por seta do teclado, os botoes
+             de spinner e o padrao de automacao de intervalo do leitor de tela. Nao se
+             troca comportamento acessivel testado por 5 ms invisiveis numa pagina ja
+             aberta.
+             O que faria reavaliar: a pagina deixar de ser lazy, ou o numero de
+             NumberBox crescer.
+             ClearButtonEnabled=False nao muda a contagem de elementos (o botao esta no
+             template dos dois jeitos, so colapsado) - e decisao de comportamento: o "x"
+             zera o Text, Value vira null e o handler (que exige `is { } value`) nao
+             grava, entao a caixa mostraria vazio com o setting ainda no valor antigo.
+             Zero ja e o "sem limite" e se digita.
+             MaxDecimalPlaces=0 casa a exibicao com o cast (int) do handler; verificado
+             que 10000, 0 e 250 continuam sendo exibidos sem casas decimais. -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxItemsTitle}"
+            Description="{DynamicResource Loc.MaxItemsCaption}"
+            Icon="&#xE81C;">
+            <ui:NumberBox
+                x:Name="MaxItemsBox"
+                Width="140"
+                Maximum="1000000"
+                Minimum="0"
+                MaxDecimalPlaces="0"
+                ClearButtonEnabled="False"
+                Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxAgeTitle}"
+            Description="{DynamicResource Loc.MaxAgeCaption}"
+            Icon="&#xE787;">
+            <ui:NumberBox
+                x:Name="MaxAgeBox"
+                Width="140"
+                Maximum="3650"
+                Minimum="0"
+                MaxDecimalPlaces="0"
+                ClearButtonEnabled="False"
+                Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <!-- Campo + botao + lista ficam no Footer (RF-S.02): o cartao nao tem controle
+             a direita, tudo e empilhado abaixo do titulo e da legenda. -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ExcludedAppsTitle}"
+            Description="{DynamicResource Loc.ExcludedAppsCaption}"
+            Icon="&#xE72E;">
+            <controls:SettingsCard.Footer>
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <!-- RF-S.07: "processo.exe" estava hardcoded no XAML da MainWindow. -->
+                        <ui:TextBox
+                            x:Name="ExcludeAppBox"
+                            PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
+                            Style="{StaticResource SettingsTextBox}" />
+                        <ui:Button
+                            x:Name="AddExcludeButton"
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            MinHeight="32"
+                            Content="{DynamicResource Loc.AddApp}" />
+                    </Grid>
+
+                    <!-- RF-S.09: virtualizacao de verdade.
+                         Um VirtualizingStackPanel medido com altura DISPONIVEL INFINITA
+                         realiza todos os itens - a virtualizacao desliga em silencio. E
+                         infinita e o que esta lista recebe: o DynamicScrollViewer do
+                         NavigationViewContentPresenter mede a pagina inteira assim.
+                         Duas condicoes precisam valer juntas:
+                         1) o painel tem que ser o IScrollInfo de um ScrollViewer, e por
+                            isso o ScrollViewer mora DENTRO do Template (como no template
+                            default do ListBox). Um ScrollViewer por fora envolvendo o
+                            ItemsControl nao serve: o filho dele seria o ItemsControl, que
+                            nao e IScrollInfo, e o scroll voltaria a ser por pixel;
+                         2) a altura tem que ser finita - dai o MaxHeight, que da a
+                            viewport e faz a lista rolar sozinha. Este MaxHeight e o UNICO
+                            do conjunto e e da LISTA, nao da pagina: e ele que liga a
+                            virtualizacao, nao um remendo de rolagem.
+                         O poco de scroll que isso cria e devolvido no code-behind
+                         (OnExcludedAppsPreviewMouseWheel), que reemite o MouseWheelEvent
+                         a partir do ItemsControl. Como o evento so borbulha, ele sobe
+                         ate o DynamicScrollViewer do presenter - antes parava no
+                         ScrollViewer da pagina, que nao existe mais. O handler nao
+                         precisou mudar: ele so depende de haver um ScrollViewer acima.
+                         HasItems=False colapsa a lista para nao sobrar margem vazia. -->
+                    <ItemsControl
+                        x:Name="ExcludedAppsList"
+                        MaxHeight="216"
+                        Margin="0,8,0,0"
+                        VirtualizingPanel.IsVirtualizing="True"
+                        VirtualizingPanel.VirtualizationMode="Recycling"
+                        ScrollViewer.CanContentScroll="True">
+                        <ItemsControl.Style>
+                            <Style TargetType="{x:Type ItemsControl}">
+                                <Style.Triggers>
+                                    <Trigger Property="HasItems" Value="False">
+                                        <Setter Property="Visibility" Value="Collapsed" />
+                                    </Trigger>
+                                </Style.Triggers>
+                            </Style>
+                        </ItemsControl.Style>
+                        <ItemsControl.Template>
+                            <ControlTemplate TargetType="{x:Type ItemsControl}">
+                                <ScrollViewer
+                                    x:Name="PART_ExcludedAppsScroll"
+                                    Focusable="False"
+                                    CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
+                                    HorizontalScrollBarVisibility="Disabled"
+                                    VerticalScrollBarVisibility="Auto">
+                                    <ItemsPresenter />
+                                </ScrollViewer>
+                            </ControlTemplate>
+                        </ItemsControl.Template>
+                        <ItemsControl.ItemsPanel>
+                            <ItemsPanelTemplate>
+                                <VirtualizingStackPanel />
+                            </ItemsPanelTemplate>
+                        </ItemsControl.ItemsPanel>
+                        <ItemsControl.ItemTemplate>
+                            <DataTemplate>
+                                <Border
+                                    Margin="0,0,0,4"
+                                    Padding="10,6"
+                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                                    CornerRadius="4">
+                                    <Grid>
+                                        <TextBlock VerticalAlignment="Center" Text="{Binding}" />
+                                        <!-- Sem Click="..." e sem Tag: o Click borbulha ate o
+                                             ItemsControl, onde um unico handler ligado em C#
+                                             (compile-checked) le o DataContext do botao.
+                                             RF-S.07: Loc.RemoveApp existia e nao era usado. -->
+                                        <Button
+                                            HorizontalAlignment="Right"
+                                            Padding="6,2"
+                                            Background="Transparent"
+                                            BorderThickness="0"
+                                            Cursor="Hand"
+                                            ToolTip="{DynamicResource Loc.RemoveApp}"
+                                            AutomationProperties.Name="{DynamicResource Loc.RemoveApp}">
+                                            <TextBlock
+                                                FontFamily="{StaticResource KlipIconFont}"
+                                                FontSize="12"
+                                                Text="&#xE74D;" />
+                                        </Button>
+                                    </Grid>
+                                </Border>
+                            </DataTemplate>
+                        </ItemsControl.ItemTemplate>
+                    </ItemsControl>
+                </StackPanel>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

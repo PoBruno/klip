@@ -1,0 +1,125 @@
+<ui:FluentWindow
+    x:Class="Klip.App.Views.SettingsShell"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:pages="clr-namespace:Klip.App.Views.Pages"
+    Title="{DynamicResource Loc.SettingsTitle}"
+    Width="900"
+    Height="720"
+    MinWidth="720"
+    MinHeight="520"
+    FontFamily="{StaticResource KlipUiFont}"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round"
+    WindowStartupLocation="CenterScreen">
+
+    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. Display quantiza as
+         metricas por pixel inteiro, o que e bom ate ~16 px; o PageTitle (28 px) volta
+         a Ideal no proprio estilo (RF-S.01).
+         RF-S.03: nenhum Background aqui nem na NavigationView - isso mataria o Mica. -->
+    <Grid
+        TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        UseLayoutRounding="True"
+        SnapsToDevicePixels="True"
+        TextOptions.TextFormattingMode="Display">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" Title="{DynamicResource Loc.SettingsTitle}" />
+
+        <!-- ADR-S.02: o template do WPF-UI ja entrega o indicador de selecao 3x16
+             raio 2 (ActiveRectangle) e a camada de conteudo com CornerRadius 8,0,0,0 -
+             exatamente o mockup, sem reimplementar nada.
+             OpenPaneLength=210: o PaneGrid do template tem Margin="4,0", entao
+             210 + 8 = os 218 do mockup.
+             Q-S.1: o item de nav fica em 40 px (MinHeight fixo no template do WPF-UI)
+             em vez dos 36 do mockup - o Explorer do Windows tambem usa 40.
+
+             RF-S.03 - ROLAGEM DAS PAGINAS. O NavigationViewContentPresenter do WPF-UI
+             4.3 deriva de System.Windows.Controls.Frame e o estilo default dele troca o
+             template por um que embrulha a pagina num ui:DynamicScrollViewer sempre que
+             IsDynamicScrollViewerEnabled=True (ver o Setter em Styles/Settings.xaml).
+             Ou seja: a rolagem ja existe uma camada ACIMA da pagina, e a pagina e
+             medida com altura infinita. Um ScrollViewer dentro da pagina, como havia
+             ate aqui, crescia ate o tamanho do conteudo (ViewportHeight ==
+             ExtentHeight, ScrollableHeight = 0), nunca mostrava barra e ainda comia a
+             roda do mouse - o ScrollViewer do WPF marca MouseWheelEvent como tratado
+             mesmo sem ter para onde rolar. As paginas nao tem mais ScrollViewer.
+
+             Padding=24,0,24,24 (o `.content { padding: 0 24px 24px }` do mockup): o
+             template liga esse Padding ao Margin do PART_FrameCP, que fica DENTRO do
+             DynamicScrollViewer. Isso e proposital - no template do DynamicScrollViewer
+             o conteudo ocupa as duas colunas do Grid e a DynamicScrollBar (12 px)
+             flutua POR CIMA, encostada na direita. Com o padding por dentro, essa faixa
+             de 24 px e exatamente o vao onde a barra flutua: ela nunca cobre texto. Se
+             o padding fosse por fora, a barra seria empurrada 24 px para dentro e
+             passaria a flutuar em cima do conteudo. -->
+        <ui:NavigationView
+            x:Name="RootNavigation"
+            Grid.Row="1"
+            OpenPaneLength="210"
+            PaneDisplayMode="Left"
+            IsPaneToggleVisible="False"
+            IsBackButtonVisible="Collapsed"
+            HeaderVisibility="Collapsed"
+            Padding="24,0,24,24">
+            <ui:NavigationView.MenuItems>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionGeneral}"
+                    TargetPageType="{x:Type pages:GeneralPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE713;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionHotkeys}"
+                    TargetPageType="{x:Type pages:HotkeysPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE765;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionClipboard}"
+                    TargetPageType="{x:Type pages:ClipboardPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE77F;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionCapture}"
+                    TargetPageType="{x:Type pages:CapturePage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE722;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionPrivacy}"
+                    TargetPageType="{x:Type pages:PrivacyPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE72E;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionMaintenance}"
+                    TargetPageType="{x:Type pages:MaintenancePage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE90F;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+            </ui:NavigationView.MenuItems>
+            <ui:NavigationView.FooterMenuItems>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionAbout}"
+                    TargetPageType="{x:Type pages:AboutPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE946;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+            </ui:NavigationView.FooterMenuItems>
+        </ui:NavigationView>
+    </Grid>
+</ui:FluentWindow>

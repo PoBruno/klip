@@ -10,6 +10,10 @@
                 <ui:ThemesDictionary Theme="Dark" />
                 <ui:ControlsDictionary />
                 <ResourceDictionary Source="/Styles/Keycaps.xaml" />
+                <!-- RF-S.01: design system da tela de Configuracoes. Precisa vir DEPOIS
+                     do ThemesDictionary e do ControlsDictionary, senao os overrides de
+                     brush (NavigationViewItemBackgroundPointerOver) nao vencem. -->
+                <ResourceDictionary Source="/Styles/Settings.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>
     </Application.Resources>

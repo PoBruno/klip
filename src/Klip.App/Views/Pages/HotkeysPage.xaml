@@ -1,0 +1,211 @@
+<Page
+    x:Class="Klip.App.Views.Pages.HotkeysPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionHotkeys}" />
+
+        <!-- RF-S.06: linha de status PROPRIA da pagina. As 10 mensagens de
+             resultado (takeover e captura de atalho) iam para o StatusText
+             compartilhado da MainWindow e eram apagadas pelo RefreshStatus() da
+             linha seguinte antes de o usuario ler qualquer uma delas. Aqui nada
+             do refresh de estado toca nesta linha: ela so muda quando ha uma
+             nova acao, ou quando o usuario a fecha. Fica colapsada (IsOpen) ate
+             a primeira acao, entao nao ocupa espaco na abertura da pagina. -->
+        <ui:InfoBar
+            x:Name="ActionStatus"
+            Margin="0,4,0,0"
+            IsClosable="True"
+            IsOpen="False" />
+
+        <!-- ==================== Atalhos do Klip ==================== -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionAppHotkeys}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.OpenHistoryHotkey}"
+            Description="{DynamicResource Loc.HotkeyHint}"
+            Icon="&#xE81C;">
+            <!-- botao-capturador: os atributos ficam inline (e nao num Style com
+                 chave) para o estilo IMPLICITO do WPF-UI continuar valendo - um
+                 Style com chave desliga a busca implicita e derrubaria o template
+                 do botao para o default do tema. -->
+            <Button
+                x:Name="HistoryHotkeyButton"
+                MinWidth="140"
+                Padding="8,6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                Focusable="True">
+                <Grid>
+                    <controls:KeyChord x:Name="HistoryHotkeyChord" HorizontalAlignment="Center" />
+                    <TextBlock
+                        x:Name="HistoryHotkeyPrompt"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="{DynamicResource Loc.HotkeyPressKeys}"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Button>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.NewCaptureHotkey}"
+            Description="{DynamicResource Loc.HotkeyHint}"
+            Icon="&#xE722;">
+            <Button
+                x:Name="CaptureHotkeyButton"
+                MinWidth="140"
+                Padding="8,6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                Focusable="True">
+                <Grid>
+                    <controls:KeyChord x:Name="CaptureHotkeyChord" HorizontalAlignment="Center" />
+                    <TextBlock
+                        x:Name="CaptureHotkeyPrompt"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="{DynamicResource Loc.HotkeyPressKeys}"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Button>
+        </controls:SettingsCard>
+
+        <!-- RF-F3.05: este atalho so e registrado DURANTE a gravacao, entao
+             salva-lo nao chama ApplyHotkeys (ver HotkeysPage.xaml.cs). -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.StopRecordingHotkeyTitle}"
+            Description="{DynamicResource Loc.HotkeyHint}"
+            Icon="&#xE71A;">
+            <Button
+                x:Name="StopRecHotkeyButton"
+                MinWidth="140"
+                Padding="8,6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                Focusable="True">
+                <Grid>
+                    <controls:KeyChord x:Name="StopRecHotkeyChord" HorizontalAlignment="Center" />
+                    <TextBlock
+                        x:Name="StopRecHotkeyPrompt"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="{DynamicResource Loc.HotkeyPressKeys}"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Button>
+        </controls:SettingsCard>
+
+        <!-- ============ Atalhos nativos do Windows (registro) ============ -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionNativeHotkeys}" />
+
+        <!-- RF-S.08: a terceira linha (Status) e preenchida em codigo, depois de
+             uma leitura do registro em Task.Run - nunca sincronamente na
+             abertura da pagina. Ate a leitura voltar mostra o placeholder. -->
+        <controls:SettingsCard
+            x:Name="WinVCard"
+            Title="{DynamicResource Loc.CardWinVTitle}"
+            Description="{DynamicResource Loc.CardWinVCaption}"
+            Icon="&#xE77F;">
+            <ui:Button
+                x:Name="TakeWinVButton"
+                Appearance="Primary"
+                Content="{DynamicResource Loc.TakeWinV}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            x:Name="CaptureKeyCard"
+            Title="{DynamicResource Loc.CardCaptureKeyTitle}"
+            Description="{DynamicResource Loc.CardCaptureKeyCaption}"
+            Icon="&#xE765;">
+            <StackPanel>
+                <ui:Button
+                    x:Name="TakePrtScButton"
+                    Margin="0,0,0,6"
+                    Appearance="Primary"
+                    Content="{DynamicResource Loc.UsePrintScreen}" />
+                <ui:Button
+                    x:Name="TakeWinShiftSButton"
+                    Content="{DynamicResource Loc.UseWinShiftS}" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.CardRevertTitle}"
+            Description="{DynamicResource Loc.CardRevertCaption}"
+            Icon="&#xE7A7;">
+            <ui:Button x:Name="RevertButton" Content="{DynamicResource Loc.Revert}" />
+        </controls:SettingsCard>
+
+        <!-- ============ Atalhos do painel (so referencia) ============ -->
+        <!-- Q-S.4: Loc.ShortcutClick/CtrlClick/AltClick/ShiftClick estavam
+             declaradas e sem uso porque a tabela antiga (2 colunas: keycaps |
+             descricao) nao tinha onde por o rotulo. No formato de cartao elas
+             sao exatamente o Title que faltava, com a frase indo para o
+             Description e os keycaps no lugar do controle. -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionFlyoutShortcuts}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShortcutClick}"
+            Description="{DynamicResource Loc.ShortcutClickDesc}">
+            <Border Style="{StaticResource KeyCap}">
+                <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+            </Border>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShortcutCtrlClick}"
+            Description="{DynamicResource Loc.ShortcutCtrlClickDesc}">
+            <StackPanel Orientation="Horizontal">
+                <controls:KeyChord Chord="Ctrl" />
+                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                <Border Style="{StaticResource KeyCap}">
+                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                </Border>
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShortcutAltClick}"
+            Description="{DynamicResource Loc.ShortcutAltClickDesc}">
+            <StackPanel Orientation="Horizontal">
+                <controls:KeyChord Chord="Alt" />
+                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                <Border Style="{StaticResource KeyCap}">
+                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                </Border>
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShortcutShiftClick}"
+            Description="{DynamicResource Loc.ShortcutShiftClickDesc}">
+            <StackPanel Orientation="Horizontal">
+                <controls:KeyChord Chord="Shift" />
+                <TextBlock Style="{StaticResource KeyCapPlus}" />
+                <Border Style="{StaticResource KeyCap}">
+                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
+                </Border>
+            </StackPanel>
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

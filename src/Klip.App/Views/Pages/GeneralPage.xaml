@@ -1,0 +1,48 @@
+<Page
+    x:Class="Klip.App.Views.Pages.GeneralPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: nenhum Background aqui - qualquer preenchimento opaco mataria o Mica
+         que o shell compoe atras do conteudo. Tambem sem ScrollViewer: quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionGeneral}" />
+
+        <!-- RF-S.02 / ADR-S.05: os 4 Grid escritos a mao de MainWindow.xaml:234-279
+             viram 4 SettingsCard. As margens deixam de ser decididas cartao a cartao. -->
+
+        <!-- MainWindow.xaml:234-243. Sem legenda: nenhuma chave existente do Loc
+             descreve o ajuste, e inventar texto exigiria mexer no Loc.cs (fora
+             do escopo desta pagina). -->
+        <controls:SettingsCard Title="{DynamicResource Loc.StartWithWindows}" Icon="&#xE7E8;">
+            <ui:ToggleSwitch x:Name="AutostartToggle" />
+        </controls:SettingsCard>
+
+        <!-- MainWindow.xaml:244-256. Os itens sao montados em codigo (a lista de
+             idiomas e dinamica), entao aqui so vem a largura do original. -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.LanguageTitle}"
+            Description="{DynamicResource Loc.LanguageCaption}"
+            Icon="&#xE774;">
+            <ComboBox x:Name="LanguageCombo" Width="180" Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <!-- MainWindow.xaml:257-266 -->
+        <controls:SettingsCard Title="{DynamicResource Loc.ThemeTitle}" Icon="&#xE790;">
+            <ComboBox x:Name="ThemeCombo" Width="180" Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <!-- MainWindow.xaml:267-279 -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShowEmojiTabTitle}"
+            Description="{DynamicResource Loc.ShowEmojiTabCaption}"
+            Icon="&#xE76E;">
+            <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" />
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

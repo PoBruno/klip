@@ -355,6 +355,33 @@ public static class Loc
     public static string AboutText => Get(nameof(AboutText));
     public static string ItemsInHistory => Get(nameof(ItemsInHistory));
 
+    // RF-S.07: rotulo curto da navegacao lateral (o mockup usa "Atalhos", nao "Atalhos do Klip")
+    public static string SectionHotkeys => Get(nameof(SectionHotkeys));
+    public static string AppVersion => Get(nameof(AppVersion));
+
+    // RF-S.07: rotulos do diagnostico, antes fixos em pt-BR no code-behind
+    public static string DiagItems => Get(nameof(DiagItems));
+    public static string DiagDbSize => Get(nameof(DiagDbSize));
+    public static string DiagHotkeyHistory => Get(nameof(DiagHotkeyHistory));
+    public static string DiagHotkeyCapture => Get(nameof(DiagHotkeyCapture));
+    public static string DiagDisabledHotkeys => Get(nameof(DiagDisabledHotkeys));
+    public static string DiagWinVFreed => Get(nameof(DiagWinVFreed));
+    public static string DiagWinSFreed => Get(nameof(DiagWinSFreed));
+    public static string DiagPrtScFreed => Get(nameof(DiagPrtScFreed));
+    public static string DiagHklmOff => Get(nameof(DiagHklmOff));
+    public static string DiagPolicies => Get(nameof(DiagPolicies));
+    public static string DiagEmpty => Get(nameof(DiagEmpty));
+    public static string DiagCopy => Get(nameof(DiagCopy));
+    public static string DiagCopied => Get(nameof(DiagCopied));
+
+    // RF-S.07: valores formatados que estavam concatenados em codigo
+    public static string CadenceValue => Get(nameof(CadenceValue));
+    public static string GifScaleValue => Get(nameof(GifScaleValue));
+    public static string Mp4BitrateValue => Get(nameof(Mp4BitrateValue));
+    public static string ExcludedAppsPlaceholder => Get(nameof(ExcludedAppsPlaceholder));
+    public static string FfmpegFilter => Get(nameof(FfmpegFilter));
+    public static string BackupFileName => Get(nameof(BackupFileName));
+
     // takeover states and flows
     public static string WinVActive => Get(nameof(WinVActive));
     public static string WinVFreedNotBound => Get(nameof(WinVFreedNotBound));
@@ -680,6 +707,28 @@ public static class Loc
         [nameof(AboutText)] = "Klip: histórico de clipboard e captura de tela nativos do Windows 11. Local-first: nada sai da sua máquina.",
         [nameof(ItemsInHistory)] = "{0} item(ns) no histórico.",
 
+        [nameof(SectionHotkeys)] = "Atalhos",
+        [nameof(AppVersion)] = "Versão {0}",
+        [nameof(DiagItems)] = "Itens no histórico",
+        [nameof(DiagDbSize)] = "Tamanho do banco",
+        [nameof(DiagHotkeyHistory)] = "Atalho do histórico",
+        [nameof(DiagHotkeyCapture)] = "Atalho de captura",
+        [nameof(DiagDisabledHotkeys)] = "DisabledHotkeys (registro)",
+        [nameof(DiagWinVFreed)] = "Win+V liberado",
+        [nameof(DiagWinSFreed)] = "Win+S liberado",
+        [nameof(DiagPrtScFreed)] = "PrtSc liberado",
+        [nameof(DiagHklmOff)] = "HKLM clipboard desativado",
+        [nameof(DiagPolicies)] = "Políticas corporativas",
+        [nameof(DiagEmpty)] = "(vazio)",
+        [nameof(DiagCopy)] = "Copiar diagnóstico",
+        [nameof(DiagCopied)] = "Diagnóstico copiado para a área de transferência.",
+        [nameof(CadenceValue)] = "{0} ms",
+        [nameof(GifScaleValue)] = "{0}%",
+        [nameof(Mp4BitrateValue)] = "{0} Mbps",
+        [nameof(ExcludedAppsPlaceholder)] = "processo.exe",
+        [nameof(FfmpegFilter)] = "ffmpeg.exe|ffmpeg.exe|Executáveis|*.exe",
+        [nameof(BackupFileName)] = "Klip {0:yyyy-MM-dd}.zip",
+
         [nameof(WinVActive)] = "Ativo: Win+V abre o Klip.",
         [nameof(WinVFreedNotBound)] = "Win+V está liberado no registro, mas não atribuído ao Klip.",
         [nameof(WinVNative)] = "Win+V está com o Windows (painel nativo).",
@@ -1001,6 +1050,28 @@ public static class Loc
         [nameof(OnboardFinish)] = "Start using",
         [nameof(AboutText)] = "Klip: native Windows 11 clipboard history and screen capture. Local-first: nothing leaves your machine.",
         [nameof(ItemsInHistory)] = "{0} item(s) in history.",
+
+        [nameof(SectionHotkeys)] = "Shortcuts",
+        [nameof(AppVersion)] = "Version {0}",
+        [nameof(DiagItems)] = "Items in history",
+        [nameof(DiagDbSize)] = "Database size",
+        [nameof(DiagHotkeyHistory)] = "History shortcut",
+        [nameof(DiagHotkeyCapture)] = "Capture shortcut",
+        [nameof(DiagDisabledHotkeys)] = "DisabledHotkeys (registry)",
+        [nameof(DiagWinVFreed)] = "Win+V freed",
+        [nameof(DiagWinSFreed)] = "Win+S freed",
+        [nameof(DiagPrtScFreed)] = "PrtSc freed",
+        [nameof(DiagHklmOff)] = "HKLM clipboard disabled",
+        [nameof(DiagPolicies)] = "Managed policies",
+        [nameof(DiagEmpty)] = "(empty)",
+        [nameof(DiagCopy)] = "Copy diagnostics",
+        [nameof(DiagCopied)] = "Diagnostics copied to the clipboard.",
+        [nameof(CadenceValue)] = "{0} ms",
+        [nameof(GifScaleValue)] = "{0}%",
+        [nameof(Mp4BitrateValue)] = "{0} Mbps",
+        [nameof(ExcludedAppsPlaceholder)] = "process.exe",
+        [nameof(FfmpegFilter)] = "ffmpeg.exe|ffmpeg.exe|Executables|*.exe",
+        [nameof(BackupFileName)] = "Klip {0:yyyy-MM-dd}.zip",
 
         [nameof(WinVActive)] = "Active: Win+V opens Klip.",
         [nameof(WinVFreedNotBound)] = "Win+V is freed in the registry but not assigned to Klip.",

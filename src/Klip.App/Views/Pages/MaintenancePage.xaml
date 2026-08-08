@@ -1,0 +1,112 @@
+<Page
+    x:Class="Klip.App.Views.Pages.MaintenancePage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionMaintenance}" />
+
+        <!-- ===== Bloco 1: Loc.SectionMaintenance (titulo da pagina) ===== -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.BackupTitle}"
+            Description="{DynamicResource Loc.BackupCaption}"
+            Icon="&#xE74E;">
+            <controls:SettingsCard.Footer>
+                <StackPanel>
+                    <StackPanel Orientation="Horizontal">
+                        <ui:Button x:Name="ExportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ExportHistory}" />
+                        <ui:Button x:Name="ImportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ImportHistory}" />
+                        <ui:Button x:Name="CompactButton" Margin="0,0,8,0" Content="{DynamicResource Loc.CompactDb}" />
+                        <ui:Button x:Name="OpenDataFolderButton" Content="{DynamicResource Loc.OpenDataFolder}" />
+                    </StackPanel>
+
+                    <!-- RF-S.08: barra indeterminada enquanto exportar/importar/compactar
+                         roda em Task.Run. IsIndeterminate acompanha a Visibility para o
+                         storyboard nao ficar animando um elemento invisivel. -->
+                    <ProgressBar
+                        x:Name="MaintenanceProgress"
+                        Height="3"
+                        Margin="0,10,0,0"
+                        IsIndeterminate="False"
+                        Visibility="Collapsed" />
+
+                    <TextBlock
+                        x:Name="MaintenanceStatus"
+                        Margin="0,8,0,0"
+                        Style="{StaticResource CardCaption}"
+                        TextWrapping="Wrap" />
+                </StackPanel>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+
+        <!-- ===== Bloco 2: Loc.SectionDiagnostics =====
+             Sem SectionHeader de proposito: com um unico cartao no bloco, o cabecalho
+             repetiria palavra por palavra o titulo do cartao logo abaixo, sem ganho de
+             navegacao. O bloco continua rotulado por Loc.SectionDiagnostics. -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.SectionDiagnostics}"
+            Description="{DynamicResource Loc.DiagnosticsCaption}"
+            Icon="&#xE9D9;">
+            <ui:Button x:Name="DiagnosticsButton" Content="{DynamicResource Loc.RunDiagnostics}" />
+            <controls:SettingsCard.Footer>
+                <StackPanel>
+                    <!-- RF-S.08: Count() (SELECT COUNT(*)), FileInfo e as 4 leituras de
+                         registro do GetState() rodam fora da UI thread. -->
+                    <ProgressBar
+                        x:Name="DiagnosticsProgress"
+                        Height="3"
+                        IsIndeterminate="False"
+                        Visibility="Collapsed" />
+
+                    <!-- RF-P0.01: a linha mais importante do diagnostico. "teclado=nao,
+                         mouse=nao" em repouso e a prova do criterio CA-P1.3 - nenhum hook
+                         de baixo nivel instalado, ou seja, a Raw Input Thread do Windows
+                         nao chama o Klip a cada evento de teclado e mouse do sistema.
+                         Por isso sai destacada, acima do resto e em SemiBold. -->
+                    <Border
+                        x:Name="HookHealthBox"
+                        Padding="10,8"
+                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        CornerRadius="4"
+                        Visibility="Collapsed">
+                        <TextBlock
+                            x:Name="HookHealthText"
+                            FontFamily="Consolas"
+                            FontWeight="SemiBold"
+                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                            Style="{StaticResource CardCaption}"
+                            TextWrapping="Wrap" />
+                    </Border>
+
+                    <TextBlock
+                        x:Name="DiagnosticsText"
+                        Margin="0,8,0,0"
+                        FontFamily="Consolas"
+                        Style="{StaticResource CardCaption}"
+                        TextWrapping="Wrap" />
+
+                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                        <!-- Comeca desabilitado: sem relatorio gerado nao ha o que copiar. -->
+                        <ui:Button
+                            x:Name="CopyDiagnosticsButton"
+                            Content="{DynamicResource Loc.DiagCopy}"
+                            IsEnabled="False" />
+                        <TextBlock
+                            x:Name="DiagnosticsStatus"
+                            Margin="10,0,0,0"
+                            VerticalAlignment="Center"
+                            FontWeight="SemiBold"
+                            Style="{StaticResource CardCaption}"
+                            TextWrapping="Wrap" />
+                    </StackPanel>
+                </StackPanel>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

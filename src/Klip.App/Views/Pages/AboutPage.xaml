@@ -1,0 +1,57 @@
+<Page
+    x:Class="Klip.App.Views.Pages.AboutPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionAbout}" />
+
+        <!-- Identidade. "Klip" e nome proprio do produto, nao string de UI: nao e
+             traduzido em nenhuma das 15 tabelas do Loc. A versao vem do assembly
+             (VersionText), formatada com Loc.AppVersion. -->
+        <controls:SettingsCard
+            Title="Klip"
+            Description="{DynamicResource Loc.AboutText}"
+            Icon="&#xE946;">
+            <TextBlock
+                x:Name="VersionText"
+                Style="{StaticResource CardCaption}"
+                VerticalAlignment="Center" />
+        </controls:SettingsCard>
+
+        <!-- RF-S.06: a contagem de itens mora AQUI. Na tela antiga ela dividia o
+             StatusText com outros 3 papeis e sobrescrevia as mensagens de
+             resultado dos takeovers (MainWindow.xaml.cs:484) antes de o usuario
+             conseguir le-las.
+             RF-S.08: a legenda e preenchida em background - ver o code-behind. -->
+        <controls:SettingsCard
+            x:Name="HistoryCard"
+            Title="{DynamicResource Loc.SectionClipboard}"
+            Icon="&#xE81C;" />
+
+        <!-- Tamanho do banco + caminho da pasta de dados como texto secundario.
+             O botao aqui e um segundo ponto de entrada, nao uma mudanca de lugar:
+             o de MainWindow.xaml:571 continua na secao de manutencao. -->
+        <controls:SettingsCard
+            x:Name="DatabaseCard"
+            Title="{DynamicResource Loc.DiagDbSize}"
+            Icon="&#xE8B7;">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    x:Name="DatabaseSizeText"
+                    Margin="0,0,12,0"
+                    Style="{StaticResource CardCaption}"
+                    VerticalAlignment="Center" />
+                <ui:Button
+                    x:Name="OpenDataFolderButton"
+                    Content="{DynamicResource Loc.OpenDataFolder}" />
+            </StackPanel>
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

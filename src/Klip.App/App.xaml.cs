@@ -4,6 +4,8 @@ using Klip.App.Diagnostics;
 using Klip.App.Localization;
 using Klip.App.Services;
 using Klip.App.ViewModels;
+using Klip.App.Views;
+using Klip.App.Views.Pages;
 using Klip.App.Windows;
 using Klip.Core.Clipboard;
 using Klip.Core.Common;
@@ -16,6 +18,7 @@ using Klip.Interop.SystemIntegration;
 using H.NotifyIcon;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
+using Wpf.Ui.Abstractions;
 
 namespace Klip.App;
 
@@ -29,7 +32,7 @@ public partial class App : Application
     private Mutex? _mutex;
     private IHost? _host;
     private TaskbarIcon? _tray;
-    private MainWindow? _mainWindow;
+    private SettingsShell? _settingsWindow;
     private HistoryFlyoutWindow? _flyout;
     private PasteService? _pasteService;
     private ClipboardMonitorService? _clipboardMonitor;
@@ -160,7 +163,19 @@ public partial class App : Application
         builder.Services.AddSingleton<SystemActivityMonitor>();
         builder.Services.AddSingleton(_ => new UiThreadWatchdog(Dispatcher));
         builder.Services.AddTransient<EditorWindow>(); // one window per edit
-        builder.Services.AddSingleton<MainWindow>();
+        // ADR-S.03 / RF-S.04: tela de Configuracoes redesenhada. O provider resolve as
+        // paginas pelo container; com ele ligado o NavigationCacheMode vira codigo
+        // morto e o ciclo de vida passa a ser do DI - Singleton = construida na
+        // primeira navegacao e reusada, sem reconstruir ao voltar.
+        builder.Services.AddSingleton<INavigationViewPageProvider, NavigationPageProvider>();
+        builder.Services.AddSingleton<SettingsShell>();
+        builder.Services.AddSingleton<GeneralPage>();
+        builder.Services.AddSingleton<HotkeysPage>();
+        builder.Services.AddSingleton<ClipboardPage>();
+        builder.Services.AddSingleton<CapturePage>();
+        builder.Services.AddSingleton<PrivacyPage>();
+        builder.Services.AddSingleton<MaintenancePage>();
+        builder.Services.AddSingleton<AboutPage>();
         _host = builder.Build();
         _host.Start();
         StartupLog.Write("OnStartup: host iniciado");
@@ -287,7 +302,11 @@ public partial class App : Application
         else
         {
             var startMinimized = settings.Current.StartMinimized || e.Args.Contains("--minimized");
-            if (!startMinimized)
+            // --settings abre direto as Configuracoes (util para suporte e atalhos)
+            if (e.Args.Contains("--settings"))
+                Dispatcher.BeginInvoke(new Action(ShowMainWindow),
+                    System.Windows.Threading.DispatcherPriority.ApplicationIdle);
+            else if (!startMinimized)
                 ShowMainWindow();
         }
     }
@@ -836,18 +855,18 @@ public partial class App : Application
         // ADR-P.08: sai do Eco antes de montar/mostrar (senao o layout roda em E-core)
         PowerEfficiency.EnterProcessHighQos();
 
-        if (_mainWindow is null)
+        if (_settingsWindow is null)
         {
-            _mainWindow = _host.Services.GetRequiredService<MainWindow>();
-            _mainWindow.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
+            _settingsWindow = _host.Services.GetRequiredService<SettingsShell>();
+            _settingsWindow.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
             StartupLog.Write("Configuracoes: janela criada sob demanda");
         }
 
-        _mainWindow.RefreshStatus();
-        _mainWindow.Show();
-        if (_mainWindow.WindowState == WindowState.Minimized)
-            _mainWindow.WindowState = WindowState.Normal;
-        _mainWindow.Activate();
+        _settingsWindow.RefreshStatus();
+        _settingsWindow.Show();
+        if (_settingsWindow.WindowState == WindowState.Minimized)
+            _settingsWindow.WindowState = WindowState.Normal;
+        _settingsWindow.Activate();
     }
 
     private void NotifyHotkeyConflict(HotkeyGesture gesture)

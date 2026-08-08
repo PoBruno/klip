@@ -1,0 +1,42 @@
+<Page
+    x:Class="Klip.App.Views.Pages.PrivacyPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
+         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <StackPanel MaxWidth="680">
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionPrivacy}" />
+
+        <!-- RF-S.02 / ADR-S.05: MainWindow.xaml:520-559, os 3 Grid identicos viram
+             3 SettingsCard. -->
+
+        <!-- MainWindow.xaml:521-533 -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.SkipSecretsTitle}"
+            Description="{DynamicResource Loc.SkipSecretsCaption}"
+            Icon="&#xE72E;">
+            <ui:ToggleSwitch x:Name="SkipSecretsToggle" />
+        </controls:SettingsCard>
+
+        <!-- MainWindow.xaml:534-546 -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RestoreClipboardTitle}"
+            Description="{DynamicResource Loc.RestoreClipboardCaption}"
+            Icon="&#xE7A7;">
+            <ui:ToggleSwitch x:Name="RestoreClipboardToggle" />
+        </controls:SettingsCard>
+
+        <!-- MainWindow.xaml:547-559 -->
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ClearOnExitTitle}"
+            Description="{DynamicResource Loc.ClearOnExitCaption}"
+            Icon="&#xE74D;">
+            <ui:ToggleSwitch x:Name="ClearOnExitToggle" />
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>
