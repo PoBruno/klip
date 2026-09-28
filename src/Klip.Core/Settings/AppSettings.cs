@@ -97,4 +97,13 @@ public sealed class AppSettings
     // RF-F5.14: caminho do ffmpeg.exe para o editor de midia; vazio = deteccao
     // automatica (pasta de dados do app ou PATH)
     public string FfmpegPath { get; set; } = "";
+
+    // ----- Editor preferences -----
+    // RF-F1.06: Klip Editor remember last used preferences
+    public double EditorZoom { get; set; } = 1.0;
+    public int EditorActiveTool { get; set; } = 1; // default: Pen tool
+    public string EditorActiveColor { get; set; } = "#FF4040"; // default: Red
+    public double EditorThickness { get; set; } = 3.0;
+    public bool EditorWindowMaximized { get; set; } = true;
+    public bool EditorAlwaysMaximized { get; set; } = false; // Force fullscreen, ignore saved state
 }

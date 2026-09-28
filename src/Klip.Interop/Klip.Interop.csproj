@@ -3,7 +3,7 @@
   <PropertyGroup>
     <!-- TFM 26100 expoe as APIs WGC mais novas (IsBorderRequired 20348, MinUpdateInterval 26100);
          o minimo suportado continua 17763 com feature-detection em runtime (spec F2). -->
-    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
