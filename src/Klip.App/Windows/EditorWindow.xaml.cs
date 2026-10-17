@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
@@ -11,6 +12,7 @@ using System.Windows.Threading;
 using Klip.App.Services;
 using Klip.Core.Clipboard;
 using Klip.Core.Common;
+using Klip.Core.Settings;
 using Klip.Core.Storage;
 using Wpf.Ui.Appearance;
 
@@ -45,6 +47,7 @@ public partial class EditorWindow
     private readonly ClipboardItemRepository _repository;
     private readonly MediaStore _mediaStore;
     private readonly OcrService _ocr;
+    private readonly SettingsService _settings;
     private readonly DispatcherTimer _autoCopyDebounce;
 
     private EditorTool _tool = EditorTool.Pen;
@@ -56,6 +59,11 @@ public partial class EditorWindow
     private Point _shapeStart;
     private Shape? _activeShape;
     private bool _drawingShape;
+
+    // highlighter drag in progress (straight by default, freehand with Ctrl)
+    private Stroke? _highlightStroke;
+    private Point _highlightStart;
+    private bool _highlightFree;
 
     // Crop
     private Point _cropStart;
@@ -80,19 +88,22 @@ public partial class EditorWindow
     private bool _suppressStrokeUndo;
 
     private readonly List<(ToggleButton button, EditorTool tool)> _toolButtons = [];
+    private bool _isLoading = false;  // Prevent saving while loading preferences
 
     public EditorWindow(
         ClipboardWriteGuard writeGuard,
         ClipboardIngestService ingest,
         ClipboardItemRepository repository,
         MediaStore mediaStore,
-        OcrService ocr)
+        OcrService ocr,
+        SettingsService settings)
     {
         _writeGuard = writeGuard;
         _ingest = ingest;
         _repository = repository;
         _mediaStore = mediaStore;
         _ocr = ocr;
+        _settings = settings;
 
         InitializeComponent();
         SystemThemeWatcher.Watch(this);
@@ -113,8 +124,141 @@ public partial class EditorWindow
         Loaded += (_, _) =>
         {
             UpdateLayout();
-            FitToWindow();
+            LoadPreferences();
+            ApplyDrawingAttributes();
+            // Only fit to window if zoom wasn't explicitly set (still at default 1.0)
+            if (Math.Abs(ZoomSlider.Value - 1.0) < 0.01)
+                FitToWindow();
         };
+
+        // Save window state when maximized/restored
+        StateChanged += (_, _) =>
+        {
+            if (!_isLoading)
+                SavePreferences();
+        };
+    }
+
+    // ----- Preferences (load/save) -----
+
+    private void LoadPreferences()
+    {
+        _isLoading = true;
+        try
+        {
+            var settings = _settings.Current;
+
+            Debug.WriteLine($"[LOAD] zoom={settings.EditorZoom:F2}, tool={settings.EditorActiveTool}, color={settings.EditorActiveColor}, thickness={settings.EditorThickness:F1}, maximized={settings.EditorWindowMaximized}, alwaysMaximized={settings.EditorAlwaysMaximized}");
+
+            // Restore zoom level
+            var zoom = Math.Clamp(settings.EditorZoom, ZoomSlider.Minimum, ZoomSlider.Maximum);
+            ZoomSlider.Value = zoom;
+            Debug.WriteLine($"[LOAD] ✓ Zoom={zoom:F2} restored");
+
+            // Restore active tool
+            var toolIndex = Math.Clamp(settings.EditorActiveTool, 0, (int)EditorTool.Emoji);
+            var tool = (EditorTool)toolIndex;
+            SetTool(tool);
+            Debug.WriteLine($"[LOAD] ✓ Tool={tool} restored");
+
+            // Restore color: find and check the matching radio button
+            RestoreColorPreference(settings.EditorActiveColor);
+            Debug.WriteLine($"[LOAD] ✓ Color={settings.EditorActiveColor} restored");
+
+            // Restore thickness
+            var thickness = Math.Clamp(settings.EditorThickness, ThicknessSlider.Minimum, ThicknessSlider.Maximum);
+            ThicknessSlider.Value = thickness;
+            Debug.WriteLine($"[LOAD] ✓ Thickness={thickness:F1} restored");
+
+            // Restore "Always Fullscreen" checkbox
+            AlwaysMaximizedCheckBox.IsChecked = settings.EditorAlwaysMaximized;
+            Debug.WriteLine($"[LOAD] ✓ AlwaysMaximized={settings.EditorAlwaysMaximized} restored");
+
+            // Restore window state (override if EditorAlwaysMaximized is set)
+            if (settings.EditorAlwaysMaximized)
+            {
+                WindowState = WindowState.Maximized;
+                Debug.WriteLine($"[LOAD] ✓ WindowState=Maximized (forced by EditorAlwaysMaximized)");
+            }
+            else
+            {
+                WindowState = settings.EditorWindowMaximized ? WindowState.Maximized : WindowState.Normal;
+                Debug.WriteLine($"[LOAD] ✓ WindowState={WindowState} restored");
+            }
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[LOAD] ✗ ERROR: {ex.Message}");
+            StartupLog.WriteException("LoadEditorPreferences", ex);
+        }
+        finally
+        {
+            _isLoading = false;
+        }
+    }
+
+    private void RestoreColorPreference(string hexColor)
+    {
+        try
+        {
+            var targetColor = (Color)ColorConverter.ConvertFromString(hexColor);
+            var swatches = PropertiesBar.Children.OfType<RadioButton>();
+            foreach (var swatch in swatches)
+            {
+                if (swatch.Background is SolidColorBrush brush && brush.Color == targetColor)
+                {
+                    swatch.IsChecked = true;
+                    return;
+                }
+            }
+            // Color not found; use first swatch (red)
+            swatches.FirstOrDefault()!.IsChecked = true;
+        }
+        catch
+        {
+            // Invalid color string; use first swatch
+            PropertiesBar.Children.OfType<RadioButton>().FirstOrDefault()!.IsChecked = true;
+        }
+    }
+
+    private void SavePreferences()
+    {
+        if (_isLoading) 
+        {
+            Debug.WriteLine("SavePreferences: Skipping (isLoading=true)");
+            return;
+        }
+
+        try
+        {
+            var color = CurrentColor.ToString();
+            var tool = (int)_tool;
+            var zoom = ZoomSlider.Value;
+            var thickness = ThicknessSlider.Value;
+            var maximized = WindowState == WindowState.Maximized;
+            var alwaysMaximized = AlwaysMaximizedCheckBox.IsChecked ?? false;
+
+            Debug.WriteLine($"[SAVE] zoom={zoom:F2} (0.1-4.0), tool={tool} ({_tool}), color={color}, thickness={thickness:F1}, maximized={maximized}, alwaysMaximized={alwaysMaximized}");
+
+            // Use UpdateAndFlush to write IMMEDIATELY to disk, not debounced
+            _settings.UpdateAndFlush(s =>
+            {
+                s.EditorZoom = zoom;
+                s.EditorActiveTool = tool;
+                s.EditorActiveColor = color;
+                s.EditorThickness = thickness;
+                s.EditorWindowMaximized = maximized;
+                s.EditorAlwaysMaximized = alwaysMaximized;
+            });
+
+            Debug.WriteLine($"[SAVE] ✓ WRITTEN TO DISK");
+            StartupLog.Write($"[EditorPrefs] Saved: zoom={zoom:F2}, tool={tool}, color={color}, thickness={thickness:F1}, maximized={maximized}, alwaysMaximized={alwaysMaximized}");
+        }
+        catch (Exception ex)
+        {
+            Debug.WriteLine($"[SAVE] ✗ ERROR: {ex.Message}");
+            StartupLog.WriteException("SaveEditorPreferences", ex);
+        }
     }
 
     // ----- Open -----
@@ -180,6 +324,7 @@ public partial class EditorWindow
         ToolEmoji.Click += (_, _) =>
         {
             SetTool(EditorTool.Emoji);
+            SavePreferences();
             BuildEmojiPickerOnce();
             EmojiPopup.IsOpen = true;
         };
@@ -193,16 +338,26 @@ public partial class EditorWindow
         TextActionsButton.Click += async (_, _) => await ExtractTextAsync();
         QuickRedactButton.Click += async (_, _) => await QuickRedactAsync();
 
-        ThicknessSlider.ValueChanged += (_, _) => ApplyDrawingAttributes();
-        foreach (var swatch in PropertiesBar.Children.OfType<RadioButton>())
-            swatch.Checked += (_, _) => ApplyDrawingAttributes();
+        // Preference saving buttons
+        SavePreferencesButton.Click += (_, _) => SavePreferences();
+        Zoom75Button.Click += (_, _) => { ZoomSlider.Value = 0.75; SavePreferences(); };
+        Zoom100Button.Click += (_, _) => { ZoomSlider.Value = 1.0; SavePreferences(); };
+        Zoom125Button.Click += (_, _) => { ZoomSlider.Value = 1.25; SavePreferences(); };
 
-        ZoomSlider.ValueChanged += (_, _) => ApplyZoom();
+        // Always Fullscreen checkbox
+        AlwaysMaximizedCheckBox.Checked += (_, _) => SavePreferences();
+        AlwaysMaximizedCheckBox.Unchecked += (_, _) => SavePreferences();
+
+        ThicknessSlider.ValueChanged += (_, _) => { ApplyDrawingAttributes(); SavePreferences(); };
+        foreach (var swatch in PropertiesBar.Children.OfType<RadioButton>())
+            swatch.Checked += (_, _) => { ApplyDrawingAttributes(); SavePreferences(); };
+
+        ZoomSlider.ValueChanged += (_, _) => { ApplyZoom(); SavePreferences(); };
 
         void Wire(ToggleButton button, EditorTool tool)
         {
             _toolButtons.Add((button, tool));
-            button.Click += (_, _) => SetTool(tool);
+            button.Click += (_, _) => { SetTool(tool); SavePreferences(); };
         }
     }
 
@@ -216,9 +371,10 @@ public partial class EditorWindow
 
         Ink.EditingMode = tool switch
         {
-            EditorTool.Pen or EditorTool.Highlighter => InkCanvasEditingMode.Ink,
+            EditorTool.Pen => InkCanvasEditingMode.Ink,
             EditorTool.Eraser => InkCanvasEditingMode.EraseByStroke,
             EditorTool.Select => InkCanvasEditingMode.Select,
+            // highlighter strokes are built by hand: straight by default, freehand with Ctrl
             _ => InkCanvasEditingMode.None,
         };
         Ink.UseCustomCursor = Ink.EditingMode == InkCanvasEditingMode.None;
@@ -226,12 +382,41 @@ public partial class EditorWindow
         {
             EditorTool.Text => Cursors.IBeam,
             EditorTool.Crop or EditorTool.Rect or EditorTool.Ellipse
-                or EditorTool.Line or EditorTool.Arrow => Cursors.Cross,
+                or EditorTool.Line or EditorTool.Arrow or EditorTool.Highlighter => Cursors.Cross,
             EditorTool.Blur => Cursors.Cross,
             EditorTool.Emoji => Cursors.Hand,
             _ => Cursors.Arrow,
         };
+        ApplySwatchPalette(tool == EditorTool.Highlighter);
         ApplyDrawingAttributes();
+    }
+
+    // Neon highlighter palette, same slots as the regular swatches (yellow first,
+    // like Office/Snagit/Greenshot highlighters). The checked slot is kept when
+    // switching, so the chosen position carries over between pen and highlighter.
+    private static readonly Color[] NeonPalette =
+    [
+        Color.FromRgb(0xFF, 0xFF, 0x00), // yellow
+        Color.FromRgb(0x00, 0xFF, 0x00), // green
+        Color.FromRgb(0x00, 0xFF, 0xFF), // cyan
+        Color.FromRgb(0xFF, 0x00, 0xFF), // pink
+        Color.FromRgb(0xFF, 0x99, 0x00), // orange
+        Color.FromRgb(0xFF, 0x31, 0x31), // red
+        Color.FromRgb(0x4D, 0x4D, 0xFF), // blue
+    ];
+
+    private Brush[]? _regularSwatchBrushes;
+
+    private void ApplySwatchPalette(bool neon)
+    {
+        var swatches = PropertiesBar.Children.OfType<RadioButton>().ToArray();
+        _regularSwatchBrushes ??= swatches.Select(s => s.Background).ToArray();
+        for (var i = 0; i < swatches.Length; i++)
+        {
+            swatches[i].Background = neon && i < NeonPalette.Length
+                ? new SolidColorBrush(NeonPalette[i])
+                : _regularSwatchBrushes[i];
+        }
     }
 
     private Color CurrentColor
@@ -349,6 +534,17 @@ public partial class EditorWindow
 
         switch (_tool)
         {
+            case EditorTool.Highlighter:
+                _highlightStart = pos;
+                _highlightFree = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+                _highlightStroke = new Stroke(
+                    new StylusPointCollection([new StylusPoint(pos.X, pos.Y), new StylusPoint(pos.X, pos.Y)]),
+                    Ink.DefaultDrawingAttributes.Clone());
+                Ink.Strokes.Add(_highlightStroke); // undo entry comes from StrokesChanged
+                Ink.CaptureMouse();
+                e.Handled = true;
+                break;
+
             case EditorTool.Rect or EditorTool.Ellipse or EditorTool.Line or EditorTool.Arrow:
                 _drawingShape = true;
                 _shapeStart = pos;
@@ -397,7 +593,26 @@ public partial class EditorWindow
     private void OnCanvasMouseMove(object sender, MouseEventArgs e)
     {
         var pos = e.GetPosition(Ink);
-        if (_drawingShape && _activeShape is not null)
+        if (_highlightStroke is not null)
+        {
+            // pressing Ctrl mid-drag switches to freehand from the current point on
+            if (!_highlightFree && Keyboard.Modifiers.HasFlag(ModifierKeys.Control))
+                _highlightFree = true;
+
+            if (_highlightFree)
+            {
+                _highlightStroke.StylusPoints.Add(new StylusPoint(pos.X, pos.Y));
+            }
+            else
+            {
+                // straight: lock to whichever axis the drag mostly follows
+                var dx = Math.Abs(pos.X - _highlightStart.X);
+                var dy = Math.Abs(pos.Y - _highlightStart.Y);
+                var end = dx >= dy ? new Point(pos.X, _highlightStart.Y) : new Point(_highlightStart.X, pos.Y);
+                _highlightStroke.StylusPoints[^1] = new StylusPoint(end.X, end.Y);
+            }
+        }
+        else if (_drawingShape && _activeShape is not null)
         {
             UpdateActiveShape(pos);
         }
@@ -415,7 +630,13 @@ public partial class EditorWindow
 
     private void OnCanvasMouseUp(object sender, MouseButtonEventArgs e)
     {
-        if (_drawingShape && _activeShape is not null)
+        if (_highlightStroke is not null)
+        {
+            _highlightStroke = null;
+            Ink.ReleaseMouseCapture();
+            e.Handled = true;
+        }
+        else if (_drawingShape && _activeShape is not null)
         {
             _drawingShape = false;
             Ink.ReleaseMouseCapture();

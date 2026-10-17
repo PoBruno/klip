@@ -165,6 +165,17 @@ public partial class HistoryFlyoutWindow
         // and the paste flow restores its focus afterwards.
         if (msg == NativeMethods.WM_MOUSEACTIVATE)
         {
+            // a click on a card (or an emoji) pastes right away: don't take the
+            // foreground for that. stealing it means the target app has to
+            // restore focus to its field before our Ctrl+V lands, and apps like
+            // TeamViewer or a browser login form often aren't ready in time, so
+            // the paste just vanishes. keyboard keeps coming through the hook.
+            if (!System.Threading.Volatile.Read(ref _hasFocus) && IsPasteClickTarget())
+            {
+                handled = true;
+                return NativeMethods.MA_NOACTIVATE;
+            }
+
             var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
             if ((exStyle & NativeMethods.WS_EX_NOACTIVATE) != 0)
             {
@@ -197,6 +208,43 @@ public partial class HistoryFlyoutWindow
     // true once a click activated the flyout, so typing goes through WPF. set in
     // WndProc synchronously with the activation, cleared when we lose it or hide.
     private bool _hasFocus;
+
+    /// <summary>
+    /// True when the mouse is over a history card or an emoji (not over one of
+    /// the card's buttons). Those clicks paste and close, so they don't need
+    /// keyboard focus; everything else (search, menus, buttons) still activates.
+    /// </summary>
+    private bool IsPasteClickTarget()
+    {
+        try
+        {
+            NativeMethods.GetCursorPos(out var cursor);
+            var point = PointFromScreen(new Point(cursor.x, cursor.y));
+            if (InputHitTest(point) is not DependencyObject hit)
+                return false;
+
+            var overControl = false;
+            for (var node = hit; node is not null; node = node is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                     ? System.Windows.Media.VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node)
+                     : LogicalTreeHelper.GetParent(node))
+            {
+                if (ReferenceEquals(node, EmojiWrap))
+                    return true; // emoji buttons paste too
+                if (node is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Primitives.ScrollBar
+                    or System.Windows.Controls.Primitives.TextBoxBase)
+                    overControl = true;
+                if (node is ListBoxItem)
+                    return !overControl; // pin/fav/more on the card still activate
+                if (ReferenceEquals(node, this))
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // hit test is best effort; fall back to the old activate behavior
+        }
+        return false;
+    }
 
     /// <summary>This window's native handle (for the paste target guard).</summary>
     public nint Hwnd => new WindowInteropHelper(this).Handle;
@@ -841,6 +889,11 @@ public partial class HistoryFlyoutWindow
                 _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
+            case Key.System when e.SystemKey == Key.Enter && Keyboard.Modifiers == ModifierKeys.Alt
+                                 && !_viewModel.IsMultiSelectMode:
+                _viewModel.TypeTextCommand.Execute(ItemsList.SelectedItem);
+                e.Handled = true;
+                return;
             case Key.Enter:
                 _viewModel.PasteCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
@@ -1009,6 +1062,8 @@ public partial class HistoryFlyoutWindow
         var menu = new ContextMenu { PlacementTarget = element };
         AddMenuItem(menu, Localization.Loc.MenuPaste, "\uE77F", () => _viewModel.PasteCommand.Execute(item));
         AddMenuItem(menu, Localization.Loc.MenuPastePlain, "\uE8E9", () => _viewModel.PastePlainCommand.Execute(item));
+        if (!item.IsImage && !string.IsNullOrEmpty(item.Item.TextContent))
+            AddMenuItem(menu, Localization.Loc.MenuTypeText, "\uE765", () => _viewModel.TypeTextCommand.Execute(item));
         AddMenuItem(menu, Localization.Loc.MenuCopy, "\uE8C8", () => _viewModel.CopyOnlyCommand.Execute(item));
         menu.Items.Add(new Separator());
         if (item.IsImage)

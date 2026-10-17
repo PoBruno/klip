@@ -111,3 +111,91 @@ public class SettingsServiceTests : IDisposable
             File.Delete(_path + ".tmp");
     }
 }
+
+public class EditorPreferencesTests : IDisposable
+{
+    private readonly string _path = Path.Combine(Path.GetTempPath(), $"klip-editor-prefs-{Guid.NewGuid():N}.json");
+
+    [Fact]
+    public void SaveAndLoad_EditorZoom()
+    {
+        using var service = new SettingsService(_path);
+        service.Update(s => s.EditorZoom = 1.5);
+        service.Flush();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal(1.5, reloaded.Current.EditorZoom);
+    }
+
+    [Fact]
+    public void SaveAndLoad_EditorActiveTool()
+    {
+        using var service = new SettingsService(_path);
+        service.Update(s => s.EditorActiveTool = 3); // Eraser
+        service.Flush();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal(3, reloaded.Current.EditorActiveTool);
+    }
+
+    [Fact]
+    public void SaveAndLoad_EditorActiveColor()
+    {
+        using var service = new SettingsService(_path);
+        service.Update(s => s.EditorActiveColor = "#0078D4"); // Blue
+        service.Flush();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal("#0078D4", reloaded.Current.EditorActiveColor);
+    }
+
+    [Fact]
+    public void SaveAndLoad_EditorThickness()
+    {
+        using var service = new SettingsService(_path);
+        service.Update(s => s.EditorThickness = 5.5);
+        service.Flush();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal(5.5, reloaded.Current.EditorThickness);
+    }
+
+    [Fact]
+    public void SaveAndLoad_AllEditorPreferences()
+    {
+        using var service = new SettingsService(_path);
+        service.Update(s =>
+        {
+            s.EditorZoom = 2.0;
+            s.EditorActiveTool = 7; // Arrow
+            s.EditorActiveColor = "#B146C2"; // Purple
+            s.EditorThickness = 7.0;
+        });
+        service.Flush();
+
+        using var reloaded = new SettingsService(_path);
+        Assert.Equal(2.0, reloaded.Current.EditorZoom);
+        Assert.Equal(7, reloaded.Current.EditorActiveTool);
+        Assert.Equal("#B146C2", reloaded.Current.EditorActiveColor);
+        Assert.Equal(7.0, reloaded.Current.EditorThickness);
+    }
+
+    [Fact]
+    public void DefaultValues_EditorPreferences()
+    {
+        using var service = new SettingsService(_path);
+        Assert.Equal(1.0, service.Current.EditorZoom);
+        Assert.Equal(1, service.Current.EditorActiveTool); // Pen
+        Assert.Equal("#FF4040", service.Current.EditorActiveColor); // Red
+        Assert.Equal(3.0, service.Current.EditorThickness);
+    }
+
+    public void Dispose()
+    {
+        File.Delete(_path);
+        if (File.Exists(_path + ".corrupt"))
+            File.Delete(_path + ".corrupt");
+        if (File.Exists(_path + ".tmp"))
+            File.Delete(_path + ".tmp");
+    }
+}

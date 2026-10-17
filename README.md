@@ -74,7 +74,7 @@ Native WPF app, Fluent Design and Mica, lives in the tray. No Electron, no brows
 
 ## Build from source
 
-You need the **.NET 9 SDK** and Windows 11.
+You need the **.NET 10 SDK** and Windows 11.
 
 ```powershell
 git clone https://github.com/PoBruno/klip.git
@@ -96,7 +96,7 @@ The installer script needs [Inno Setup 6](https://jrsoftware.org/isdl.php). Klip
 
 ## Tech
 
-- WPF on .NET 9 (`net9.0-windows`), C# 13, MVVM.
+- WPF on .NET 10 (`net10.0-windows`), C# 13, MVVM.
 - Clean split: `Klip.Core` (pure domain), `Klip.Interop` (Win32 P/Invoke), `Klip.App` (WPF).
 - SQLite with FTS5 for history and search.
 

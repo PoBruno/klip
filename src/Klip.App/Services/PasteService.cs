@@ -99,10 +99,9 @@ public sealed class PasteService(
                         writeGuard.WriteItem(item, plainTextOnly: asPlainText);
                 });
 
-                if (target != nint.Zero && !NativeMethods.ForceForeground(target))
+                if (!BringTargetBack(target))
                     ok = false;
 
-                WaitForForeground(target);
                 NativeMethods.ReleasePressedModifiers();
                 Thread.Sleep(20);
                 NativeMethods.SendCtrlV();
@@ -127,6 +126,34 @@ public sealed class PasteService(
     }
 
     /// <summary>
+    /// Tempo para o app alvo devolver o foco ao proprio campo depois de reativado.
+    /// Browsers (Chromium) e o TeamViewer fazem isso de forma assincrona; um Ctrl+V
+    /// que chega antes cai na janela sem campo focado e some.
+    /// </summary>
+    private const int FocusSettleMs = 120;
+
+    /// <summary>
+    /// Devolve o foreground ao alvo. So espera o foco assentar quando o alvo de fato
+    /// perdeu a ativacao (clique no campo de busca, menu); no caminho normal o flyout
+    /// abre sem ativar e o alvo nunca deixou de ser o foreground.
+    /// </summary>
+    private static bool BringTargetBack(nint target)
+    {
+        if (target == nint.Zero)
+        {
+            Thread.Sleep(40);
+            return true;
+        }
+
+        var wasForeground = NativeMethods.GetForegroundWindow() == target;
+        var ok = wasForeground || NativeMethods.ForceForeground(target);
+        WaitForForeground(target);
+        if (!wasForeground)
+            Thread.Sleep(FocusSettleMs);
+        return ok;
+    }
+
+    /// <summary>
     /// Espera (pouco) o alvo virar foreground, em vez de um sleep fixo.
     /// Desiste rapido para a colagem continuar responsiva.
     /// </summary>
@@ -143,6 +170,40 @@ public sealed class PasteService(
                 return;
             Thread.Sleep(10);
         }
+    }
+
+    /// <summary>
+    /// Types the item's text as keystrokes instead of pasting. For fields that
+    /// refuse Ctrl+V (password boxes, TeamViewer ID/password, remote sessions).
+    /// Doesn't touch the clipboard at all.
+    /// </summary>
+    public void TypeItem(ClipboardItem item)
+    {
+        var text = item.TextContent;
+        if (string.IsNullOrEmpty(text) || item.Type == ClipboardItemType.Image)
+            return;
+        var target = SavedTargetWindow;
+
+        _ = Task.Run(() =>
+        {
+            var ok = true;
+            try
+            {
+                if (!BringTargetBack(target))
+                    ok = false;
+                NativeMethods.ReleasePressedModifiers();
+                Thread.Sleep(20);
+                NativeMethods.SendUnicodeText(text);
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("TypeItem", ex);
+                ok = false;
+            }
+
+            if (!ok)
+                _uiDispatcher.BeginInvoke(() => PasteFailed?.Invoke());
+        });
     }
 
     /// <summary>So copiar, sem colar (Ctrl+clique). Nada disso toca a UI thread.</summary>
@@ -192,9 +253,7 @@ public sealed class PasteService(
 
                 writeGuard.WriteText(text);
 
-                if (target != nint.Zero)
-                    NativeMethods.ForceForeground(target);
-                WaitForForeground(target);
+                BringTargetBack(target);
                 NativeMethods.ReleasePressedModifiers();
                 Thread.Sleep(20);
                 NativeMethods.SendCtrlV();

@@ -62,6 +62,7 @@ public sealed class RecordingController(
 
     // janelas da sessao
     private RegionFrameWindow? _border;
+    private RegionMaskWindow? _mask;
     private RecordingToolbarWindow? _toolbar;
     private RecordingProgressWindow? _progress;
     private System.Windows.Threading.DispatcherTimer? _tick;
@@ -126,6 +127,7 @@ public sealed class RecordingController(
     {
         if (IsActive)
         {
+            StartupLog.Write($"Gravacao ignorada: sessao anterior ainda em {_state}");
             // toolbar e NOACTIVATE (Activate seria no-op): realce visual rapido
             _toolbar?.FlashAttention();
             return;
@@ -649,6 +651,11 @@ public sealed class RecordingController(
         {
             // reuso do frame do scroll capture: click-through, NOACTIVATE,
             // excluido da captura, borda accent FORA da area gravada
+            // mascara escurece fora da regiao (como o screenshot); criada antes
+            // da moldura para que a borda fique por cima no z-order
+            _mask = new RegionMaskWindow();
+            _mask.ShowAround(_monitorBounds, region.Left, region.Top, region.Width, region.Height);
+
             _border = new RegionFrameWindow();
             _border.ShowAround(region.Left, region.Top, region.Width, region.Height);
 
@@ -706,9 +713,15 @@ public sealed class RecordingController(
         if (_border is not { } border)
             return;
         if (visible)
+        {
+            _mask?.Show();
             border.Show();
+        }
         else
+        {
+            _mask?.Hide();
             border.Hide();
+        }
     }
 
     private void TeardownRecordingUi()
@@ -720,6 +733,8 @@ public sealed class RecordingController(
         _toolbar = null;
         _border?.Close();
         _border = null;
+        _mask?.Close();
+        _mask = null;
     }
 
     /// <summary>RF-F3.05: hotkey de parar registrado SO durante a gravacao.</summary>

@@ -23,6 +23,8 @@ public sealed class CaptureController(
 {
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private bool _sessionActive;
+    private CaptureMode? _forcedMode;
+    private CaptureMode? _modeToRestore;
 
     /// <summary>Post-capture tray toast; the App subscribes to this.</summary>
     public event Action<string>? CaptureCompleted;
@@ -33,11 +35,23 @@ public sealed class CaptureController(
     /// <summary>Last captured item so the toast can reopen it in the editor.</summary>
     public Core.Storage.ClipboardItem? LastCapturedItem { get; private set; }
 
-    public void StartCapture()
+    /// <summary>
+    /// Opens the overlay. With <paramref name="mode"/> (direct-mode hotkeys) the
+    /// overlay starts in that mode for this session only; the mode the user last
+    /// picked on the toolbar comes back afterwards.
+    /// </summary>
+    public void StartCapture(CaptureMode? mode = null)
     {
         if (_sessionActive)
             return;
         _sessionActive = true;
+
+        if (mode is { } forced)
+        {
+            _modeToRestore = CaptureOverlayWindow.CurrentMode;
+            _forcedMode = forced;
+            CaptureOverlayWindow.CurrentMode = forced;
+        }
 
         try
         {
@@ -309,5 +323,15 @@ public sealed class CaptureController(
         foreach (var overlay in _overlays)
             overlay.CloseOverlay();
         _overlays.Clear();
+
+        // one-shot mode from a direct hotkey: put the sticky mode back unless the
+        // user switched modes on the toolbar during this session
+        if (_forcedMode is { } forced)
+        {
+            if (CaptureOverlayWindow.CurrentMode == forced && _modeToRestore is { } previous)
+                CaptureOverlayWindow.CurrentMode = previous;
+            _forcedMode = null;
+            _modeToRestore = null;
+        }
     }
 }

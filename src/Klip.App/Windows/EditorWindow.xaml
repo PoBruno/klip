@@ -12,7 +12,8 @@
     ExtendsContentIntoTitleBar="True"
     WindowBackdropType="Mica"
     WindowCornerPreference="Round"
-    WindowStartupLocation="CenterScreen">
+    WindowStartupLocation="CenterScreen"
+    WindowState="Maximized">
     <ui:FluentWindow.Resources>
         <Style x:Key="ToolButton" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
@@ -286,9 +287,27 @@
                 FontSize="11"
                 Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
             <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                <Button x:Name="SavePreferencesButton" Style="{StaticResource ActionButton}" 
+                        ToolTip="Save editor preferences (zoom, tool, color, thickness)">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE105;" />
+                </Button>
+                <CheckBox x:Name="AlwaysMaximizedCheckBox" VerticalAlignment="Center" Margin="8,0,0,0"
+                          ToolTip="Force fullscreen: always open editor maximized, regardless of last window state">
+                    <TextBlock FontSize="11" Text="Always Fullscreen" />
+                </CheckBox>
+                <Border Width="1" Margin="6,8" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
                 <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontSize="11"
                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{DynamicResource Loc.Zoom}" />
-                <Slider x:Name="ZoomSlider" Width="120" VerticalAlignment="Center"
+                <Button x:Name="Zoom75Button" Style="{StaticResource ActionButton}" Padding="6,8" ToolTip="75%">
+                    <TextBlock FontSize="11" Text="75%" />
+                </Button>
+                <Button x:Name="Zoom100Button" Style="{StaticResource ActionButton}" Padding="6,8" ToolTip="100%">
+                    <TextBlock FontSize="11" Text="100%" />
+                </Button>
+                <Button x:Name="Zoom125Button" Style="{StaticResource ActionButton}" Padding="6,8" ToolTip="125%">
+                    <TextBlock FontSize="11" Text="125%" />
+                </Button>
+                <Slider x:Name="ZoomSlider" Width="120" VerticalAlignment="Center" Margin="8,0,0,0"
                         Maximum="4" Minimum="0.1" Value="1" />
                 <TextBlock x:Name="ZoomLabel" Width="42" Margin="8,0,0,0" VerticalAlignment="Center"
                            FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />

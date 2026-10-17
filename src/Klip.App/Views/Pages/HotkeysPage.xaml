@@ -86,6 +86,59 @@
             </Button>
         </controls:SettingsCard>
 
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.CaptureRectangleHotkey}"
+            Description="{DynamicResource Loc.HotkeyHint}"
+            Icon="&#xF407;">
+            <Button
+                x:Name="CaptureRectHotkeyButton"
+                MinWidth="140"
+                Padding="8,6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                Focusable="True">
+                <Grid>
+                    <controls:KeyChord x:Name="CaptureRectHotkeyChord" HorizontalAlignment="Center" />
+                    <TextBlock
+                        x:Name="CaptureRectHotkeyPrompt"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="{DynamicResource Loc.HotkeyPressKeys}"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Button>
+        </controls:SettingsCard>
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.CaptureGifHotkey}"
+            Description="{DynamicResource Loc.HotkeyHint}"
+            Icon="&#xF4A9;">
+            <Button
+                x:Name="CaptureGifHotkeyButton"
+                MinWidth="140"
+                Padding="8,6"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                BorderThickness="1"
+                Cursor="Hand"
+                Focusable="True">
+                <Grid>
+                    <controls:KeyChord x:Name="CaptureGifHotkeyChord" HorizontalAlignment="Center" />
+                    <TextBlock
+                        x:Name="CaptureGifHotkeyPrompt"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        FontSize="12"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="{DynamicResource Loc.HotkeyPressKeys}"
+                        Visibility="Collapsed" />
+                </Grid>
+            </Button>
+        </controls:SettingsCard>
+
         <!-- RF-F3.05: este atalho so e registrado DURANTE a gravacao, entao
              salva-lo nao chama ApplyHotkeys (ver HotkeysPage.xaml.cs). -->
         <controls:SettingsCard

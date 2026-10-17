@@ -144,6 +144,8 @@ public partial class HotkeysPage : ISettingsPage
             var s = _settings.Current;
             HistoryHotkeyChord.Chord = s.HotkeyHistory;
             CaptureHotkeyChord.Chord = s.HotkeyCapture;
+            CaptureRectHotkeyChord.Chord = s.HotkeyCaptureRectangle;
+            CaptureGifHotkeyChord.Chord = s.HotkeyCaptureGif;
             StopRecHotkeyChord.Chord = s.StopRecordingHotkey;
         }
         finally
@@ -411,11 +413,13 @@ public partial class HotkeysPage : ISettingsPage
     {
         History,
         Capture,
+        CaptureRectangle,
+        CaptureGif,
         StopRecording,
     }
 
     private static readonly HotkeySlot[] AllSlots =
-        [HotkeySlot.History, HotkeySlot.Capture, HotkeySlot.StopRecording];
+        [HotkeySlot.History, HotkeySlot.Capture, HotkeySlot.CaptureRectangle, HotkeySlot.CaptureGif, HotkeySlot.StopRecording];
 
     /// <summary>
     /// Slot em captura, ou <c>null</c>. No original isto era um unico <c>bool</c>
@@ -432,6 +436,8 @@ public partial class HotkeysPage : ISettingsPage
     {
         HotkeySlot.History => HistoryHotkeyChord,
         HotkeySlot.Capture => CaptureHotkeyChord,
+        HotkeySlot.CaptureRectangle => CaptureRectHotkeyChord,
+        HotkeySlot.CaptureGif => CaptureGifHotkeyChord,
         HotkeySlot.StopRecording => StopRecHotkeyChord,
         _ => throw UnknownSlot(slot),
     };
@@ -440,6 +446,8 @@ public partial class HotkeysPage : ISettingsPage
     {
         HotkeySlot.History => HistoryHotkeyPrompt,
         HotkeySlot.Capture => CaptureHotkeyPrompt,
+        HotkeySlot.CaptureRectangle => CaptureRectHotkeyPrompt,
+        HotkeySlot.CaptureGif => CaptureGifHotkeyPrompt,
         HotkeySlot.StopRecording => StopRecHotkeyPrompt,
         _ => throw UnknownSlot(slot),
     };
@@ -448,6 +456,8 @@ public partial class HotkeysPage : ISettingsPage
     {
         HotkeySlot.History => HistoryHotkeyButton,
         HotkeySlot.Capture => CaptureHotkeyButton,
+        HotkeySlot.CaptureRectangle => CaptureRectHotkeyButton,
+        HotkeySlot.CaptureGif => CaptureGifHotkeyButton,
         HotkeySlot.StopRecording => StopRecHotkeyButton,
         _ => throw UnknownSlot(slot),
     };
@@ -456,6 +466,8 @@ public partial class HotkeysPage : ISettingsPage
     {
         HotkeySlot.History => _settings.Current.HotkeyHistory,
         HotkeySlot.Capture => _settings.Current.HotkeyCapture,
+        HotkeySlot.CaptureRectangle => _settings.Current.HotkeyCaptureRectangle,
+        HotkeySlot.CaptureGif => _settings.Current.HotkeyCaptureGif,
         HotkeySlot.StopRecording => _settings.Current.StopRecordingHotkey,
         _ => throw UnknownSlot(slot),
     };
@@ -543,6 +555,8 @@ public partial class HotkeysPage : ISettingsPage
         {
             HotkeySlot.History => s => s.HotkeyHistory = gesture,
             HotkeySlot.Capture => s => s.HotkeyCapture = gesture,
+            HotkeySlot.CaptureRectangle => s => s.HotkeyCaptureRectangle = gesture,
+            HotkeySlot.CaptureGif => s => s.HotkeyCaptureGif = gesture,
             HotkeySlot.StopRecording => s => s.StopRecordingHotkey = gesture,
             _ => throw UnknownSlot(slot),
         };

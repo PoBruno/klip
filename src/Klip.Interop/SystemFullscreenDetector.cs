@@ -109,17 +109,40 @@ public static class SystemFullscreenDetector
     public static SystemActivityState Evaluate()
     {
         var state = QueryNotificationState();
-        if (state is QUERY_USER_NOTIFICATION_STATE.QUNS_BUSY
-            or QUERY_USER_NOTIFICATION_STATE.QUNS_RUNNING_D3D_FULL_SCREEN
-            or QUERY_USER_NOTIFICATION_STATE.QUNS_PRESENTATION_MODE
-            or QUERY_USER_NOTIFICATION_STATE.QUNS_NOT_PRESENT)
+        if (state is QUERY_USER_NOTIFICATION_STATE.QUNS_NOT_PRESENT
+            or QUERY_USER_NOTIFICATION_STATE.QUNS_PRESENTATION_MODE)
         {
             return SystemActivityState.Suspended;
+        }
+
+        // the shell reports BUSY for our own topmost capture overlay too; when a
+        // Klip window is in front the user is interacting with us, not a game
+        if (state is QUERY_USER_NOTIFICATION_STATE.QUNS_BUSY
+            or QUERY_USER_NOTIFICATION_STATE.QUNS_RUNNING_D3D_FULL_SCREEN)
+        {
+            return IsForegroundOwnProcess()
+                ? SystemActivityState.Normal
+                : SystemActivityState.Suspended;
         }
 
         return IsForegroundWindowFullscreen()
             ? SystemActivityState.Suspended
             : SystemActivityState.Normal;
+    }
+
+    private static bool IsForegroundOwnProcess()
+    {
+        try
+        {
+            var hwnd = NativeMethods.GetForegroundWindow();
+            return hwnd != nint.Zero
+                && NativeMethods.GetWindowThreadProcessId(hwnd, out var processId) != 0
+                && processId == (uint)Environment.ProcessId;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return false;
+        }
     }
 
     private static bool IsShellClass(string className) => className is

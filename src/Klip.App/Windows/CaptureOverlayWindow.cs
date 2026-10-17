@@ -45,6 +45,13 @@ public enum CaptureDelay
 public sealed class CaptureOverlayWindow : Window
 {
     private static CaptureMode _mode = CaptureMode.Rectangle; // shared across monitors
+
+    /// <summary>Mode the next overlay opens in (shared across monitors and sessions).</summary>
+    public static CaptureMode CurrentMode
+    {
+        get => _mode;
+        set => _mode = value;
+    }
     private static CaptureDelay _delay = CaptureDelay.None;    // same deal
     private Button? _delayButton;
     private TextBlock? _countdownLabel;
@@ -247,6 +254,14 @@ public sealed class CaptureOverlayWindow : Window
         var b = _source.Monitor.Bounds;
         NativeMethods.SetWindowPos(helper.Handle, nint.Zero, b.left, b.top,
             b.right - b.left, b.bottom - b.top, NativeMethods.SWP_NOZORDER);
+
+        // all Klip windows share the UI thread: a capture left behind by another
+        // window (editor, media editor timeline) would swallow every click here
+        if (Mouse.Captured is { } stale)
+        {
+            StartupLog.Write($"Overlay: released stale mouse capture held by {stale.GetType().Name}");
+            Mouse.Capture(null);
+        }
 
         Show();
         Activate();

@@ -131,6 +131,7 @@ public static class Loc
     public static string DateAll => Get(nameof(DateAll));
     public static string MenuPaste => Get(nameof(MenuPaste));
     public static string MenuPastePlain => Get(nameof(MenuPastePlain));
+    public static string MenuTypeText => Get(nameof(MenuTypeText));
     public static string MenuCopy => Get(nameof(MenuCopy));
     public static string MenuSaveAs => Get(nameof(MenuSaveAs));
     public static string MenuOpenInEditor => Get(nameof(MenuOpenInEditor));
@@ -276,6 +277,8 @@ public static class Loc
     public static string SectionAppHotkeys => Get(nameof(SectionAppHotkeys));
     public static string OpenHistoryHotkey => Get(nameof(OpenHistoryHotkey));
     public static string NewCaptureHotkey => Get(nameof(NewCaptureHotkey));
+    public static string CaptureRectangleHotkey => Get(nameof(CaptureRectangleHotkey));
+    public static string CaptureGifHotkey => Get(nameof(CaptureGifHotkey));
     public static string HotkeyHint => Get(nameof(HotkeyHint));
     public static string HotkeyPressKeys => Get(nameof(HotkeyPressKeys));
     public static string SectionFlyoutShortcuts => Get(nameof(SectionFlyoutShortcuts));
@@ -490,6 +493,7 @@ public static class Loc
         [nameof(DateAll)] = "Todo o período",
         [nameof(MenuPaste)] = "Colar",
         [nameof(MenuPastePlain)] = "Colar como texto puro",
+        [nameof(MenuTypeText)] = "Digitar como teclas (Alt+Enter)",
         [nameof(MenuCopy)] = "Copiar",
         [nameof(MenuSaveAs)] = "Salvar como...",
         [nameof(MenuOpenInEditor)] = "Abrir no editor",
@@ -628,6 +632,8 @@ public static class Loc
         [nameof(SectionAppHotkeys)] = "Atalhos do Klip",
         [nameof(OpenHistoryHotkey)] = "Abrir histórico",
         [nameof(NewCaptureHotkey)] = "Nova captura",
+        [nameof(CaptureRectangleHotkey)] = "Captura retangular direta",
+        [nameof(CaptureGifHotkey)] = "Gravar GIF direto",
         [nameof(HotkeyHint)] = "Clique nas teclas e pressione a nova combinação",
         [nameof(HotkeyPressKeys)] = "pressione as teclas",
         [nameof(SectionFlyoutShortcuts)] = "Atalhos do painel (Win+V)",
@@ -834,6 +840,7 @@ public static class Loc
         [nameof(DateAll)] = "All time",
         [nameof(MenuPaste)] = "Paste",
         [nameof(MenuPastePlain)] = "Paste as plain text",
+        [nameof(MenuTypeText)] = "Type as keystrokes (Alt+Enter)",
         [nameof(MenuCopy)] = "Copy",
         [nameof(MenuSaveAs)] = "Save as...",
         [nameof(MenuOpenInEditor)] = "Open in editor",
@@ -972,6 +979,8 @@ public static class Loc
         [nameof(SectionAppHotkeys)] = "Klip shortcuts",
         [nameof(OpenHistoryHotkey)] = "Open history",
         [nameof(NewCaptureHotkey)] = "New capture",
+        [nameof(CaptureRectangleHotkey)] = "Direct rectangle capture",
+        [nameof(CaptureGifHotkey)] = "Direct GIF recording",
         [nameof(HotkeyHint)] = "Click the keys and press the new combination",
         [nameof(HotkeyPressKeys)] = "press the keys",
         [nameof(SectionFlyoutShortcuts)] = "Panel shortcuts (Win+V)",

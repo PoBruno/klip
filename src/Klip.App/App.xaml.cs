@@ -376,6 +376,8 @@ public partial class App : Application
 
     private int _historyHotkeyId;
     private int _captureHotkeyId;
+    private int _captureRectangleHotkeyId;
+    private int _captureGifHotkeyId;
 
     /// <summary>(Re)applies the global hotkeys from settings.</summary>
     public bool ApplyHotkeys(SettingsService settings)
@@ -391,6 +393,16 @@ public partial class App : Application
         {
             hotkeys.Unregister(_captureHotkeyId);
             _captureHotkeyId = 0;
+        }
+        if (_captureRectangleHotkeyId != 0)
+        {
+            hotkeys.Unregister(_captureRectangleHotkeyId);
+            _captureRectangleHotkeyId = 0;
+        }
+        if (_captureGifHotkeyId != 0)
+        {
+            hotkeys.Unregister(_captureGifHotkeyId);
+            _captureGifHotkeyId = 0;
         }
 
         var allOk = true;
@@ -410,6 +422,24 @@ public partial class App : Application
             if (!hotkeys.TryRegister(captureGesture, StartCapture, out _captureHotkeyId))
             {
                 NotifyHotkeyConflict(captureGesture);
+                allOk = false;
+            }
+        }
+
+        if (HotkeyGesture.TryParse(settings.Current.HotkeyCaptureRectangle, out var rectangleGesture))
+        {
+            if (!hotkeys.TryRegister(rectangleGesture, () => StartCapture(CaptureMode.Rectangle), out _captureRectangleHotkeyId))
+            {
+                NotifyHotkeyConflict(rectangleGesture);
+                allOk = false;
+            }
+        }
+
+        if (HotkeyGesture.TryParse(settings.Current.HotkeyCaptureGif, out var gifGesture))
+        {
+            if (!hotkeys.TryRegister(gifGesture, () => StartCapture(CaptureMode.Gif), out _captureGifHotkeyId))
+            {
+                NotifyHotkeyConflict(gifGesture);
                 allOk = false;
             }
         }
@@ -544,8 +574,10 @@ public partial class App : Application
         return false;
     }
 
-    /// <summary>Opens the capture overlay.</summary>
-    private void StartCapture()
+    /// <summary>Opens the capture overlay, optionally straight in one mode.</summary>
+    private void StartCapture() => StartCapture(null);
+
+    private void StartCapture(CaptureMode? mode)
     {
         // Aqui NAO ha bloqueio por jogo em tela cheia de proposito. Capturar um jogo ou
         // um video em tela cheia e caso de uso primario de uma ferramenta de captura;
@@ -557,7 +589,7 @@ public partial class App : Application
 
         _flyout?.HideFlyout(); // overlay cant capture the flyout while its open
         PowerEfficiency.EnterProcessHighQos(); // ADR-P.08: UI a frente, sai do Eco
-        _captureController?.StartCapture();
+        _captureController?.StartCapture(mode);
     }
 
     /// <summary>
