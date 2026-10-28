@@ -94,16 +94,17 @@ public static partial class NativeMethods
     /// Types the text as keystrokes (KEYEVENTF_UNICODE) instead of going through the
     /// clipboard. Works in fields that block paste (password boxes, sites with onpaste
     /// blocked) and in remote sessions like TeamViewer or RDP that do not forward a
-    /// synthetic Ctrl+V. Newlines become Enter, tabs become Tab. Sent in small chunks
-    /// at about a thousand characters a second: faster than that an app cannot keep up,
-    /// its input queue piles up, it freezes, and stopping later does not help because
-    /// what is already queued still arrives.
+    /// synthetic Ctrl+V. Newlines become Enter, tabs become Tab. Sent two characters at a
+    /// time at about a hundred and thirty a second: it reads like typing instead of
+    /// stuttering bursts, and an app can keep up. Much faster and its input queue piles
+    /// up and it freezes, and stopping late does not help because what is already
+    /// queued still arrives.
     /// <para>
     /// <paramref name="cancel"/> is asked before every chunk; when it says yes the rest
     /// is dropped and this returns false. True means everything was typed.
     /// </para>
     /// </summary>
-    public static bool SendUnicodeText(string text, Func<bool>? cancel = null, int chunkSize = 16, int chunkDelayMs = 15)
+    public static bool SendUnicodeText(string text, Func<bool>? cancel = null, int chunkSize = 2, int chunkDelayMs = 15)
     {
         var inputs = new List<INPUT>(Math.Min(text.Length, chunkSize) * 2);
         var size = Marshal.SizeOf<INPUT>();
