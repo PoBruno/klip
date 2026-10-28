@@ -14,9 +14,9 @@ public readonly record struct DirtyRect(int X, int Y, int Width, int Height)
 }
 
 /// <summary>
-/// Deteccao de dirty-rect entre frames BGRA32 (RF-F4.06/RF-F4.08):
+/// Deteccao de dirty-rect entre frames BGRA32:
 /// bounding box das linhas/colunas com pixels diferentes, com tolerancia
-/// opcional |dR|+|dG|+|dB| &lt;= N (RF-F4.10). Alpha e ignorado.
+/// opcional |dR|+|dG|+|dB| &lt;= N. Alpha e ignorado.
 /// </summary>
 public static class DirtyRectDetector
 {

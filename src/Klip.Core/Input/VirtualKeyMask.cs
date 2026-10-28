@@ -3,7 +3,7 @@ using System.Runtime.CompilerServices;
 namespace Klip.Core.Input;
 
 /// <summary>
-/// RF-P1.03: bitmap de 256 bits (4 x ulong) para decidir em O(1), dentro do
+/// bitmap de 256 bits (4 x ulong) para decidir em O(1), dentro do
 /// callback do hook, se uma virtual key deve ser engolida. Sem lock, sem
 /// alocacao e sem branch dependente do tamanho do conjunto.
 /// </summary>

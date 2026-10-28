@@ -1,6 +1,6 @@
 namespace Klip.Core.Recording;
 
-/// <summary>Categoria de falha irrecuperavel do motor de captura (RF-F2.08).</summary>
+/// <summary>Categoria de falha irrecuperavel do motor de captura.</summary>
 public enum FrameCaptureErrorKind
 {
     /// <summary>GPU removida/resetada e a recuperacao (1 tentativa) falhou.</summary>

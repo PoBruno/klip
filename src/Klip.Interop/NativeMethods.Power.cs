@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Klip.Interop;
 
 /// <summary>
-/// P/Invoke de QoS/energia (RF-P3.03): EcoQoS por processo e por thread,
+/// P/Invoke de QoS/energia: EcoQoS por processo e por thread,
 /// prioridade de memoria e background IO mode.
 /// </summary>
 public static partial class NativeMethods

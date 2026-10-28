@@ -8,28 +8,22 @@ using Klip.Core.Settings;
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// RF-S.05 - secao "Historico de clipboard" (absorve <c>SectionClipboard</c>):
-/// retencao por itens e por idade, e a lista de apps excluidos.
-/// <para>
-/// RF-S.09: a lista de apps excluidos e uma <see cref="ObservableCollection{T}"/>
-/// ligada uma unica vez ao <c>ItemsSource</c>, com <c>VirtualizingStackPanel</c> em
-/// <c>VirtualizationMode=Recycling</c>. Antes era um <c>ItemsControl</c> sem
-/// virtualizacao cujo <c>ItemsSource</c> era REATRIBUIDO inteiro
-/// (<c>ExcludedAppsList.ItemsSource = ...ToList()</c>) a cada adicao ou remocao, o
-/// que jogava fora e regerava todos os containers.
-/// </para>
+/// "History" page: retention (items, images, media space, age, excluded apps) and
+/// the Win+V panel options. The app lists are ObservableCollections bound once and
+/// changed item by item, so adding or removing an app never rebuilds every row.
 /// </summary>
 public partial class ClipboardPage : ISettingsPage
 {
+    private const double BytesPerGb = 1024d * 1024 * 1024;
+
     private readonly SettingsService _settings;
 
-    /// <summary>RF-S.09: fonte unica da lista; nunca e reatribuida ao ItemsSource.</summary>
     private readonly ObservableCollection<string> _excludedApps = [];
+    private readonly ObservableCollection<string> _richApps = [];
 
     /// <summary>
-    /// ADR-S.07: guard de reentrancia. Setar <c>NumberBox.Value</c> dispara
-    /// <c>ValueChanged</c>, entao sem ele o refresh regravaria o valor que acabou
-    /// de ler. Sempre manipulado em <c>try/finally</c> (ver <see cref="RefreshState"/>).
+    /// Reentrancy guard: setting NumberBox.Value raises ValueChanged, and without it the
+    /// refresh would write back what it just read. Always in try/finally (see RefreshState).
     /// </summary>
     private bool _loading;
 
@@ -39,42 +33,67 @@ public partial class ClipboardPage : ISettingsPage
         PageDiagnostics.TrackConstruction(this);
         InitializeComponent();
 
-        // RF-S.09: uma unica atribuicao de ItemsSource na vida da pagina
         ExcludedAppsList.ItemsSource = _excludedApps;
+        RichAppsList.ItemsSource = _richApps;
 
-        // RF-S.05: assinatura no CONSTRUTOR, nunca em Loaded - a pagina e singleton
-        // (ADR-S.03) e Loaded dispara a cada re-entrada na arvore visual, duplicando
-        // as assinaturas.
-        MaxItemsBox.ValueChanged += (_, _) => OnMaxItemsChanged();
-        MaxAgeBox.ValueChanged += (_, _) => OnMaxAgeChanged();
-        AddExcludeButton.Click += (_, _) => AddExcludedApp();
-        ExcludeAppBox.KeyDown += OnExcludeAppBoxKeyDown;
+        // wired in the CONSTRUCTOR, never in Loaded: the page is a singleton and Loaded
+        // fires on every visit, which would stack the handlers
+        MaxItemsBox.ValueChanged += (_, _) => Save(MaxItemsBox, (s, v) => s.RetentionMaxItems = (int)v);
+        MaxImagesBox.ValueChanged += (_, _) => Save(MaxImagesBox, (s, v) => s.RetentionMaxImages = (int)v);
+        MaxMediaBox.ValueChanged += (_, _) => Save(MaxMediaBox, (s, v) => s.RetentionMaxMediaBytes = (long)(v * BytesPerGb));
+        MaxAgeBox.ValueChanged += (_, _) => Save(MaxAgeBox, (s, v) => s.RetentionMaxAgeDays = (int)v);
+        FlyoutWidthBox.ValueChanged += (_, _) => Save(FlyoutWidthBox, (s, v) => s.FlyoutWidth = Math.Max(360, v));
+        FlyoutHeightBox.ValueChanged += (_, _) => Save(FlyoutHeightBox, (s, v) => s.FlyoutHeight = Math.Max(460, v));
 
-        // Um handler para N linhas: o Click do botao de remover borbulha ate o
-        // ItemsControl. Substitui o Click="OnRemoveExcludedApp" declarado por string
-        // no XAML antigo, que so quebrava em runtime se o metodo fosse renomeado.
-        ExcludedAppsList.AddHandler(ButtonBase.ClickEvent, new RoutedEventHandler(OnRemoveExcludedApp));
-        ExcludedAppsList.PreviewMouseWheel += OnExcludedAppsPreviewMouseWheel;
+        OpenAtCaretToggle.Click += (_, _) => SaveToggle(OpenAtCaretToggle, (s, v) => s.FlyoutOpenAtCaret = v);
+        RememberScrollToggle.Click += (_, _) => SaveToggle(RememberScrollToggle, (s, v) => s.FlyoutRememberScroll = v);
+        AlwaysPlainTextToggle.Click += (_, _) =>
+        {
+            SaveToggle(AlwaysPlainTextToggle, (s, v) => s.AlwaysPastePlainText = v);
+            RichPasteAppsCard.IsEnabled = AlwaysPlainTextToggle.IsChecked == true;
+        };
+        EnterActionCombo.SelectionChanged += (_, _) =>
+        {
+            if (!_loading && EnterActionCombo.SelectedItem is ComboBoxItem { Tag: string action })
+                _settings.Update(s => s.FlyoutEnterAction = action);
+        };
+
+        AddExcludeButton.Click += (_, _) => AddApp(ExcludeAppBox, _excludedApps, s => s.ExcludedApps);
+        ExcludeAppBox.KeyDown += (_, e) => OnEnter(e, () => AddApp(ExcludeAppBox, _excludedApps, s => s.ExcludedApps));
+        AddRichAppButton.Click += (_, _) => AddApp(RichAppBox, _richApps, s => s.RichPasteApps);
+        RichAppBox.KeyDown += (_, e) => OnEnter(e, () => AddApp(RichAppBox, _richApps, s => s.RichPasteApps));
+
+        // one handler for N rows: the remove button Click bubbles up to the list
+        ExcludedAppsList.AddHandler(ButtonBase.ClickEvent,
+            new RoutedEventHandler((_, e) => RemoveApp(e, _excludedApps, s => s.ExcludedApps)));
+        RichAppsList.AddHandler(ButtonBase.ClickEvent,
+            new RoutedEventHandler((_, e) => RemoveApp(e, _richApps, s => s.RichPasteApps)));
+        ExcludedAppsList.PreviewMouseWheel += OnListPreviewMouseWheel;
 
         RefreshState();
     }
 
-    /// <summary>
-    /// RF-S.05: recarrega os valores salvos. Chamado no fim do construtor e a cada
-    /// entrada na pagina (<c>SettingsShell.OnNavigated</c>).
-    /// </summary>
+    /// <summary>Reloads the saved values. Runs at the end of the constructor and on every visit.</summary>
     public void RefreshState()
     {
-        // ADR-S.07: o try/finally e o ponto. O _loading da MainWindow nao estava
-        // protegido: uma excecao no meio de RefreshStatus deixava a tela
-        // somente-leitura ate reiniciar o app.
         _loading = true;
         try
         {
-            var current = _settings.Current;
-            MaxItemsBox.Value = current.RetentionMaxItems;
-            MaxAgeBox.Value = current.RetentionMaxAgeDays;
-            SyncExcludedApps(current.ExcludedApps);
+            var s = _settings.Current;
+            MaxItemsBox.Value = s.RetentionMaxItems;
+            MaxImagesBox.Value = s.RetentionMaxImages;
+            MaxMediaBox.Value = Math.Round(s.RetentionMaxMediaBytes / BytesPerGb, 1);
+            MaxAgeBox.Value = s.RetentionMaxAgeDays;
+            FlyoutWidthBox.Value = Math.Round(s.FlyoutWidth);
+            FlyoutHeightBox.Value = Math.Round(s.FlyoutHeight);
+            OpenAtCaretToggle.IsChecked = s.FlyoutOpenAtCaret;
+            RememberScrollToggle.IsChecked = s.FlyoutRememberScroll;
+            AlwaysPlainTextToggle.IsChecked = s.AlwaysPastePlainText;
+            RichPasteAppsCard.IsEnabled = s.AlwaysPastePlainText;
+            EnterActionCombo.SelectedIndex =
+                string.Equals(s.FlyoutEnterAction, "copy", StringComparison.OrdinalIgnoreCase) ? 1 : 0;
+            Sync(_excludedApps, s.ExcludedApps);
+            Sync(_richApps, s.RichPasteApps);
         }
         finally
         {
@@ -82,114 +101,96 @@ public partial class ClipboardPage : ISettingsPage
         }
     }
 
-    // ----- Retencao -----
-
-    private void OnMaxItemsChanged()
+    private void Save(Wpf.Ui.Controls.NumberBox box, Action<AppSettings, double> apply)
     {
-        // Value e double?: null acontece quando a caixa fica vazia, e ai nao ha o
-        // que gravar (o setting mantem o ultimo valor valido).
-        if (_loading || MaxItemsBox.Value is not { } value)
+        // Value is null while the box is empty: keep the last valid setting
+        if (_loading || box.Value is not { } value)
             return;
-        _settings.Update(s => s.RetentionMaxItems = (int)value);
+        _settings.Update(s => apply(s, value));
     }
 
-    private void OnMaxAgeChanged()
+    private void SaveToggle(Wpf.Ui.Controls.ToggleSwitch toggle, Action<AppSettings, bool> apply)
     {
-        if (_loading || MaxAgeBox.Value is not { } value)
+        if (_loading)
             return;
-        _settings.Update(s => s.RetentionMaxAgeDays = (int)value);
+        var on = toggle.IsChecked == true;
+        _settings.Update(s => apply(s, on));
     }
 
-    // ----- Apps excluidos -----
+    // ----- App lists -----
 
-    private void OnExcludeAppBoxKeyDown(object sender, KeyEventArgs e)
+    private static void OnEnter(KeyEventArgs e, Action action)
     {
         if (e.Key != Key.Enter)
             return;
         e.Handled = true;
-        AddExcludedApp();
+        action();
     }
 
-    private void AddExcludedApp()
+    private void AddApp(Wpf.Ui.Controls.TextBox box, ObservableCollection<string> view,
+        Func<AppSettings, List<string>> list)
     {
-        var name = ExcludeAppBox.Text.Trim();
+        var name = box.Text.Trim();
         if (name.Length == 0)
             return;
 
-        // Normalizacao herdada da MainWindow: nome sem ponto ganha ".exe", e a
-        // deduplicacao e OrdinalIgnoreCase (nome de processo no Windows).
+        // process names: no dot gets ".exe", and dedupe ignores case like Windows does
         if (!name.Contains('.'))
             name += ".exe";
 
         var added = false;
         _settings.Update(s =>
         {
-            if (s.ExcludedApps.Contains(name, StringComparer.OrdinalIgnoreCase))
+            var apps = list(s);
+            if (apps.Contains(name, StringComparer.OrdinalIgnoreCase))
                 return;
-            s.ExcludedApps.Add(name);
+            apps.Add(name);
             added = true;
         });
 
-        ExcludeAppBox.Text = "";
-
-        // RF-S.09: mutacao incremental - so o container novo e gerado
+        box.Text = "";
         if (added)
-            _excludedApps.Add(name);
+            view.Add(name);
     }
 
-    private void OnRemoveExcludedApp(object sender, RoutedEventArgs e)
+    private void RemoveApp(RoutedEventArgs e, ObservableCollection<string> view,
+        Func<AppSettings, List<string>> list)
     {
-        // O DataContext do botao JA e o nome do processo; o Tag="{Binding}" do XAML
-        // antigo era so um veiculo de dado redundante (e mal tipado).
+        // the button DataContext already is the process name
         if (e.OriginalSource is not FrameworkElement { DataContext: string app })
             return;
 
         e.Handled = true;
-        _settings.Update(s => s.ExcludedApps.RemoveAll(
+        _settings.Update(s => list(s).RemoveAll(
             a => string.Equals(a, app, StringComparison.OrdinalIgnoreCase)));
 
-        for (var i = _excludedApps.Count - 1; i >= 0; i--)
+        for (var i = view.Count - 1; i >= 0; i--)
         {
-            if (string.Equals(_excludedApps[i], app, StringComparison.OrdinalIgnoreCase))
-                _excludedApps.RemoveAt(i);
+            if (string.Equals(view[i], app, StringComparison.OrdinalIgnoreCase))
+                view.RemoveAt(i);
         }
     }
 
-    /// <summary>
-    /// RF-S.09: reconcilia a colecao com o que esta salvo. No caminho comum (entrar
-    /// na pagina, nada mudou por fora) NAO toca na colecao - nenhum container e
-    /// regerado. So reconstroi quando a lista salva realmente divergiu.
-    /// </summary>
-    private void SyncExcludedApps(List<string> saved)
+    /// <summary>Only rebuilds the collection when the saved list really changed.</summary>
+    private static void Sync(ObservableCollection<string> view, List<string> saved)
     {
-        if (_excludedApps.Count == saved.Count
-            && _excludedApps.SequenceEqual(saved, StringComparer.Ordinal))
-        {
+        if (view.Count == saved.Count && view.SequenceEqual(saved, StringComparer.Ordinal))
             return;
-        }
-
-        _excludedApps.Clear();
+        view.Clear();
         foreach (var app in saved)
-            _excludedApps.Add(app);
+            view.Add(app);
     }
 
     /// <summary>
-    /// RF-S.09: a lista tem scroll proprio (a virtualizacao exige viewport finita),
-    /// e um ScrollViewer do WPF marca a roda do mouse como tratada mesmo quando nao
-    /// tem para onde rolar. Sem isto o cartao viraria um poco morto no meio da
-    /// pagina. Quando a lista chega ao fim (ou nem rola), a roda e devolvida ao
-    /// ScrollViewer da pagina.
+    /// The excluded apps list scrolls on its own (virtualization needs a finite viewport),
+    /// and a WPF ScrollViewer eats the wheel even when it can't move. At either end the
+    /// wheel goes back to the page scroller.
     /// </summary>
-    private void OnExcludedAppsPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    private void OnListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
     {
-        // resolvido a cada roda em vez de cacheado: FindName e um lookup de hashtable
-        // no namescope do template, e um campo cacheado ficaria pendurado em uma
-        // instancia antiga se o template um dia for reaplicado.
-        if (ExcludedAppsList.Template?.FindName("PART_ExcludedAppsScroll", ExcludedAppsList)
-            is not ScrollViewer scroll)
-        {
+        if (sender is not ItemsControl list ||
+            list.Template?.FindName("PART_ListScroll", list) is not ScrollViewer scroll)
             return;
-        }
 
         var atTop = e.Delta > 0 && scroll.VerticalOffset <= 0;
         var atBottom = e.Delta < 0 && scroll.VerticalOffset >= scroll.ScrollableHeight;
@@ -197,13 +198,11 @@ public partial class ClipboardPage : ISettingsPage
             return;
 
         e.Handled = true;
-
-        // MouseWheelEvent so borbulha: o evento re-emitido sobe para o ScrollViewer
-        // da pagina e nao volta para este handler (que escuta o tunel Preview).
-        ExcludedAppsList.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+        // MouseWheelEvent only bubbles: the re-raised one goes up to the page scroller
+        list.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
         {
             RoutedEvent = MouseWheelEvent,
-            Source = ExcludedAppsList,
+            Source = list,
         });
     }
 }

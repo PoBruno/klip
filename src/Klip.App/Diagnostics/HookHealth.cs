@@ -6,8 +6,8 @@ using Microsoft.Win32;
 namespace Klip.App.Diagnostics;
 
 /// <summary>
-/// RF-P0.01: telemetria do caminho critico de input. Criterio de aceite CA-P1.2:
-/// pior caso &lt; 50 us e menos de 2% do orcamento do LowLevelHooksTimeout.
+/// Telemetria do caminho critico de input. A meta e pior caso &lt; 50 us e menos
+/// de 2% do orcamento do LowLevelHooksTimeout.
 /// <para>
 /// O disjuntor do sistema remove o hook em SILENCIO quando o callback estoura o
 /// timeout - desde o Windows 7 nao ha aviso nenhum. Medir a folga e a unica forma
@@ -97,7 +97,7 @@ public static class HookHealth
     }
 
     /// <summary>
-    /// True quando os hooks LL nao estao instalados (estado ideal em idle, CA-P1.3).
+    /// True quando os hooks LL nao estao instalados (estado ideal em idle).
     /// Um hook instalado e chamado pela Raw Input Thread a cada evento do sistema
     /// inteiro, mesmo com o callback vazio - "instalado" e o que custa, nao "ativo".
     /// </summary>

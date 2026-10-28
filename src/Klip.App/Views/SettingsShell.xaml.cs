@@ -9,11 +9,11 @@ using Wpf.Ui.Controls;
 namespace Klip.App.Views;
 
 /// <summary>
-/// RF-S.03 / ADR-S.02: o shell da tela de Configuracoes. So a moldura -
+/// o shell da tela de Configuracoes. So a moldura -
 /// <c>ui:TitleBar</c> + <c>ui:NavigationView</c> com as 7 secoes. Nenhum ajuste mora
-/// aqui: cada pagina e dona da propria logica (ADR-S.07).
+/// aqui: cada pagina e dona da propria logica.
 /// <para>
-/// ADR-S.03 / RF-S.04: as paginas sao resolvidas pelo container via
+/// as paginas sao resolvidas pelo container via
 /// <see cref="INavigationViewPageProvider"/> e registradas como <c>AddSingleton</c>.
 /// Com um provider ligado o <c>NavigationCacheMode</c> vira codigo morto - quem
 /// decide o ciclo de vida e o DI: construida na primeira navegacao e reusada.
@@ -39,7 +39,7 @@ public partial class SettingsShell
         InitializeComponent();
         SystemThemeWatcher.Watch(this);
 
-        // ADR-S.06: na 4.3.0 a interface e INavigationViewPageProvider (Wpf.Ui.Abstractions)
+        // na 4.3.0 a interface e INavigationViewPageProvider (Wpf.Ui.Abstractions)
         // e o gancho e SetPageProviderService. IPageService nao existe.
         RootNavigation.SetPageProviderService(pageProvider);
         RootNavigation.Navigated += OnNavigated;
@@ -53,7 +53,7 @@ public partial class SettingsShell
     }
 
     /// <summary>
-    /// RF-S.05: repassa a atualizacao de estado para a pagina ativa. Paginas ainda
+    /// repassa a atualizacao de estado para a pagina ativa. Paginas ainda
     /// nao construidas nao precisam de nada - elas leem o estado atual no proprio
     /// construtor.
     /// </summary>

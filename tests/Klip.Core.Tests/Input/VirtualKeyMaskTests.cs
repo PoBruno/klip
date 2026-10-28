@@ -2,7 +2,7 @@ using Klip.Core.Input;
 
 namespace Klip.Core.Tests.Input;
 
-/// <summary>RF-P1.03: bitmap de 256 bits para decidir "engolir esta tecla?" em O(1).</summary>
+/// <summary>bitmap de 256 bits para decidir "engolir esta tecla?" em O(1).</summary>
 public class VirtualKeyMaskTests
 {
     [Theory]

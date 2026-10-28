@@ -11,19 +11,19 @@ using Klip.Interop;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Estado inicial da sessao para montar a toolbar (spec M2-02). MP4 mostra o
-/// conjunto completo; GIF mostra o subconjunto (timer, cursor, borda, parar -
-/// RF-T2.07).
+/// Estado inicial da sessao para montar a toolbar. MP4 mostra o
+/// conjunto completo; GIF mostra o subconjunto (timer, cursor, borda,
+/// parar).
 /// </summary>
 public sealed class RecordingToolbarOptions
 {
-    /// <summary>Pausar/retomar (so MP4, RF-F3.13).</summary>
+    /// <summary>Pausar/retomar (so MP4).</summary>
     public bool CanPause { get; init; }
 
-    /// <summary>Toggle de mic visivel (MP4 com microfone escolhido, RF-T2.05).</summary>
+    /// <summary>Toggle de mic visivel (MP4 com microfone escolhido).</summary>
     public bool ShowMicToggle { get; init; }
 
-    /// <summary>Toggle de som do sistema visivel (MP4 com sistema ligado, RF-T2.05).</summary>
+    /// <summary>Toggle de som do sistema visivel (MP4 com sistema ligado).</summary>
     public bool ShowSystemToggle { get; init; }
 
     public bool MicMuted { get; init; }
@@ -36,19 +36,19 @@ public sealed class RecordingToolbarOptions
 }
 
 /// <summary>
-/// Control hub flutuante da gravacao (spec M2-02): pill arrastavel
-/// (RF-T2.01), com snap magnetico (RF-T2.03), posicao persistida em pixels
-/// fisicos (RF-T2.02), toggles ao vivo de mic/sistema/cursor/borda (RF-T2.05)
-/// e estados visuais REC/PAUSED (RF-T2.06). Sem foco (NOACTIVATE) e excluida
-/// de qualquer captura (RF-T2.04/RF-F2.10) - durante a sessao a janela nunca
+/// Control hub flutuante da gravacao: pill arrastavel
+///, com snap magnetico, posicao persistida em pixels
+/// fisicos, toggles ao vivo de mic/sistema/cursor/borda
+/// e estados visuais REC/PAUSED. Sem foco (NOACTIVATE) e excluida
+/// de qualquer captura - durante a sessao a janela nunca
 /// e fechada, apenas Hide/Show (a afinidade WDA persiste no HWND).
 /// </summary>
 public sealed class RecordingToolbarWindow : Window
 {
-    // RF-T2.03: distancia (px fisicos) em que a borda cola no rcWork
+    // distancia (px fisicos) em que a borda cola no rcWork
     private const int SnapPx = 16;
 
-    // RF-T2.02: intersecao minima da posicao restaurada com o rcWork
+    // intersecao minima da posicao restaurada com o rcWork
     private const int MinVisiblePx = 32;
 
     // Bug 1: inicio do move-loop nativo (constante local: NativeMethods.* esta
@@ -58,11 +58,12 @@ public sealed class RecordingToolbarWindow : Window
     private static readonly Color RecRed = Color.FromRgb(0xE8, 0x11, 0x23);
     private static readonly Color PausedAmber = Color.FromRgb(0xFF, 0xC8, 0x3D);
     private static readonly Color PillBackground = Color.FromArgb(0xE6, 0x2C, 0x2C, 0x2C);
-    private static readonly Color PillBackgroundPaused = Color.FromArgb(0xE6, 0x4A, 0x3A, 0x12); // tint ambar (RF-T2.06)
+    private static readonly Color PillBackgroundPaused = Color.FromArgb(0xE6, 0x4A, 0x3A, 0x12); // tint ambar
 
     private readonly Border _pill;
     private readonly System.Windows.Shapes.Ellipse _recDot;
     private readonly TextBlock _timerLabel;
+    private readonly TextBlock _dropWarning;
     private readonly TextBlock? _pauseGlyph;
     private readonly Button? _pauseButton;
     private readonly ToggleGlyph? _micToggle;
@@ -79,19 +80,19 @@ public sealed class RecordingToolbarWindow : Window
     public event Action? StopRequested;
     public event Action? PauseToggled;
 
-    /// <summary>Novo estado: true = microfone mudo (RF-T2.05).</summary>
+    /// <summary>Novo estado: true = microfone mudo.</summary>
     public event Action<bool>? MicMuteToggled;
 
-    /// <summary>Novo estado: true = som do sistema mudo (RF-T2.05).</summary>
+    /// <summary>Novo estado: true = som do sistema mudo.</summary>
     public event Action<bool>? SystemMuteToggled;
 
-    /// <summary>Novo estado: true = cursor visivel na gravacao (RF-T2.05).</summary>
+    /// <summary>Novo estado: true = cursor visivel na gravacao.</summary>
     public event Action<bool>? CursorToggled;
 
-    /// <summary>Novo estado: true = moldura da regiao visivel (RF-T2.05).</summary>
+    /// <summary>Novo estado: true = moldura da regiao visivel.</summary>
     public event Action<bool>? BorderToggled;
 
-    /// <summary>Fim do arraste (WM_EXITSIZEMOVE): rect em px fisicos (RF-T2.02).</summary>
+    /// <summary>Fim do arraste (WM_EXITSIZEMOVE): rect em px fisicos.</summary>
     public event Action<NativeMethods.RECT>? PositionChanged;
 
     public RecordingToolbarWindow(RecordingToolbarOptions options)
@@ -100,7 +101,7 @@ public sealed class RecordingToolbarWindow : Window
         ResizeMode = ResizeMode.NoResize;
         ShowInTaskbar = false;
         Topmost = true;
-        ShowActivated = false; // RF-T2.01: nunca rouba foco do app gravado
+        ShowActivated = false; // nunca rouba foco do app gravado
         WindowStartupLocation = WindowStartupLocation.Manual;
         SizeToContent = SizeToContent.WidthAndHeight;
         AllowsTransparency = true;
@@ -121,7 +122,7 @@ public sealed class RecordingToolbarWindow : Window
             Cursor = Cursors.SizeAll,
         });
 
-        // 2) ponto REC pulsante (RF-T2.06: pulso lento, 10 fps para nao manter
+        // 2) ponto REC pulsante (pulso lento, 10 fps para nao manter
         // o render thread acordado por um glifo de 8 px) + timer tabular
         _recDot = new System.Windows.Shapes.Ellipse
         {
@@ -146,6 +147,19 @@ public sealed class RecordingToolbarWindow : Window
         // digitos tabulares: o timer nao "danca" a cada segundo
         System.Windows.Documents.Typography.SetNumeralAlignment(_timerLabel, FontNumeralAlignment.Tabular);
         panel.Children.Add(_timerLabel);
+
+        // shows up only when the recording is losing frames
+        _dropWarning = new TextBlock
+        {
+            Text = "", // Warning
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontSize = 14,
+            Foreground = new SolidColorBrush(Color.FromRgb(0xFC, 0xE1, 0x00)),
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(0, 0, 6, 0),
+            Visibility = Visibility.Collapsed,
+        };
+        panel.Children.Add(_dropWarning);
 
         // 3) pausar/retomar (so MP4)
         if (options.CanPause)
@@ -196,7 +210,7 @@ public sealed class RecordingToolbarWindow : Window
 
         panel.Children.Add(Divider());
 
-        // 10) parar: quadrado vermelho, alvo >= 32x32 (RF-F3.03 / spec M2-02)
+        // 10) parar: quadrado vermelho, alvo >= 32x32
         var stop = ToolButton("\uE71A", Localization.Loc.RecordingStop); // Stop
         ((TextBlock)stop.Content).Foreground = new SolidColorBrush(RecRed);
         stop.MinWidth = 32;
@@ -219,7 +233,7 @@ public sealed class RecordingToolbarWindow : Window
         };
         Content = _pill;
 
-        // RF-T2.01: grip/areas vazias arrastam; botoes ja marcam o
+        // grip/areas vazias arrastam; botoes ja marcam o
         // MouseLeftButtonDown como handled, entao continuam clicaveis
         _pill.MouseLeftButtonDown += OnDragArea;
     }
@@ -229,8 +243,15 @@ public sealed class RecordingToolbarWindow : Window
             ? elapsed.ToString(@"h\:mm\:ss")
             : elapsed.ToString(@"mm\:ss");
 
+    /// <summary>Amber warning next to the timer while frames are being dropped; null hides it.</summary>
+    public void SetDropWarning(string? tooltip)
+    {
+        _dropWarning.Visibility = tooltip is null ? Visibility.Collapsed : Visibility.Visible;
+        _dropWarning.ToolTip = tooltip;
+    }
+
     /// <summary>
-    /// RF-T2.06: PAUSED = tint ambar no pill, ponto estatico ambar e o botao
+    /// PAUSED = tint ambar no pill, ponto estatico ambar e o botao
     /// vira play; o timer congela sozinho (Elapsed do recorder exclui pausas).
     /// </summary>
     public void SetPaused(bool paused)
@@ -276,8 +297,8 @@ public sealed class RecordingToolbarWindow : Window
 
     /// <summary>
     /// Mostra a toolbar: restaura a posicao salva se ela ainda cai num monitor
-    /// valido (RF-T2.02); senao posiciona FORA da regiao - acima; sem espaco,
-    /// abaixo (RF-T2.09). Tudo em px fisicos.
+    /// valido; senao posiciona FORA da regiao - acima; sem espaco,
+    /// abaixo. Tudo em px fisicos.
     /// </summary>
     public void ShowOutside(RecordingRegion region, NativeMethods.RECT monitor, string? savedPosition = null)
     {
@@ -288,9 +309,9 @@ public sealed class RecordingToolbarWindow : Window
         var exStyle = (long)NativeMethods.GetWindowLongPtr(helper.Handle, NativeMethods.GWL_EXSTYLE);
         exStyle |= NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
         NativeMethods.SetWindowLongPtr(helper.Handle, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
-        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle); // RF-T2.04/RF-F2.10
+        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle);
 
-        // RF-T2.02/03: snap e persistencia via mensagens do move-loop nativo
+        // snap e persistencia via mensagens do move-loop nativo
         _source = HwndSource.FromHwnd(helper.Handle);
         _source?.AddHook(WndProc);
 
@@ -303,7 +324,7 @@ public sealed class RecordingToolbarWindow : Window
         var w = (int)(ActualWidth * dpi / 96.0);
         var h = (int)(ActualHeight * dpi / 96.0);
 
-        // RF-T2.02: posicao salva vale se o rect (no tamanho atual) ainda
+        // posicao salva vale se o rect (no tamanho atual) ainda
         // intersecta >= 32x32 o rcWork do monitor mais proximo
         if (TryRestorePosition(savedPosition, w, h, out var restored))
         {
@@ -312,7 +333,7 @@ public sealed class RecordingToolbarWindow : Window
             return;
         }
 
-        // RF-T2.09: default fora da regiao (acima; flip para baixo)
+        // default fora da regiao (acima; flip para baixo)
         var x = Math.Clamp(region.Left + (region.Width - w) / 2,
             monitor.left + 8, Math.Max(monitor.left + 8, monitor.right - w - 8));
         int y = region.Top - h - 12; // acima da regiao (borda fica fora do video)
@@ -335,14 +356,14 @@ public sealed class RecordingToolbarWindow : Window
         base.OnClosed(e);
     }
 
-    // ----- drag / snap / persistencia (RF-T2.01..03) -----
+    // ----- drag / snap / persistencia -----
 
     private void OnDragArea(object sender, MouseButtonEventArgs e)
     {
         var hwnd = new WindowInteropHelper(this).Handle;
         if (hwnd == 0)
             return;
-        // RF-T2.01: delega o arraste ao move-loop nativo sem ativar a janela
+        // delega o arraste ao move-loop nativo sem ativar a janela
         NativeMethods.ReleaseCapture();
         NativeMethods.SendMessage(hwnd, NativeMethods.WM_NCLBUTTONDOWN, NativeMethods.HTCAPTION, 0);
         e.Handled = true;
@@ -360,7 +381,7 @@ public sealed class RecordingToolbarWindow : Window
                     _lastMovingRect = null; // novo arraste: sem direcao anterior
                     break;
                 case NativeMethods.WM_MOVING:
-                    // RF-T2.03: ajusta o RECT proposto; Bug 1b: handled com
+                    // ajusta o RECT proposto; Bug 1b: handled com
                     // lresult TRUE apenas quando o RECT foi de fato MODIFICADO
                     if (SnapToWorkArea(lParam))
                     {
@@ -370,7 +391,7 @@ public sealed class RecordingToolbarWindow : Window
                     break;
                 case NativeMethods.WM_EXITSIZEMOVE:
                     _lastMovingRect = null;
-                    // RF-T2.02: fim do arraste -> persistir a posicao em px fisicos
+                    // fim do arraste -> persistir a posicao em px fisicos
                     if (NativeMethods.GetWindowRect(hwnd, out var rect))
                         PositionChanged?.Invoke(rect);
                     break;
@@ -384,7 +405,7 @@ public sealed class RecordingToolbarWindow : Window
     }
 
     /// <summary>
-    /// RF-T2.03: snap magnetico ao rcWork. Bug 1a: a referencia e o monitor sob
+    /// snap magnetico ao rcWork. Bug 1a: a referencia e o monitor sob
     /// o CURSOR (GetCursorPos + MonitorFromPoint) - com MonitorFromRect do rect
     /// proposto, ao arrastar rumo a outro monitor o rect ficava
     /// majoritariamente no monitor antigo e o snap re-colava a borda,
@@ -454,7 +475,7 @@ public sealed class RecordingToolbarWindow : Window
         previousEdge is not { } prev || Math.Abs(currentEdge - workEdge) <= Math.Abs(prev - workEdge);
 
     /// <summary>
-    /// RF-T2.02: "x,y,w,h" invariante -> rect no tamanho ATUAL da janela,
+    /// "x,y,w,h" invariante -> rect no tamanho ATUAL da janela,
     /// validado com MonitorFromRect + intersecao minima 32x32 com o rcWork
     /// (monitor removido/fora de tela -> false, cai no default).
     /// </summary>
@@ -483,7 +504,7 @@ public sealed class RecordingToolbarWindow : Window
         var visibleW = Math.Min(rect.right, work.right) - Math.Max(rect.left, work.left);
         var visibleH = Math.Min(rect.bottom, work.bottom) - Math.Max(rect.top, work.top);
         if (visibleW < MinVisiblePx || visibleH < MinVisiblePx)
-            return false; // CA-T2.5: nunca restar fora de tela
+            return false; // nunca restar fora de tela
 
         position = (x, y);
         return true;
@@ -552,7 +573,7 @@ public sealed class RecordingToolbarWindow : Window
 
     /// <summary>
     /// Botao de toggle com estado "off" sempre marcado por glifo com slash
-    /// (RF-T2.06: nunca so cor): glifo nativo de "off" quando existe
+    /// (nunca so cor): glifo nativo de "off" quando existe
     /// (MicOff/Mute) ou slash desenhado por cima (cursor/borda).
     /// </summary>
     private sealed class ToggleGlyph

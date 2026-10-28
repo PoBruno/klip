@@ -3,7 +3,7 @@ using System.Windows;
 namespace Klip.App.Media;
 
 /// <summary>
-/// RF-F5.02 / D-F5.1: abstracao do player de video do editor de midia. A v1
+/// abstracao do player de video do editor de midia. A v1
 /// usa MediaElement in-box (seek impreciso, sem frame stepping real); a
 /// interface existe para trocar por FFME ou um player MF Source Reader sem
 /// tocar na janela.
@@ -22,10 +22,10 @@ public interface IVideoPlayer
 
     bool HasAudio { get; }
 
-    /// <summary>Largura do video em pixels (valida apos MediaOpened; 0 se desconhecida). Usada no filler preto dos gaps (RF-F5.20).</summary>
+    /// <summary>Largura do video em pixels (valida apos MediaOpened; 0 se desconhecida). Usada no filler preto dos gaps.</summary>
     int NaturalVideoWidth { get; }
 
-    /// <summary>Altura do video em pixels (valida apos MediaOpened; 0 se desconhecida). RF-F5.20.</summary>
+    /// <summary>Altura do video em pixels (valida apos MediaOpened; 0 se desconhecida).</summary>
     int NaturalVideoHeight { get; }
 
     /// <summary>Posicao no ARQUIVO fonte (o mapeamento editado-fonte e do chamador). O set e um seek IMEDIATO (casos pontuais: fim de scrub, step, retomada de gap).</summary>

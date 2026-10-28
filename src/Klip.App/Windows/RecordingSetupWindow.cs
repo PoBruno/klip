@@ -9,7 +9,7 @@ using Klip.Interop;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Painel pre-gravacao do modo MP4 (RF-F3.02), ancorado a regiao no estilo da
+/// Painel pre-gravacao do modo MP4, ancorado a regiao no estilo da
 /// capture bar do Snipping Tool: toggle de som do sistema, lista de microfones
 /// ativos (multi-selecao), indicador da resolucao e botao Iniciar.
 /// FORA DO FLUXO PADRAO (UX submenu de gravacao): as opcoes de audio/bitrate
@@ -72,7 +72,7 @@ public sealed class RecordingSetupWindow : Window
         _systemAudio.Margin = new Thickness(0, 12, 0, 0);
         panel.Children.Add(_systemAudio);
 
-        // microfones ativos (RF-F3.02: multi-selecao; default desmarcados,
+        // microfones ativos (multi-selecao; default desmarcados,
         // paridade com o Snipping Tool - o usuario opta pelo mic)
         panel.Children.Add(new TextBlock
         {
@@ -151,7 +151,7 @@ public sealed class RecordingSetupWindow : Window
     {
         var helper = new WindowInteropHelper(this);
         helper.EnsureHandle();
-        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle); // RF-F2.10
+        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle);
         Show();
         UpdateLayout();
 

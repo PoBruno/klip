@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Media.Imaging;
+using System.Windows.Threading;
 using Klip.App.Windows;
 using Klip.Core.Capture;
 using Klip.Core.Clipboard;
@@ -10,8 +11,9 @@ namespace Klip.App.Services;
 
 /// <summary>
 /// Drives a capture session: freeze frame, then one overlay per monitor,
-/// then the result goes to clipboard + history + a tray toast. Also handles
-/// the scrolling capture flow.
+/// then the result goes to clipboard + history + a toast with a pin button.
+/// Also handles the scrolling flow, text and color picking, and repeating the
+/// last region without the overlay.
 /// </summary>
 public sealed class CaptureController(
     ScreenCaptureService screenCapture,
@@ -19,21 +21,25 @@ public sealed class CaptureController(
     ClipboardWriteGuard writeGuard,
     ClipboardIngestService ingest,
     SettingsService settings,
-    RecordingController recording)
+    RecordingController recording,
+    MemorySettler memory,
+    OcrService ocr,
+    PinnedImageService pinned)
 {
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private bool _sessionActive;
+    private CaptureSessionState? _session;
 
     /// <summary>Post-capture tray toast; the App subscribes to this.</summary>
     public event Action<string>? CaptureCompleted;
 
-    /// <summary>Asks the editor to open the scrolling capture result.</summary>
-    public event Action<Core.Storage.ClipboardItem>? EditRequested;
+    /// <summary>Asks for the editor with the captured bitmap, straight from memory.</summary>
+    public event Action<BitmapSource>? EditImageRequested;
 
     /// <summary>Last captured item so the toast can reopen it in the editor.</summary>
     public Core.Storage.ClipboardItem? LastCapturedItem { get; private set; }
 
-    public void StartCapture()
+    public void StartCapture(CaptureMode? forcedMode = null)
     {
         if (_sessionActive)
             return;
@@ -46,24 +52,29 @@ public sealed class CaptureController(
             NativeMethods.GetCursorPos(out var cursor);
             var cursorMonitor = NativeMethods.MonitorFromPoint(cursor, NativeMethods.MONITOR_DEFAULTTONEAREST);
 
-            var ourWindows = new HashSet<nint>();
-            foreach (Window window in Application.Current.Windows)
-                ourWindows.Add(new System.Windows.Interop.WindowInteropHelper(window).Handle);
+            // one state for every monitor of this session, a fresh one next time
+            var s = settings.Current;
+            _session = new CaptureSessionState(
+                CaptureModePolicy.ResolveInitial(s, recording.IsActive, forcedMode))
+            {
+                Forced = forcedMode is not null,
+            };
 
-            // top-level windows in Z order, used by window mode
-            var topWindows = NativeMethods.GetVisibleTopLevelWindows(ourWindows);
+            // top-level windows only matter for window mode: enumerate on first use,
+            // once per session, shared by all overlays
+            var topWindows = new Lazy<IReadOnlyList<NativeMethods.TopLevelWindow>>(EnumerateTopWindows);
 
             foreach (var frame in frames)
             {
                 var overlay = new CaptureOverlayWindow(
                     frame,
                     showToolbar: frame.Monitor.Handle == cursorMonitor,
-                    topWindows,
-                    settings.Current.EditorModifierKey,
-                    settings.Current.AlwaysOpenEditorAfterCapture,
+                    _session,
+                    () => topWindows.Value,
+                    s.EditorModifierKey,
+                    s.AlwaysOpenEditorAfterCapture,
                     settings,
-                    // UX submenu de gravacao: enumeracao de microfones no painel
-                    // inline (concreta do Interop so via factory, ponto unico)
+                    // concrete interop types only through the factory
                     RecordingInteropFactory.CreateAudioDeviceEnumerator,
                     OnRegionSelected,
                     CancelCapture);
@@ -81,13 +92,100 @@ public sealed class CaptureController(
     }
 
     /// <summary>
+    /// Captures the last rectangle again with no overlay. When the monitor layout or
+    /// DPI changed since it was saved the pixels mean something else, so the normal
+    /// overlay opens instead.
+    /// </summary>
+    public void RepeatLastRegion()
+    {
+        if (_sessionActive)
+            return;
+
+        if (!SavedCaptureRegion.TryParse(settings.Current.LastCaptureRegion, out var saved))
+        {
+            StartCapture();
+            return;
+        }
+
+        var monitors = NativeMethods.GetMonitors();
+        var snapshots = monitors.Select(m => new MonitorSnapshot(
+            new ScreenRect(m.Bounds.left, m.Bounds.top, m.Bounds.right - m.Bounds.left, m.Bounds.bottom - m.Bounds.top),
+            m.Dpi == 0 ? 96 : m.Dpi));
+        if (!saved.IsStillValid(snapshots))
+        {
+            StartCapture();
+            return;
+        }
+
+        _sessionActive = true;
+        try
+        {
+            var r = saved.Region;
+            var frame = screenCapture.CaptureRegion(r.X, r.Y, r.Width, r.Height);
+            PublishResult(frame, Localization.Loc.CaptureTitleScreen, openEditor: false);
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("RepeatRegion", ex);
+        }
+        finally
+        {
+            _sessionActive = false;
+        }
+    }
+
+    private static IReadOnlyList<NativeMethods.TopLevelWindow> EnumerateTopWindows()
+    {
+        var ours = new HashSet<nint>();
+        foreach (Window window in Application.Current.Windows)
+            ours.Add(new System.Windows.Interop.WindowInteropHelper(window).Handle);
+        return NativeMethods.GetVisibleTopLevelWindows(ours);
+    }
+
+    /// <summary>
+    /// Pays the cold start of the first capture (GDI, WIC, JIT of the overlay) while the
+    /// app is idle, so the first Win+Shift+S after boot doesn't take ~300 ms extra.
+    /// </summary>
+    public void WarmUp()
+    {
+        if (_sessionActive)
+            return;
+        try
+        {
+            var monitors = NativeMethods.GetMonitors();
+            if (monitors.Count == 0)
+                return;
+            var m = monitors[0];
+            var frame = screenCapture.CaptureRegion(m.Bounds.left, m.Bounds.top, 1, 1);
+            var crop = ScreenCaptureService.Crop(frame, new Int32Rect(0, 0, 1, 1));
+            _ = ScreenCaptureService.EncodePng(crop);
+
+            // built and thrown away, never shown (no hwnd): just JIT and the static brushes
+            var warm = new CaptureOverlayWindow(
+                new FrozenMonitor(m, frame), showToolbar: true,
+                new CaptureSessionState(CaptureMode.Rectangle), () => [],
+                CaptureEditorModifier.None, false, settings,
+                RecordingInteropFactory.CreateAudioDeviceEnumerator,
+                (_, _, _, _, _) => { }, () => { });
+            // a Window registers itself in Application.Windows even unshown: close to drop it
+            warm.CloseOverlay();
+            StartupLog.WriteVerbose("Captura: aquecida");
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("CaptureWarmUp", ex);
+        }
+    }
+
+    /// <summary>
     /// Gets the selection in physical pixels from the source monitor.
-    /// <paramref name="openEditorRequested"/> é o estado físico do modificador
-    /// reportado pelo overlay; a política fica aqui (D-F1.2).
+    /// <paramref name="openEditorRequested"/> is the physical modifier state reported by
+    /// the overlay; the decision about it lives here.
     /// </summary>
     private void OnRegionSelected(FrozenMonitor source, Int32Rect physicalRect, CaptureMode mode, Point[]? mask, bool openEditorRequested)
     {
         CloseOverlays();
+        EndSession();
 
         if (physicalRect.Width < 1 || physicalRect.Height < 1)
         {
@@ -101,8 +199,19 @@ public sealed class CaptureController(
             return;
         }
 
-        // RF-F3.01/RF-F4.01: gravacao sai do fluxo de captura estatica e vai
-        // para o RecordingController com a regiao em px fisicos do desktop virtual
+        if (mode == CaptureMode.Color)
+        {
+            PickColor(source, physicalRect);
+            return;
+        }
+
+        if (mode == CaptureMode.Text)
+        {
+            _ = ReadTextAsync(source, physicalRect);
+            return;
+        }
+
+        // recordings leave the still capture flow, region in physical px of the virtual desktop
         if (mode is CaptureMode.Gif or CaptureMode.Mp4)
         {
             var region = new Core.Recording.RecordingRegion(
@@ -123,10 +232,12 @@ public sealed class CaptureController(
             // freeform: keep only what's inside the lasso, rest goes transparent
             if (mode == CaptureMode.Freeform && mask is { Length: >= 3 })
                 cropped = ApplyPolygonMask(cropped, mask);
-            // RF-F1.01/RF-F1.05: modificador OU toggle "sempre editor"; toast suprimido ao abrir no editor
+            // modifier OR "always editor"; no toast when the editor opens anyway
             var openEditor = EditorOpenDecision.ShouldOpenEditor(
                 openEditorRequested, settings.Current.AlwaysOpenEditorAfterCapture);
             PublishResult(cropped, Localization.Loc.CaptureTitleScreen, openEditor, suppressToast: openEditor);
+            if (mode == CaptureMode.Rectangle)
+                RememberRegion(source, physicalRect);
         }
         catch (Exception ex)
         {
@@ -136,6 +247,89 @@ public sealed class CaptureController(
         {
             _sessionActive = false;
         }
+    }
+
+    /// <summary>Saves the rectangle (physical px of the virtual desktop) for the repeat hotkey.</summary>
+    private void RememberRegion(FrozenMonitor source, Int32Rect rect)
+    {
+        var b = source.Monitor.Bounds;
+        var monitor = new ScreenRect(b.left, b.top, b.right - b.left, b.bottom - b.top);
+        var region = new ScreenRect(b.left + rect.X, b.top + rect.Y, rect.Width, rect.Height);
+        var text = new SavedCaptureRegion(region, monitor, source.Monitor.Dpi == 0 ? 96 : source.Monitor.Dpi).Serialize();
+        if (text != settings.Current.LastCaptureRegion)
+            settings.Update(x => x.LastCaptureRegion = text);
+    }
+
+    /// <summary>Copies the color under the click, read from the frozen frame.</summary>
+    private void PickColor(FrozenMonitor source, Int32Rect rect)
+    {
+        _sessionActive = false;
+        var pixel = new byte[4];
+        if (!ScreenCaptureService.TryReadPixel(source.Frame, rect.X, rect.Y, pixel, out var r, out var g, out var b))
+            return;
+
+        var text = ColorFormatter.Format(r, g, b, settings.Current.ColorPickerFormat);
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                writeGuard.WriteText(text);
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("PickColor", ex);
+            }
+        });
+
+        CaptureToastWindow.Present(new CaptureToast(
+            string.Format(Localization.Loc.NotifyColorCopied, text), "")
+        {
+            Swatch = System.Windows.Media.Color.FromRgb(r, g, b),
+        });
+    }
+
+    /// <summary>
+    /// OCR on the selected area, straight to the clipboard. The engine loads on the
+    /// first call here, never before.
+    /// </summary>
+    private async Task ReadTextAsync(FrozenMonitor source, Int32Rect rect)
+    {
+        _sessionActive = false;
+        try
+        {
+            var crop = ScreenCaptureService.Crop(source.Frame, rect);
+            var png = await Task.Run(() => ScreenCaptureService.EncodePng(crop));
+            var text = (await ocr.ReadTextAsync(png).ConfigureAwait(true)).Trim();
+
+            if (text.Length == 0)
+            {
+                var message = ocr.IsAvailable ? Localization.Loc.NotifyNoText : Localization.Loc.OcrUnavailable;
+                CaptureToastWindow.Present(new CaptureToast(message, "") { Glyph = "\uE8D2" });
+                return;
+            }
+
+            await Task.Run(() => writeGuard.WriteText(text));
+            CaptureToastWindow.Present(new CaptureToast(
+                string.Format(Localization.Loc.NotifyTextCopied, text.Length), Preview(text))
+            {
+                Glyph = "\uE8D2",
+            });
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("CaptureText", ex);
+        }
+        finally
+        {
+            memory.Schedule();
+        }
+    }
+
+    // one line, short: the toast is not a text viewer
+    private static string Preview(string text)
+    {
+        var line = text.ReplaceLineEndings(" ");
+        return line.Length <= 80 ? line : line[..79] + "...";
     }
 
     /// <summary>Clips the image to the lasso polygon: outside the shape becomes transparent.</summary>
@@ -185,7 +379,7 @@ public sealed class CaptureController(
 
         void OnProgress(PanoramicCaptureService.Progress p) =>
             panel.UpdateProgress(p.HeightPx, p.LastDiscarded);
-        void OnPreview(System.Windows.Media.Imaging.BitmapSource preview) =>
+        void OnPreview(BitmapSource preview) =>
             panel.UpdatePreview(preview);
         void OnLimit()
         {
@@ -215,7 +409,7 @@ public sealed class CaptureController(
                 if (result is not null)
                 {
                     var (image, discarded) = result.Value;
-                    // rolagem sempre abre no editor (RF-F1.06); toast suprimido como no RF-F1.01
+                    // scrolling always opens in the editor, so no toast here either
                     PublishResult(image, Localization.Loc.CaptureTitleScrolling, openEditor: true, suppressToast: true);
                     if (limitHit)
                         CaptureCompleted?.Invoke(Localization.Loc.NotifyMemoryLimit);
@@ -241,43 +435,75 @@ public sealed class CaptureController(
             frame.Close();
             panel.Close();
             _sessionActive = false;
+            memory.Schedule();
         }
     }
 
-    /// <summary>clipboard (PNG + DIB, anti-loop) + history + auto-save + toast.</summary>
-    private Core.Storage.ClipboardItem? PublishResult(BitmapSource image, string title, bool openEditor, bool suppressToast = false)
+    /// <summary>
+    /// clipboard (PNG + DIB, anti-loop) + history + auto-save + toast.
+    /// The editor opens right away with the bitmap in memory; PNG encode, ingest
+    /// (hash, file, thumbnail, SQLite) and auto-save run on the pool, so the UI
+    /// thread is free the moment the mouse is released.
+    /// </summary>
+    private void PublishResult(BitmapSource image, string title, bool openEditor, bool suppressToast = false)
     {
-        var png = ScreenCaptureService.EncodePng(image);
-        writeGuard.WriteImageFromPng(png, image);
-
-        var item = ingest.Ingest(new ClipboardSnapshot
+        if (!image.IsFrozen)
         {
-            PngBytes = png,
-            ImageWidth = image.PixelWidth,
-            ImageHeight = image.PixelHeight,
-            SourceApp = "Klip",
-            SourceTitle = title,
-            Origin = Core.Storage.ClipboardItemOrigin.Capture,
-        });
-        LastCapturedItem = item;
-
-        // optional auto-save
-        if (settings.Current.AutoSaveScreenshots)
-            AutoSave(png);
-
-        // RF-F1.01: quando abre direto no editor, o toast é redundante (Q-F1.2)
-        if (!suppressToast)
-        {
-            CaptureCompleted?.Invoke(
-                string.Format(Localization.Loc.NotifyCaptureCopied, image.PixelWidth, image.PixelHeight) +
-                ". " + Localization.Loc.NotifyClickToEdit);
+            if (image.CanFreeze)
+                image.Freeze();
+            else
+                image = BitmapFrame.Create(image); // frozen copy, the pool can't touch a live one
         }
-        StartupLog.Write($"Captura: {image.PixelWidth}x{image.PixelHeight}, item {item?.Id}");
 
-        if (openEditor && item is not null)
-            EditRequested?.Invoke(item); // scroll result opens straight in the editor
+        if (openEditor)
+            EditImageRequested?.Invoke(image);
 
-        return item;
+        var dispatcher = Dispatcher.CurrentDispatcher;
+        var autoSave = settings.Current.AutoSaveScreenshots;
+        var width = image.PixelWidth;
+        var height = image.PixelHeight;
+
+        _ = Task.Run(() =>
+        {
+            var png = ScreenCaptureService.EncodePng(image);
+            writeGuard.WriteImageFromPng(png, image);
+
+            var item = ingest.Ingest(new ClipboardSnapshot
+            {
+                PngBytes = png,
+                ImageWidth = width,
+                ImageHeight = height,
+                SourceApp = "Klip",
+                SourceTitle = title,
+                Origin = Core.Storage.ClipboardItemOrigin.Capture,
+            });
+
+            if (autoSave)
+                AutoSave(png);
+            return item;
+        }).ContinueWith(t =>
+        {
+            if (t.IsFaulted)
+            {
+                StartupLog.WriteException("PublishResult", t.Exception!.GetBaseException());
+                return;
+            }
+            var item = t.Result;
+            LastCapturedItem = item;
+            if (!suppressToast)
+            {
+                CaptureToastWindow.Present(new CaptureToast(
+                    string.Format(Localization.Loc.NotifyCaptureCopied, width, height),
+                    Localization.Loc.NotifyClickToEdit)
+                {
+                    Thumbnail = image,
+                    OnClick = () => EditImageRequested?.Invoke(image),
+                    OnPin = () => pinned.Pin(image),
+                });
+            }
+            StartupLog.Write($"Captura: {width}x{height}, item {item?.Id}");
+        }, CancellationToken.None, TaskContinuationOptions.None,
+            dispatcher.CheckAccess() ? TaskScheduler.FromCurrentSynchronizationContext() : TaskScheduler.Default);
     }
 
     private void AutoSave(byte[] png)
@@ -301,7 +527,26 @@ public sealed class CaptureController(
     public void CancelCapture()
     {
         CloseOverlays();
+        EndSession();
         _sessionActive = false;
+    }
+
+    /// <summary>
+    /// Saves the chosen mode once per session (captured or cancelled), not on every
+    /// toolbar click: each Update wakes the settings listeners.
+    /// </summary>
+    private void EndSession()
+    {
+        var session = _session;
+        _session = null;
+        if (session is not null)
+        {
+            var remember = CaptureModePolicy.ModeToRemember(settings.Current, session.Mode, session.Forced);
+            if (remember is { } mode)
+                settings.Update(x => x.LastCaptureMode = mode);
+        }
+        // the frozen frames (8 MB per 1080p monitor, 33 MB per 4K) only go back with a GC
+        memory.Schedule();
     }
 
     private void CloseOverlays()

@@ -9,23 +9,23 @@ using Klip.Core.Storage;
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// RF-S.05 - secao "Sobre" (absorve <c>SectionAbout</c>): identidade e versao do app,
+/// secao "Sobre" (absorve <c>SectionAbout</c>): identidade e versao do app,
 /// contagem de itens do historico, tamanho do banco e a pasta de dados.
 /// Migrada de <c>MainWindow.xaml:588-594</c> + <c>MainWindow.xaml.cs:483-484</c>.
 /// <para>
-/// RF-S.06: a contagem de itens passa a morar aqui. Na tela antiga ela dividia o
+/// a contagem de itens passa a morar aqui. Na tela antiga ela dividia o
 /// <c>StatusText</c> com outros 3 papeis e, pior, era escrita logo DEPOIS das
 /// mensagens de resultado dos takeovers - que por isso nunca chegavam a ser lidas.
 /// </para>
 /// <para>
-/// RF-S.08: <c>Count()</c> e um <c>SELECT COUNT(*)</c> e <c>FileInfo.Length</c> toca o
+/// <c>Count</c> e um <c>SELECT COUNT(*)</c> e <c>FileInfo.Length</c> toca o
 /// disco. Os dois saem da UI thread (<c>Task.Run</c> + <c>Dispatcher</c>), com
 /// placeholder enquanto carregam.
 /// </para>
 /// </summary>
 public partial class AboutPage : ISettingsPage
 {
-    /// <summary>Mostrado ate a leitura de SQLite/disco voltar (RF-S.08).</summary>
+    /// <summary>Mostrado ate a leitura de SQLite/disco voltar.</summary>
     private const string LoadingPlaceholder = "...";
 
     private readonly ClipboardItemRepository _repository;
@@ -41,8 +41,8 @@ public partial class AboutPage : ISettingsPage
         _repository = repository;
         InitializeComponent();
 
-        // RF-S.05: assinatura NO CONSTRUTOR, nunca em Loaded. A pagina e singleton
-        // (ADR-S.03) e o Loaded dispara a cada re-entrada na arvore visual, o que
+        // assinatura NO CONSTRUTOR, nunca em Loaded. A pagina e singleton
+        //  e o Loaded dispara a cada re-entrada na arvore visual, o que
         // duplicaria o handler a cada ida e volta na navegacao.
         OpenDataFolderButton.Click += OnOpenDataFolderClick;
 
@@ -53,7 +53,7 @@ public partial class AboutPage : ISettingsPage
     public void RefreshState()
     {
         // Sem guard de reentrancia: esta pagina nao tem nenhum controle que grave em
-        // settings, entao nao ha handler para o refresh acordar (ADR-S.07 nao se
+        // settings, entao nao ha handler para o refresh acordar (nao se
         // aplica). Um flag aqui seria codigo morto.
 
         // Loc.AppVersion muda com o idioma, entao o texto e remontado a cada refresh.
@@ -66,7 +66,7 @@ public partial class AboutPage : ISettingsPage
     }
 
     /// <summary>
-    /// RF-S.08: SQLite e disco fora da UI thread. A tela antiga fazia as duas leituras
+    /// SQLite e disco fora da UI thread. A tela antiga fazia as duas leituras
     /// de forma sincrona dentro do <c>RefreshStatus()</c> chamado no <c>Loaded</c> -
     /// ou seja, antes de a janela aparecer.
     /// </summary>

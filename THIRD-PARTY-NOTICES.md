@@ -12,15 +12,15 @@ suas proprias licencas nos pacotes.
   gravacao MP4 (`src/Klip.Interop/Recording/`):
   - Silence padding no muxer (`OutputManager::RenderFrame`): frames de video
     sem audio correspondente recebem silencio PCM do tamanho exato do
-    intervalo (RF-M2.03, `Mp4Recorder.WritePendingSilencePadding`).
+    intervalo (`Mp4Recorder.WritePendingSilencePadding`).
   - Video escravizado ao audio entregue (`PrepareAndRenderFrame`): timestamps
     de video reconciliados com o PCM efetivamente escrito na trilha
-    (RF-M2.04, `Mp4Recorder.ReconcileVideoTimestamp`).
+    (`Mp4Recorder.ReconcileVideoTimestamp`).
   - Tuning do encoder via `MF_SINK_WRITER_ENCODER_CONFIG`/IPropertyStore e
-    faststart com `MF_MPEG4SINK_MOOV_BEFORE_MDAT` (RF-M2.06/08,
-    `Mp4SinkWriter`).
+    faststart com `MF_MPEG4SINK_MOOV_BEFORE_MDAT`
+    (`Mp4SinkWriter`).
   - Re-aplicacao defensiva de `GraphicsCaptureSession.IsCursorCaptureEnabled`
-    a cada frame (RF-M2.10, `FrameCaptureEngine`).
+    a cada frame (`FrameCaptureEngine`).
 
 ```text
 MIT License

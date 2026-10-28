@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Klip.Interop;
 
 /// <summary>
-/// ADR-P.01: P/Invoke dos hooks de baixo nivel (WH_KEYBOARD_LL / WH_MOUSE_LL) e do
+/// P/Invoke dos hooks de baixo nivel (WH_KEYBOARD_LL / WH_MOUSE_LL) e do
 /// message loop da thread dedicada que os hospeda.
 /// <para>
 /// Tres regras do Win32 comandam este arquivo inteiro:
@@ -15,7 +15,7 @@ namespace Klip.Interop;
 /// por isso a thread chama <c>PeekMessageW(PM_NOREMOVE)</c> antes de se declarar pronta.
 /// </para>
 /// <para>
-/// ADR-P.04: <c>SetWindowsHookExW</c> recebe <c>nint</c> (function pointer vindo de
+/// <c>SetWindowsHookExW</c> recebe <c>nint</c> (function pointer vindo de
 /// <c>[UnmanagedCallersOnly]</c>), nunca um delegate gerenciado - o GC pode mover ou
 /// coletar o delegate e o resultado e o <c>ExecutionEngineException</c> classico no
 /// meio da digitacao do usuario.
@@ -35,6 +35,8 @@ public static partial class NativeMethods
 
     public const int WM_KEYDOWN = 0x0100;
     public const int WM_SYSKEYDOWN = 0x0104;
+    public const int WM_KEYUP = 0x0101;
+    public const int WM_SYSKEYUP = 0x0105;
     public const int WM_MOUSEMOVE = 0x0200;
     public const int WM_LBUTTONDOWN = 0x0201;
     public const int WM_RBUTTONDOWN = 0x0204;
@@ -98,7 +100,7 @@ public static partial class NativeMethods
     // ----- Hooks -----
 
     /// <summary>
-    /// ADR-P.04: <paramref name="lpfn"/> e um function pointer cru
+    /// <paramref name="lpfn"/> e um function pointer cru
     /// (<c>(nint)(delegate* unmanaged&lt;int, nint, nint, nint&gt;)&amp;Metodo</c>).
     /// Passar delegate gerenciado aqui e o bug que trava a digitacao global.
     /// </summary>

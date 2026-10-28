@@ -4,10 +4,10 @@ using Klip.Core.Common;
 namespace Klip.App.Services;
 
 /// <summary>
-/// Localiza o ffmpeg.exe para as exportacoes do editor de midia (RF-F5.12/14).
+/// Localiza o ffmpeg.exe para as exportacoes do editor de midia.
 /// Ordem: caminho configurado (AppSettings.FfmpegPath) -> pasta de dados do
 /// Klip (%LocalAppData%\Klip, raiz ou subpasta ffmpeg) -> PATH do sistema.
-/// O download sob demanda do binario (RF-F5.14) fica para uma entrega futura;
+/// O download sob demanda do binario fica para uma entrega futura;
 /// sem ffmpeg o editor abre um dialogo para escolher o executavel manualmente.
 /// </summary>
 public static class FfmpegLocator

@@ -1,10 +1,12 @@
 using System.Windows.Interop;
 using System.Windows.Threading;
+using Klip.Interop;
+using IComDataObject = System.Runtime.InteropServices.ComTypes.IDataObject;
 
 namespace Klip.App.Services;
 
 /// <summary>
-/// ADR-P.05: thread STA dedicada dona de todo acesso ao clipboard. A UI thread
+/// thread STA dedicada dona de todo acesso ao clipboard. A UI thread
 /// nunca abre o clipboard - abrir o clipboard e um lock global do sistema e o
 /// caminho do WPF pode bloquear ~1 s por retry interno.
 ///
@@ -16,7 +18,7 @@ namespace Klip.App.Services;
 ///
 /// Serializar tudo numa thread so tem um efeito colateral util: gravacao e
 /// leitura entram na MESMA fila do dispatcher, entao o anti-loop por sequence
-/// number (RF-P2.01) deixa de ter corrida entre as duas.
+/// number deixa de ter corrida entre as duas.
 /// </summary>
 public sealed class ClipboardThread : IDisposable
 {
@@ -37,6 +39,9 @@ public sealed class ClipboardThread : IDisposable
     private readonly Thread _thread;
     private HwndSource? _messageWindow;
     private volatile bool _disposed;
+
+    /// <summary>Last object we put on the OLE clipboard without flushing. Clipboard thread only.</summary>
+    private WeakReference<IComDataObject>? _ownedOleObject;
 
     /// <summary>Dispatcher da thread STA. Todo acesso ao clipboard roda nele.</summary>
     public Dispatcher Dispatcher { get; }
@@ -60,6 +65,11 @@ public sealed class ClipboardThread : IDisposable
             {
                 // Dispatcher.CurrentDispatcher CRIA o dispatcher desta thread
                 dispatcher = Dispatcher.CurrentDispatcher;
+
+                // OleSetClipboard needs OLE (not just COM) on this thread. WPF would do it
+                // lazily on the first clipboard call; doing it up front keeps our own
+                // data objects from depending on that order
+                NativeMethods.OleInitialize(0);
 
                 // janela message-only propria: ancora o pump desta thread e da um
                 // HWND estavel de diagnostico. HwndSource exige um dispatcher na
@@ -157,6 +167,28 @@ public sealed class ClipboardThread : IDisposable
 
     public Task<T> InvokeAsync<T>(Func<T> func) => Dispatcher.InvokeAsync(func).Task;
 
+    /// <summary>
+    /// Remembers the data object we published with OleSetClipboard, so it gets flushed on
+    /// shutdown (the image stays on the clipboard after Klip exits). Clipboard thread only.
+    /// </summary>
+    internal void TrackOwnedOleObject(IComDataObject dataObject) =>
+        _ownedOleObject = new WeakReference<IComDataObject>(dataObject);
+
+    /// <summary>True while <paramref name="dataObject"/> is still the clipboard. Clipboard thread only.</summary>
+    internal static bool IsCurrentClipboard(IComDataObject dataObject) =>
+        NativeMethods.OleIsCurrentClipboard(dataObject) == NativeMethods.S_OK;
+
+    private void FlushOwnedClipboard()
+    {
+        if (_ownedOleObject is not { } weak || !weak.TryGetTarget(out var obj))
+            return;
+        _ownedOleObject = null;
+        // flush renders the plain formats (PNG/DIB) into the clipboard and lets go of
+        // our object; the virtual file dies with the process, which is fine
+        if (IsCurrentClipboard(obj))
+            NativeMethods.OleFlushClipboard();
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -166,6 +198,8 @@ public sealed class ClipboardThread : IDisposable
         try
         {
             // a janela pertence a thread STA: destruir de fora seria cross-thread
+            Dispatcher.Invoke(FlushOwnedClipboard, DispatcherPriority.Send, CancellationToken.None, InvokeTimeout);
+
             var window = _messageWindow;
             _messageWindow = null;
             if (window is not null)

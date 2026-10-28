@@ -11,7 +11,7 @@ namespace Klip.App.Windows;
 /// <summary>
 /// UX submenu de gravacao: painel compacto ancorado ABAIXO do botao GIF/MP4
 /// na toolbar do overlay de captura. As opcoes (FPS/escala do GIF; som do
-/// sistema, microfones e bitrate do MP4) sao persistidas IMEDIATAMENTE em
+/// sistema, microfones, FPS e qualidade do MP4) sao persistidas IMEDIATAMENTE em
 /// AppSettings via SettingsService e aplicadas na proxima gravacao - a
 /// selecao de area inicia a gravacao direto, sem painel pre-gravacao.
 /// Todos os controles sao Focusable=false: o overlay mantem o foco do
@@ -19,7 +19,7 @@ namespace Klip.App.Windows;
 /// </summary>
 public sealed class RecordingOptionsPanel : Border
 {
-    // RF-P4.09: brushes estaticos congelados - nenhum ponto do painel muta a
+    // brushes estaticos congelados - nenhum ponto do painel muta a
     // cor (so troca a referencia do Brush), entao Freeze() elimina o custo de
     // change notification/thread affinity de cada SolidColorBrush.
     private static readonly Brush LabelBrush = FrozenBrush(Color.FromArgb(0xC0, 0xFF, 0xFF, 0xFF));
@@ -60,7 +60,7 @@ public sealed class RecordingOptionsPanel : Border
             ShadowDepth = 2,
             Opacity = 0.5,
         };
-        // RF-P4.01: o painel e conteudo estatico (rotulos + segmentos) sob um
+        // o painel e conteudo estatico (rotulos + segmentos) sob um
         // DropShadowEffect; o bitmap cache rasteriza a sombra uma vez em vez de
         // reprocessar o filtro a cada invalidacao do overlay.
         CacheMode = new BitmapCache();
@@ -77,7 +77,7 @@ public sealed class RecordingOptionsPanel : Border
         panel.Children.Add(SectionLabel(Localization.Loc.RecordingFpsLabel, topMargin: 0));
         panel.Children.Add(Segmented(
             [10, 15, 20],
-            // Q-F4.2: o GIF trabalha em centesimos; o segmento mostra o FPS
+            // o GIF trabalha em centesimos; o segmento mostra o FPS
             // efetivo (10 / 14,3 / 20), igual a pagina de settings
             fps => GifRecordingMath.EffectiveFps(fps).ToString("0.#"),
             fps => string.Format(Localization.Loc.GifFpsEffective, fps,
@@ -122,13 +122,22 @@ public sealed class RecordingOptionsPanel : Border
         panel.Children.Add(micHost);
         _ = LoadMicrophonesAsync(audioEnumeratorFactory, micHost);
 
-        panel.Children.Add(SectionLabel(Localization.Loc.RecordingQualityLabel));
+        panel.Children.Add(SectionLabel(Localization.Loc.RecordingFpsLabel));
         panel.Children.Add(Segmented(
-            [0, 5000, 8000, 16000],
-            kbps => kbps == 0 ? Localization.Loc.Mp4BitrateAuto : $"{kbps / 1000}",
-            kbps => kbps == 0 ? Localization.Loc.Mp4BitrateAuto : $"{kbps / 1000} Mbps",
-            selected: _settings.Current.Mp4BitrateKbps,
-            onSelect: kbps => _settings.Update(s => s.Mp4BitrateKbps = kbps)));
+            [30, 60],
+            fps => fps.ToString(),
+            fps => string.Format(Localization.Loc.Mp4FpsValue, fps),
+            selected: VideoEncodingMath.NormalizeFps(_settings.Current.Mp4Fps),
+            onSelect: fps => _settings.Update(s => s.Mp4Fps = fps)));
+
+        // same presets as the settings page; the bitrate itself is never shown
+        panel.Children.Add(SectionLabel(Localization.Loc.RecordingQualityPresetLabel));
+        panel.Children.Add(Segmented(
+            [(int)VideoQualityPreset.Small, (int)VideoQualityPreset.Balanced, (int)VideoQualityPreset.High],
+            value => Views.Pages.RecordingPage.QualityName((VideoQualityPreset)value),
+            value => Views.Pages.RecordingPage.QualityName((VideoQualityPreset)value),
+            selected: (int)VideoEncodingMath.ParseQuality(_settings.Current.Mp4Quality),
+            onSelect: value => _settings.Update(s => s.Mp4Quality = VideoEncodingMath.ToSetting((VideoQualityPreset)value))));
 
         return panel;
     }

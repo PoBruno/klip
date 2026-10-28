@@ -1,7 +1,7 @@
 namespace Klip.Core.Recording;
 
 /// <summary>
-/// Downscale de frames BGRA32 para a gravacao GIF (RF-F4.03: escala 100/75/50
+/// Downscale de frames BGRA32 para a gravacao GIF (escala 100/75/50
 /// aplicada ANTES da retencao). Filtro box (media dos pixels de origem de cada
 /// pixel destino): barato, sem dependencias e bom o suficiente para screencast;
 /// resamplers de alta qualidade ficam para o editor (F5).

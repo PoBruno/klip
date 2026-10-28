@@ -6,18 +6,9 @@ using Klip.Core.Storage;
 namespace Klip.App.Services;
 
 /// <summary>
-/// Gera miniaturas JPEG com WIC/WPF. Decodifica o PNG ja numa largura menor
-/// (barato) e reencoda como JPEG qualidade 80.
-///
-/// RF-P2.04: roda na thread do chamador (a ingestao, em Task.Run). Antes isso
-/// era marshalizado de volta para a UI thread com Dispatcher.Invoke e um
-/// timeout de 5 s - ou seja, o decode+encode de cada imagem copiada caia na UI
-/// thread e a thread de ingestao ficava parada esperando ate 5 s.
-///
-/// BitmapImage, TransformedBitmap e JpegBitmapEncoder sao objetos WIC: nao
-/// exigem STA nem dispatcher, basta congelar tudo que atravessa thread - o que
-/// este codigo ja fazia. Congelar tambem e o que permite o BitmapSource ser
-/// entregue ao encoder de outra thread sem afinidade de dispatcher.
+/// Builds the JPEG thumbnails with WIC: decodes the PNG straight at a smaller width
+/// (cheap) and re-encodes at quality 80. Runs on the caller thread (ingest, already off
+/// the UI); WIC objects need no STA, only freezing what crosses threads.
 /// </summary>
 public sealed class WpfThumbnailGenerator : IThumbnailGenerator
 {
@@ -28,6 +19,7 @@ public sealed class WpfThumbnailGenerator : IThumbnailGenerator
             var decoder = new BitmapImage();
             decoder.BeginInit();
             decoder.CacheOption = BitmapCacheOption.OnLoad;
+            decoder.CreateOptions = BitmapCreateOptions.IgnoreColorProfile;
             decoder.DecodePixelWidth = maxSize; // ja decodifica reduzido (lado longo <= maxSize na largura)
             decoder.StreamSource = new MemoryStream(pngBytes);
             decoder.EndInit();

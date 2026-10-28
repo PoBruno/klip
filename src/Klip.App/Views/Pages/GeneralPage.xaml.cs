@@ -7,11 +7,11 @@ using Klip.Core.Settings;
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// RF-S.05 - secao "Geral" (absorve <c>SectionGeneral</c>): inicio com o Windows,
+/// secao "Geral" (absorve <c>SectionGeneral</c>): inicio com o Windows,
 /// idioma, tema e aba de emoji. Migrada de <c>MainWindow.xaml:233-279</c> +
 /// <c>MainWindow.xaml.cs:69-82, 166-192, 208, 420-478</c>.
 /// <para>
-/// ADR-S.07: a pagina e dona da propria logica e do proprio guard de reentrancia,
+/// a pagina e dona da propria logica e do proprio guard de reentrancia,
 /// em <c>try/finally</c>.
 /// </para>
 /// </summary>
@@ -30,7 +30,7 @@ public partial class GeneralPage : ISettingsPage
     private readonly AutostartService _autostart;
 
     /// <summary>
-    /// ADR-S.07: guard de reentrancia. <see cref="RefreshState" /> escreve nos
+    /// guard de reentrancia. <see cref="RefreshState" /> escreve nos
     /// controles e isso pode disparar os proprios handlers; sem o guard, abrir a
     /// pagina gravaria em settings. Sempre em <c>try/finally</c> - o <c>_loading</c>
     /// da MainWindow (<c>MainWindow.xaml.cs:414-486</c>) nao estava, e uma excecao no
@@ -45,19 +45,20 @@ public partial class GeneralPage : ISettingsPage
         _autostart = autostart;
         InitializeComponent();
 
-        // RF-S.05: itens montados ANTES de assinar SelectionChanged. Na ordem inversa
+        // itens montados ANTES de assinar SelectionChanged. Na ordem inversa
         // o primeiro Add ja seleciona implicitamente o item 0 e o handler gravaria
         // esse valor em settings durante a construcao da pagina.
         BuildLanguageItems();
         BuildThemeItems();
 
-        // RF-S.05: assinatura NO CONSTRUTOR, nunca em Loaded. A pagina e singleton
-        // (ADR-S.03) e o Loaded dispara a cada re-entrada na arvore visual, o que
+        // assinatura NO CONSTRUTOR, nunca em Loaded. A pagina e singleton
+        //  e o Loaded dispara a cada re-entrada na arvore visual, o que
         // duplicaria os handlers a cada ida e volta na navegacao.
         AutostartToggle.Click += OnAutostartClick;
         LanguageCombo.SelectionChanged += OnLanguageSelectionChanged;
         ThemeCombo.SelectionChanged += OnThemeSelectionChanged;
         ShowEmojiTabToggle.Click += OnShowEmojiTabClick;
+        ShowSnippetsTabToggle.Click += OnShowSnippetsTabClick;
 
         RefreshState();
     }
@@ -71,15 +72,16 @@ public partial class GeneralPage : ISettingsPage
             var s = _settings.Current;
 
             // MainWindow.xaml.cs:420
-            // Q-S.2 continua ABERTA: a UI le AppSettings.StartWithWindows, nao
+            //  continua ABERTA: a UI le AppSettings.StartWithWindows, nao
             // AutostartService.IsEnabled(). Se algo externo apagar a chave Run, a UI
             // mente. Nao resolvida aqui de proposito - mudar a fonte e decisao de
-            // spec, e IsEnabled() e leitura de registro, que RF-S.08 quer fora da
+            // spec, e IsEnabled e leitura de registro, que quer fora da
             // abertura da pagina.
             AutostartToggle.IsChecked = s.StartWithWindows;
 
             // MainWindow.xaml.cs:425
             ShowEmojiTabToggle.IsChecked = s.ShowEmojiTab;
+            ShowSnippetsTabToggle.IsChecked = s.ShowSnippetsTab;
 
             // MainWindow.xaml.cs:463-478: o original re-rotulava e selecionava o tema
             // por indice literal (Items[0], Items[1], Items[2]). Aqui os dois combos
@@ -138,7 +140,7 @@ public partial class GeneralPage : ISettingsPage
         RefreshState();
     }
 
-    /// <summary>MainWindow.xaml.cs:185-192. Aplicado na hora, sem reiniciar (CA-S.7).</summary>
+    /// <summary>MainWindow.xaml.cs:185-192. Aplicado na hora, sem reiniciar.</summary>
     private void OnThemeSelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         if (_loading || ThemeCombo.SelectedItem is not ComboBoxItem { Tag: string theme })
@@ -155,6 +157,15 @@ public partial class GeneralPage : ISettingsPage
             return;
 
         _settings.Update(s => s.ShowEmojiTab = ShowEmojiTabToggle.IsChecked == true);
+    }
+
+    /// <summary>Same as the emoji tab: the flyout reacts to the change right away.</summary>
+    private void OnShowSnippetsTabClick(object sender, RoutedEventArgs e)
+    {
+        if (_loading)
+            return;
+
+        _settings.Update(s => s.ShowSnippetsTab = ShowSnippetsTabToggle.IsChecked == true);
     }
 
     // ----- Itens dos combos -----

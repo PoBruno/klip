@@ -1,7 +1,7 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Compressao LZW do GIF89a (RF-F4.08). Escreve o bloco de dados de imagem
+/// Compressao LZW do GIF89a. Escreve o bloco de dados de imagem
 /// completo: byte "LZW minimum code size", sub-blocos de ate 255 bytes e o
 /// terminador 0x00. Codigos LSB-first, crescimento ate 12 bits, clear code
 /// ao esgotar a tabela (4096 entradas). A cadencia de crescimento da largura

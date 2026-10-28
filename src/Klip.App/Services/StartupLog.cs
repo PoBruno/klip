@@ -11,7 +11,7 @@ namespace Klip.App.Services;
 /// Log de startup/erro de um app de tray sem console. Nao substitui logging
 /// estruturado, e so o suficiente para diagnostico em campo.
 /// <para>
-/// RF-P3.05: a gravacao e ASSINCRONA. A versao anterior fazia
+/// A gravacao e ASSINCRONA. A versao anterior fazia
 /// <c>File.AppendAllText</c> dentro de um lock a cada linha - abrir, escrever e
 /// fechar o arquivo, na thread do chamador, com 70+ call-sites (um deles por item
 /// de clipboard ingerido). Aqui o produtor so enfileira; uma unica thread
@@ -30,9 +30,6 @@ public static class StartupLog
 
     /// <summary>Backlog maximo NA FILA. Acima disso a linha e DESCARTADA e contada em <see cref="DroppedLines"/>.</summary>
     private const int MaxQueuedLines = 4096;
-
-    /// <summary>Flush por tempo: o writer acorda mesmo sem trabalho para esvaziar o buffer.</summary>
-    private const int FlushIntervalMilliseconds = 1000;
 
     /// <summary>
     /// Teto de linhas por lote. O tamanho do arquivo so e conferido no flush, entao
@@ -74,7 +71,7 @@ public static class StartupLog
     public static long DroppedLines => Interlocked.Read(ref _dropped);
 
     /// <summary>
-    /// RF-P3.05: chave do log de alta frequencia (um registro por item de clipboard
+    /// Chave do log de alta frequencia (um registro por item de clipboard
     /// ingerido, por exemplo). Default false - ligar so para diagnostico em campo.
     /// </summary>
     public static bool VerboseEnabled
@@ -105,8 +102,8 @@ public static class StartupLog
             }
 
             // Backlog grande = writer preso (disco cheio, antivirus, handle perdido).
-            // Log nunca pode virar consumo ilimitado de memoria: descarta e conta
-            // (RF-P3.05). A medida e a PROFUNDIDADE DA FILA, nao "linhas ainda nao
+            // Log nunca pode virar consumo ilimitado de memoria: descarta e conta.
+            // A medida e a PROFUNDIDADE DA FILA, nao "linhas ainda nao
             // persistidas": linhas ja entregues ao StreamWriter aguardando o flush do
             // lote nao ocupam a fila e nao podem provocar descarte numa rajada normal.
             if (Queue.Count > MaxQueuedLines)
@@ -245,7 +242,7 @@ public static class StartupLog
     }
 
     /// <summary>
-    /// ADR-P.08: gravacao de log e manutencao pura - prioridade de CPU, IO e memoria
+    /// Gravacao de log e manutencao pura - prioridade de CPU, IO e memoria
     /// baixas + E-cores, para nunca competir com a UI nem com o caminho de input.
     /// <para>
     /// O aviso oficial sobre inversao de prioridade em background mode se aplica a
@@ -268,9 +265,10 @@ public static class StartupLog
                 string? line;
                 try
                 {
-                    // Acorda a cada 1 s mesmo sem trabalho: e o flush por tempo do
-                    // lote que ficou no buffer (AutoFlush = false).
-                    taken = Queue.TryTake(out line, FlushIntervalMilliseconds);
+                    // every batch is flushed right below, so with an empty queue there
+                    // is nothing to wait for: block for real, no 1 s heartbeat at idle.
+                    // CompleteAdding (Shutdown) wakes this up
+                    taken = Queue.TryTake(out line, Timeout.Infinite);
                 }
                 catch (Exception)
                 {

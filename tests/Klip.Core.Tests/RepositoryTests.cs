@@ -144,7 +144,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Upsert_AllColumnsFilled_RoundTripsFieldByField()
     {
-        // RF-P2.08: a refatoracao de parametros do Upsert e dos ordinais do ReadAll poderia
+        // a refatoracao de parametros do Upsert e dos ordinais do ReadAll poderia
         // trocar colunas de lugar sem quebrar nenhum teste antigo; este compara campo a campo
         // com valores distintos em cada coluna.
         var original = new ClipboardItem
@@ -219,7 +219,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Origin_RoundTrips_ForEveryEnumValue()
     {
-        // RF-P2.08: o Enum.Parse por linha virou switch sobre string; todos os valores
+        // o Enum.Parse por linha virou switch sobre string; todos os valores
         // do enum precisam continuar indo e voltando.
         foreach (var origin in Enum.GetValues<ClipboardItemOrigin>())
         {
@@ -245,7 +245,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Search_ShortTerms_AreExact_LongTermsArePrefix()
     {
-        // RF-P2.10: o curinga de prefixo so vale a partir de 3 caracteres.
+        // o curinga de prefixo so vale a partir de 3 caracteres.
         // "c" e "co" viram busca exata e nao casam com o token "configuracao";
         // "con" ganha o "*" e casa.
         _fx.Repository.Upsert(DatabaseFixture.NewTextItem("configuracao do sistema", "h1"));
@@ -269,7 +269,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Query_TextTypeFilter_KeepsTextAndHtml_AndDropsTheRest()
     {
-        // RF-P2.08: a aba Texto passou a usar "+i.type IN ('text','html')" para nao cair em
+        // a aba Texto passou a usar "+i.type IN ('text','html')" para nao cair em
         // temp B-tree. O "+" e um no-op de valor, entao a semantica do filtro tem que ser
         // exatamente a mesma de antes - inclusive combinado com busca FTS.
         var text = DatabaseFixture.NewTextItem("relatorio simples", "h-text");
@@ -298,7 +298,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void OpenConnection_AppliesBusyTimeout()
     {
-        // RF-P2.07: sem busy_timeout qualquer disputa de escrita estoura na hora em vez de esperar
+        // sem busy_timeout qualquer disputa de escrita estoura na hora em vez de esperar
         using var conn = _fx.Database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "PRAGMA busy_timeout;";
@@ -326,7 +326,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Schema_HasNoForeignKeys_SoTheForeignKeysPragmaWasPointless()
     {
-        // RF-P2.07: justificativa de ter tirado "PRAGMA foreign_keys=ON" do OpenConnection.
+        // justificativa de ter tirado "PRAGMA foreign_keys=ON" do OpenConnection.
         // Nenhuma tabela declara FOREIGN KEY, entao o enforcement nunca teve o que checar.
         using var conn = _fx.Database.OpenConnection();
 
@@ -351,7 +351,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void Initialize_LeavesDatabaseInWalMode()
     {
-        // RF-P2.07: journal_mode e persistente no arquivo, gravado uma vez no Initialize()
+        // journal_mode e persistente no arquivo, gravado uma vez no Initialize
         using var conn = _fx.Database.OpenConnection();
         using var cmd = conn.CreateCommand();
         cmd.CommandText = "PRAGMA journal_mode;";
@@ -361,7 +361,7 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void RunMaintenance_DoesNotThrow_AndKeepsDatabaseValid()
     {
-        // RF-P2.07: manutencao e oportunista e nunca pode derrubar o app
+        // manutencao e oportunista e nunca pode derrubar o app
         for (var i = 0; i < 20; i++)
             _fx.Repository.Upsert(DatabaseFixture.NewTextItem($"item {i}", $"h{i}"));
         _fx.Repository.ApplyRetention(maxItems: 5, maxAgeDays: 0);
@@ -376,7 +376,6 @@ public class RepositoryTests : IDisposable
     [Fact]
     public void OptimizeFullTextIndex_KeepsSearchWorking()
     {
-        // RF-P2.10
         _fx.Repository.Upsert(DatabaseFixture.NewTextItem("relatorio anual", "h1"));
         _fx.Repository.Upsert(DatabaseFixture.NewTextItem("relatorio mensal", "h2"));
 

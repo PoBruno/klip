@@ -3,7 +3,7 @@ using Klip.Core.Storage;
 namespace Klip.Core.Tests;
 
 /// <summary>
-/// RF-P2.08: guarda-costas dos indices. Cada caso roda EXPLAIN QUERY PLAN sobre o SQL exato
+/// guarda-costas dos indices. Cada caso roda EXPLAIN QUERY PLAN sobre o SQL exato
 /// que ClipboardItemRepository.Query() monta (via ExplainQueryPlan, que reaproveita o mesmo
 /// construtor de SQL - assim o teste nao pode divergir do repositorio) e exige que o plano NAO
 /// contenha "USE TEMP B-TREE FOR ORDER BY".
@@ -102,6 +102,19 @@ public class QueryPlanTests : IDisposable
     }
 
     [Fact]
+    public void PinnedSplitAndTieBreakKeyset_UseIndexOrder()
+    {
+        AssertNoSort("so fixados", new HistoryQuery { Pinned = true });
+        AssertNoSort("so recentes", new HistoryQuery { Pinned = false });
+        AssertNoSort("so recentes + tipo", new HistoryQuery { Pinned = false, Type = ClipboardItemType.Image });
+        AssertNoSort("aba Texto, so recentes", new HistoryQuery { Pinned = false, Type = ClipboardItemType.Text });
+        AssertNoSort("keyset com desempate",
+            new HistoryQuery { Pinned = false, BeforeLastCopiedAtMs = 1_000_100, BeforeId = 50 });
+        AssertNoSort("keyset com desempate + favoritos",
+            new HistoryQuery { Pinned = false, BeforeLastCopiedAtMs = 1_000_100, BeforeId = 50, OnlyFavorites = true });
+    }
+
+    [Fact]
     public void FullTextSearch_DrivesFromTheFtsIndex()
     {
         // A busca e o unico caso em que a temp B-tree e inevitavel: o loop externo e o
@@ -112,13 +125,15 @@ public class QueryPlanTests : IDisposable
 
         Assert.Contains("VIRTUAL TABLE INDEX", plan, StringComparison.Ordinal);
         Assert.Contains("SEARCH i USING INTEGER PRIMARY KEY", plan, StringComparison.Ordinal);
-        Assert.DoesNotContain("SCAN i", plan, StringComparison.Ordinal);
+        // "SCAN items_fts" is fine, a scan of the items table (alias i) is not
+        Assert.DoesNotContain(plan.Split(Environment.NewLine),
+            line => line == "SCAN i" || line.StartsWith("SCAN i ", StringComparison.Ordinal));
     }
 
     [Fact]
     public void FullTextSearch_RecencyOrder_SkipsBm25()
     {
-        // RF-P2.10: com OrderBySearchRecency o bm25() sai do ORDER BY, entao o SQLite nao
+        // com OrderBySearchRecency o bm25 sai do ORDER BY, entao o SQLite nao
         // precisa pontuar cada match (leitura das listas de posicao do indice FTS).
         var byRelevance = Plan(new HistoryQuery { SearchText = "item" });
         var byRecency = Plan(new HistoryQuery { SearchText = "item", OrderBySearchRecency = true });

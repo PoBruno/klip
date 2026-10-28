@@ -4,6 +4,7 @@ using System.Windows.Data;
 using System.Windows.Input;
 using System.Windows.Interop;
 using Klip.App.ViewModels;
+using Klip.Core.Clipboard;
 using Klip.Interop;
 using Klip.Interop.Input;
 using Wpf.Ui.Appearance;
@@ -12,8 +13,8 @@ namespace Klip.App.Windows;
 
 /// <summary>
 /// Win+V style history flyout.
-/// Pre-built and hidden, placed at the bottom right corner of the monitor
-/// under the cursor, closes on Esc or when it loses focus.
+/// Pre-built and hidden; opens next to the text caret (or the mouse), or at the
+/// bottom right corner of the monitor, and closes on Esc or when it loses focus.
 /// Code-behind is limited to window interop and input routing (MVVM).
 /// </summary>
 public partial class HistoryFlyoutWindow
@@ -23,7 +24,7 @@ public partial class HistoryFlyoutWindow
     private bool _closing;
     private bool _suppressTabEvents;
 
-    // RF-P1.03 / ADR-P.02: escopos dos hooks de baixo nivel. Ficam nulos enquanto o
+    // escopos dos hooks de baixo nivel. Ficam nulos enquanto o
     // flyout esta fechado - o hook nao e "desativado", ele e REMOVIDO do sistema. Um
     // WH_KEYBOARD_LL/WH_MOUSE_LL instalado continua sendo chamado pela Raw Input Thread
     // a cada evento do sistema inteiro, mesmo que o callback so retorne.
@@ -46,7 +47,6 @@ public partial class HistoryFlyoutWindow
         DataContext = viewModel;
         Resources["BoolToVisibility"] = new BooleanToVisibilityConverter();
         Resources["InverseBoolToVisibility"] = new InverseBooleanToVisibilityConverter();
-        Resources["PathToThumbnail"] = new Controls.PathToThumbnailConverter();
         InitializeComponent();
         SystemThemeWatcher.Watch(this);
 
@@ -57,12 +57,14 @@ public partial class HistoryFlyoutWindow
         WireTabs();
         BuildDateFilterMenu();
         BuildMultiSelectMenu();
+        WireFeatures();
 
         viewModel.CloseRequested += HideFlyout;
-        viewModel.GroupingChanged += ApplyGrouping;
+        viewModel.GroupingChanged += SyncTabState;
+        viewModel.ListReloaded += OnListReloaded;
         ItemsList.PreviewMouseLeftButtonUp += OnListClick;
 
-        // RF-P1.01 / RF-P1.04: os hooks vivem no host, numa thread dedicada com message
+        // os hooks vivem no host, numa thread dedicada com message
         // loop proprio. Start e idempotente e precisa ter rodado antes do primeiro
         // Acquire. A assinatura e unica e dura a vida do processo: esta janela e
         // singleton e nunca fecha de verdade (OnClosing cancela e apenas esconde).
@@ -78,12 +80,11 @@ public partial class HistoryFlyoutWindow
             RebuildMultiSelectItems();
         };
 
-        // any reload (search/tab/filter) clears the selection, so keep the first
-        // item picked and Enter pastes it right away
+        // a page appended by the scroll can't leave the list with nothing selected
         viewModel.Items.CollectionChanged += (_, _) =>
         {
             if (ItemsList.SelectedIndex < 0 && _viewModel.Items.Count > 0)
-                ItemsList.SelectedIndex = 0;
+                SelectFirstVisible();
         };
 
         // build the HWND up front so the first Show is instant
@@ -92,14 +93,20 @@ public partial class HistoryFlyoutWindow
         // let a click on the flyout activate it (so the search box can type),
         // even though it opens as a no-activate window
         HwndSource.FromHwnd(helper.Handle)?.AddHook(WndProc);
-        ApplyGrouping();
+        SyncTabState();
 
         // start at the saved size (the user can resize, and it sticks)
         ApplySavedSize();
-        // hide the emoji tab if the user turned it off in settings
-        ApplyEmojiTabVisibility();
+        // hide the emoji and snippets tabs if the user turned them off in settings
+        ApplyTabVisibility();
         // react live when the setting is toggled in the settings window
-        _settings.Changed += _ => Dispatcher.BeginInvoke(ApplyEmojiTabVisibility);
+        _settings.Changed += _ => Dispatcher.BeginInvoke(() =>
+        {
+            ApplyTabVisibility();
+            // size typed in the settings page (while hidden; a drag on the border wins)
+            if (!IsVisible)
+                ApplySavedSize();
+        });
         // remember the new size when the user drags the borders (debounced)
         _saveSizeDebounce = new System.Windows.Threading.DispatcherTimer
         {
@@ -119,18 +126,21 @@ public partial class HistoryFlyoutWindow
         Height = Math.Max(460, s.FlyoutHeight);
     }
 
-    /// <summary>Shows or hides the emoji tab based on the ShowEmojiTab setting.</summary>
-    private void ApplyEmojiTabVisibility()
+    /// <summary>Shows or hides the emoji and snippets tabs based on their settings.</summary>
+    private void ApplyTabVisibility()
     {
-        var show = _settings.Current.ShowEmojiTab;
-        TabEmoji.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        // if emoji got turned off while it was the active tab, fall back to history
-        if (!show && _viewModel.SelectedTab == HistoryTab.Emoji)
+        var emoji = _settings.Current.ShowEmojiTab;
+        var snippets = _settings.Current.ShowSnippetsTab;
+        TabEmoji.Visibility = emoji ? Visibility.Visible : Visibility.Collapsed;
+        TabSnippets.Visibility = snippets ? Visibility.Visible : Visibility.Collapsed;
+        // if the active tab got turned off, fall back to history
+        if ((!emoji && _viewModel.SelectedTab == HistoryTab.Emoji) ||
+            (!snippets && _viewModel.SelectedTab == HistoryTab.Snippets))
         {
             _viewModel.SelectedTab = HistoryTab.Recent;
             // swap the panel and tab strip right away so it doesn't sit on the
-            // now-hidden emoji view
-            ShowEmojiPanel(false);
+            // now-hidden view
+            UpdatePanels();
             SyncTabButtons();
         }
     }
@@ -141,10 +151,10 @@ public partial class HistoryFlyoutWindow
         // off-screen; those aren't real user resizes
         if (_warmingUp)
             return;
-        // while shown, keep the flyout pinned to the bottom-right corner as it
-        // grows up and to the left, and debounce saving the new size
+        // while shown, keep the flyout on its anchor (corner or caret) as it
+        // grows, and debounce saving the new size
         if (IsVisible && !_closing)
-            RepositionBottomRight();
+            Reposition();
         _saveSizeDebounce.Stop();
         _saveSizeDebounce.Start();
     }
@@ -175,7 +185,7 @@ public partial class HistoryFlyoutWindow
             // tracking this explicitly (instead of polling GetForegroundWindow)
             // avoids the race where the hook and WPF fight over the first keys.
             System.Threading.Volatile.Write(ref _hasFocus, true);
-            // RF-P1.04: desarma o hook de teclado NO MESMO instante da ativacao, senao
+            // desarma o hook de teclado NO MESMO instante da ativacao, senao
             // o callback e o WPF disputam as teclas ate a proxima troca de estado.
             UpdateSwallowMasks();
             handled = true;
@@ -188,7 +198,7 @@ public partial class HistoryFlyoutWindow
             if ((wParam & 0xFFFF) == WA_INACTIVE)
             {
                 System.Threading.Volatile.Write(ref _hasFocus, false);
-                UpdateSwallowMasks(); // RF-P1.04: devolve as teclas de navegacao ao hook
+                UpdateSwallowMasks(); // devolve as teclas de navegacao ao hook
             }
         }
         return nint.Zero;
@@ -210,6 +220,7 @@ public partial class HistoryFlyoutWindow
         Wire(TabImages, HistoryTab.Images);
         Wire(TabText, HistoryTab.Text);
         Wire(TabFiles, HistoryTab.Files);
+        Wire(TabSnippets, HistoryTab.Snippets);
         Wire(TabEmoji, HistoryTab.Emoji);
 
         void Wire(RadioButton button, HistoryTab tab) =>
@@ -227,16 +238,24 @@ public partial class HistoryFlyoutWindow
 
     private bool _emojiBuilt;
 
-    private void ShowEmojiPanel(bool show)
+    /// <summary>
+    /// One of four things fills the body: the history list, the emoji picker, the snippets
+    /// tab or the preview. The tab (and the preview flag) decide which.
+    /// </summary>
+    private void UpdatePanels()
     {
-        EmojiPanel.Visibility = show ? Visibility.Visible : Visibility.Collapsed;
-        ItemsList.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        SearchBox.Visibility = show ? Visibility.Collapsed : Visibility.Visible;
-        if (show && !_emojiBuilt)
+        var tab = _viewModel.SelectedTab;
+        var emoji = tab == HistoryTab.Emoji;
+        var snippets = tab == HistoryTab.Snippets;
+        EmojiPanel.Visibility = emoji ? Visibility.Visible : Visibility.Collapsed;
+        SnippetsPanel.Visibility = snippets ? Visibility.Visible : Visibility.Collapsed;
+        ItemsList.Visibility = emoji || snippets || _viewModel.IsPreviewOpen ? Visibility.Collapsed : Visibility.Visible;
+        SearchBox.Visibility = emoji ? Visibility.Collapsed : Visibility.Visible;
+        if (emoji && !_emojiBuilt)
             BuildEmojiPanel();
-        if (show)
+        if (emoji)
             EmojiSearchBox.Focus();
-        // RF-P1.04: o conjunto de teclas engolidas depende do painel de emoji, entao
+        // o conjunto de teclas engolidas depende do painel aberto, entao
         // toda abertura/fechamento republica a mascara.
         UpdateSwallowMasks();
     }
@@ -369,6 +388,7 @@ public partial class HistoryFlyoutWindow
         TabImages.IsChecked = _viewModel.SelectedTab == HistoryTab.Images;
         TabText.IsChecked = _viewModel.SelectedTab == HistoryTab.Text;
         TabFiles.IsChecked = _viewModel.SelectedTab == HistoryTab.Files;
+        TabSnippets.IsChecked = _viewModel.SelectedTab == HistoryTab.Snippets;
         TabEmoji.IsChecked = _viewModel.SelectedTab == HistoryTab.Emoji;
         _suppressTabEvents = false;
     }
@@ -432,22 +452,22 @@ public partial class HistoryFlyoutWindow
         }
     }
 
-    // ----- Grouping: Pinned/Recent -----
+    // ----- Tab state -----
 
-    private void ApplyGrouping()
+    private void SyncTabState()
     {
-        var view = CollectionViewSource.GetDefaultView(_viewModel.Items);
-        view.GroupDescriptions.Clear();
-        if (_viewModel.IsGroupingEnabled)
-            view.GroupDescriptions.Add(new PropertyGroupDescription(nameof(HistoryItemViewModel.GroupName)));
         SyncTabButtons();
-        // keep the emoji panel visibility tied to the active tab (covers Ctrl+Tab too)
-        ShowEmojiPanel(_viewModel.SelectedTab == HistoryTab.Emoji);
+        // keep the panel visibility tied to the active tab (covers Ctrl+Tab too)
+        UpdatePanels();
     }
 
     // ----- Show -----
 
-    /// <summary>Shows the flyout on the monitor under the cursor (physical px).</summary>
+    /// <summary>
+    /// Shows the flyout next to the caret / mouse, or at the bottom right corner
+    /// (physical px). By default it always opens at the top with the first item
+    /// selected and visible; with "remember scroll" it comes back where it was.
+    /// </summary>
     public void ShowFlyout()
     {
         // if the idle warm-up didn't get to run yet (user hit Win+V right after
@@ -456,12 +476,37 @@ public partial class HistoryFlyoutWindow
         if (!_warmedUp)
             WarmUp();
 
-        // reopen on the last tab used (the view model is a singleton, so it sticks)
+        var s = _settings.Current;
+        var remember = s.FlyoutRememberScroll;
+
+        // reopen on the last tab used (the view model is a singleton, so it sticks).
+        // nothing changed since the last open = no query and no rebuild at all
         var onEmoji = _viewModel.SelectedTab == HistoryTab.Emoji;
-        if (!onEmoji)
-            _viewModel.LoadFirstPage();
-        ShowEmojiPanel(onEmoji);
+        var onSnippets = _viewModel.SelectedTab == HistoryTab.Snippets;
+        if (onSnippets && _viewModel.SnippetsStale)
+            _ = _viewModel.ReloadSnippetsAsync();
+        if (!onEmoji && !onSnippets && _viewModel.IsStale)
+        {
+            var anchor = remember ? _hiddenAnchor : null;
+            _suppressReloadReset = remember;
+            try
+            {
+                _viewModel.LoadFirstPage();
+            }
+            finally
+            {
+                _suppressReloadReset = false;
+            }
+            _pendingAnchor = anchor;
+        }
+        UpdatePanels();
         SyncTabButtons(); // keep the tab strip in sync with the active tab
+        FooterHintsText.SetResourceReference(TextBlock.TextProperty,
+            _viewModel.EnterCopiesOnly ? "Loc.FooterHintsCopy" : "Loc.FooterHints");
+
+        // top first, so the very first frame already comes out at the top
+        if (!remember && !onSnippets)
+            ResetListToTop();
 
         var hwnd = new WindowInteropHelper(this).Handle;
 
@@ -471,28 +516,235 @@ public partial class HistoryFlyoutWindow
         exStyle |= NativeMethods.WS_EX_NOACTIVATE;
         NativeMethods.SetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
 
-        RepositionBottomRight();
+        PlaceOnShow(s.FlyoutOpenAtCaret);
 
         System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
         Show();
-        if (ItemsList.Items.Count > 0)
-            ItemsList.SelectedIndex = 0;
 
-        // RF-P1.03 / ADR-P.02: instala os hooks AGORA. Eles nao existem enquanto o
-        // flyout esta fechado, que e o ponto todo do requisito.
-        // Depois do Show() de proposito: Acquire espera o pump confirmar o install e
-        // atrasaria a janela aparecer, e um hook ja armado antes de a janela existir
-        // engoliria Esc/Enter do app de baixo sem ter nada para tratar. A janela de
-        // perda e submilissegundo - o usuario ainda esta soltando o Win+V.
-        // ??= porque um Show duplicado nao pode vazar um escopo orfao.
+        // the layout of a rebuilt list only settles after Show; finish the job once it has
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            if (!IsVisible)
+                return;
+            if (_pendingAnchor is { } a)
+            {
+                _pendingAnchor = null;
+                RestoreScrollAnchor(a);
+            }
+            else if (!remember)
+            {
+                ResetListToTop();
+            }
+            else
+            {
+                SelectFirstVisibleIfSelectionOffscreen();
+            }
+        });
+
+        // the hooks go in AFTER Show() on purpose: Acquire waits for the pump to confirm
+        // the install, and a hook armed before the window exists would swallow Esc/Enter
+        // from the app below with nothing to handle them. ??= so a double Show can't leak
+        // an orphan scope.
         _keyboardScope ??= LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Keyboard);
         _mouseScope ??= LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Mouse);
         HookPolicy.MouseActive = true; // passa a observar clique fora
         // KeyboardActive e as mascaras sao definidos aqui dentro: ligar antes deixaria
         // o callback enxergar a mascara do estado anterior.
         UpdateSwallowMasks();
-        // RF-P0.01: prova rastreavel de que os hooks so existem com o flyout aberto
         Diagnostics.StartupLogHookTrace.Trace("flyout aberto");
+    }
+
+    // ----- Scroll position -----
+
+    private ScrollViewer? _listScroll;
+    private ScrollAnchor? _pendingAnchor;
+
+    // taken right before hiding: a hidden window has no visible containers to measure
+    private ScrollAnchor? _hiddenAnchor;
+    private bool _suppressReloadReset;
+
+    /// <summary>First visible card and how far from the viewport top it was.</summary>
+    private sealed record ScrollAnchor(long ItemId, double OffsetFromTop);
+
+    private ScrollViewer? ListScroll => _listScroll ??= FindDescendant<ScrollViewer>(ItemsList);
+
+    private static T? FindDescendant<T>(DependencyObject root) where T : DependencyObject
+    {
+        var count = System.Windows.Media.VisualTreeHelper.GetChildrenCount(root);
+        for (var i = 0; i < count; i++)
+        {
+            var child = System.Windows.Media.VisualTreeHelper.GetChild(root, i);
+            if (child is T match)
+                return match;
+            if (FindDescendant<T>(child) is { } deeper)
+                return deeper;
+        }
+        return null;
+    }
+
+    private void OnListReloaded()
+    {
+        // tab, filter and search go back to the top too; a reload made to restore an
+        // anchor handles the scroll itself
+        if (!_suppressReloadReset)
+            ResetListToTop();
+    }
+
+    /// <summary>Scroll to the top and select the first item (Enter pastes what you see).</summary>
+    private void ResetListToTop()
+    {
+        ListScroll?.ScrollToVerticalOffset(0);
+        if (ItemsList.Items.Count > 0)
+        {
+            ItemsList.SelectedIndex = 0;
+            ItemsList.ScrollIntoView(ItemsList.Items[0]);
+        }
+        else
+        {
+            ItemsList.SelectedIndex = -1;
+        }
+    }
+
+    /// <summary>Realized containers at least partly inside the viewport, top to bottom.</summary>
+    private List<(ListBoxItem Container, double Top)> VisibleContainers()
+    {
+        var visible = new List<(ListBoxItem, double)>();
+        if (ListScroll is not { } scroll || scroll.ViewportHeight <= 0)
+            return visible;
+        // only realized containers exist (a few dozen), so this never walks the whole list
+        var panel = FindDescendant<VirtualizingStackPanel>(ItemsList);
+        if (panel is null)
+            return visible;
+        foreach (var child in panel.Children)
+        {
+            if (child is not ListBoxItem container || !container.IsVisible)
+                continue;
+            var top = container.TranslatePoint(new Point(0, 0), scroll).Y;
+            if (top + container.ActualHeight <= 0 || top >= scroll.ViewportHeight)
+                continue;
+            visible.Add((container, top));
+        }
+        visible.Sort((a, b) => a.Item2.CompareTo(b.Item2));
+        return visible;
+    }
+
+    private ScrollAnchor? CaptureScrollAnchor()
+    {
+        if (!_warmedUp || ItemsList.Items.Count == 0)
+            return null;
+        foreach (var (container, top) in VisibleContainers())
+        {
+            if (container.DataContext is HistoryItemViewModel vm)
+                return new ScrollAnchor(vm.Id, top);
+        }
+        return null;
+    }
+
+    private void RestoreScrollAnchor(ScrollAnchor anchor)
+    {
+        // new items may have pushed the anchor past the first page: pull pages until it
+        // is back (capped; a deleted anchor falls back to the top)
+        var vm = _viewModel.LoadUntil(anchor.ItemId, maxItems: 1_000);
+        if (vm is null)
+        {
+            ResetListToTop();
+            return;
+        }
+        ItemsList.ScrollIntoView(vm);
+        Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
+        {
+            if (ListScroll is { } scroll &&
+                ItemsList.ItemContainerGenerator.ContainerFromItem(vm) is ListBoxItem container)
+            {
+                var top = container.TranslatePoint(new Point(0, 0), scroll).Y;
+                scroll.ScrollToVerticalOffset(scroll.VerticalOffset + top - anchor.OffsetFromTop);
+            }
+            ItemsList.SelectedItem = vm;
+        });
+    }
+
+    private void SelectFirstVisible()
+    {
+        var visible = VisibleContainers();
+        if (visible.Count > 0)
+            ItemsList.SelectedItem = visible[0].Container.DataContext;
+        else if (ItemsList.Items.Count > 0)
+            ItemsList.SelectedIndex = 0;
+    }
+
+    /// <summary>With "remember", keep the selection, but never on a card the user can't see.</summary>
+    private void SelectFirstVisibleIfSelectionOffscreen()
+    {
+        var selected = ItemsList.SelectedItem;
+        if (selected is not null && VisibleContainers().Any(v => ReferenceEquals(v.Container.DataContext, selected)))
+            return;
+        SelectFirstVisible();
+    }
+
+    // ----- Placement -----
+
+    // where this open was anchored (physical px); null = bottom right corner
+    private NativeMethods.POINT? _anchorPoint;
+    private NativeMethods.RECT _anchorExclude;
+
+    /// <summary>Picks the anchor for this open: caret, then mouse; the corner when the setting is off.</summary>
+    private void PlaceOnShow(bool atCaret)
+    {
+        _anchorPoint = null;
+        if (atCaret)
+        {
+            if (NativeMethods.TryGetCaretRect(out var caret))
+            {
+                _anchorPoint = new NativeMethods.POINT { x = caret.left, y = caret.bottom };
+                _anchorExclude = caret;
+            }
+            else if (NativeMethods.GetCursorPos(out var cursor))
+            {
+                _anchorPoint = cursor;
+                _anchorExclude = new NativeMethods.RECT { left = cursor.x, top = cursor.y, right = cursor.x, bottom = cursor.y };
+            }
+        }
+        Reposition();
+    }
+
+    private void Reposition()
+    {
+        if (_anchorPoint is { } anchor)
+            RepositionAt(anchor, _anchorExclude);
+        else
+            RepositionBottomRight();
+    }
+
+    /// <summary>
+    /// Below the anchor (caret line or mouse) with a small gap, above it when there is no
+    /// room below. Always fully inside the work area of the anchor's monitor.
+    /// </summary>
+    private void RepositionAt(NativeMethods.POINT anchor, NativeMethods.RECT exclude)
+    {
+        var hwnd = new WindowInteropHelper(this).Handle;
+        if (hwnd == nint.Zero)
+            return;
+
+        var monitor = NativeMethods.MonitorFromPoint(anchor, NativeMethods.MONITOR_DEFAULTTONEAREST);
+        var info = new NativeMethods.MONITORINFO { cbSize = System.Runtime.InteropServices.Marshal.SizeOf<NativeMethods.MONITORINFO>() };
+        NativeMethods.GetMonitorInfo(monitor, ref info);
+        var work = info.rcWork;
+
+        var dpi = NativeMethods.GetDpiForWindow(hwnd);
+        if (dpi == 0)
+            dpi = 96;
+        var widthPx = Math.Min((int)(Width * dpi / 96.0), work.right - work.left);
+        var heightPx = Math.Min((int)(Height * dpi / 96.0), work.bottom - work.top);
+        var gap = (int)(4 * dpi / 96.0);
+
+        var y = exclude.bottom + gap;
+        if (y + heightPx > work.bottom)
+            y = exclude.top - gap - heightPx; // no room below: flip above the caret
+        var x = Math.Clamp(anchor.x, work.left, work.right - widthPx);
+        y = Math.Clamp(y, work.top, work.bottom - heightPx);
+
+        NativeMethods.SetWindowPos(hwnd, nint.Zero, x, y, widthPx, heightPx,
+            NativeMethods.SWP_NOZORDER | NativeMethods.SWP_NOACTIVATE);
     }
 
     /// <summary>
@@ -530,7 +782,7 @@ public partial class HistoryFlyoutWindow
             return;
         _closing = true;
 
-        // RF-P1.03 / ADR-P.02: para de observar E remove os hooks do sistema. So baixar
+        // para de observar E remove os hooks do sistema. So baixar
         // os flags nao resolveria: um hook instalado continua sendo chamado a cada
         // tecla e a cada clique do sistema inteiro, mesmo com o callback so retornando.
         HookPolicy.KeyboardActive = false;
@@ -540,7 +792,7 @@ public partial class HistoryFlyoutWindow
         _keyboardScope = null;
         _mouseScope?.Dispose();
         _mouseScope = null;
-        // RF-P0.01: aqui os dois precisam voltar a "nao" - se aparecer "sim", o escopo vazou
+        // aqui os dois precisam voltar a "nao" - se aparecer "sim", o escopo vazou
         Diagnostics.StartupLogHookTrace.Trace("flyout fechado");
 
         // if we're still in multi-select here, the flyout is closing with a
@@ -549,6 +801,12 @@ public partial class HistoryFlyoutWindow
         if (_viewModel.IsMultiSelectMode)
             _viewModel.ConfirmMultiSelectCommand.Execute(null);
 
+        // transient views do not survive a hide: preview, snippet editor, badges, picked cards
+        ShowShortcutBadges(false);
+        _viewModel.ClosePreview();
+        _viewModel.CancelSnippetEditCommand.Execute(null);
+        _viewModel.ClearChecks();
+
         // if we grabbed focus (search box click), hand it back to the app the
         // user came from, so their caret returns where it was. skip this when a
         // paste is about to run: that flow restores focus and fires Ctrl+V on its
@@ -556,8 +814,23 @@ public partial class HistoryFlyoutWindow
         var weHadFocus = System.Threading.Volatile.Read(ref _hasFocus);
         System.Threading.Volatile.Write(ref _hasFocus, false);
 
+        _hiddenAnchor = _settings.Current.FlyoutRememberScroll && _viewModel.SearchText.Length == 0
+            ? CaptureScrollAnchor()
+            : null;
         Hide();
-        SearchBox.Text = "";
+        // clear the box without the debounced reload a TextChanged would schedule
+        // for a hidden window; the next open rebuilds if the search changed the list
+        _viewModel.ClearSearchSilently();
+        if (SearchBox.Text.Length > 0)
+            SearchBox.Text = "";
+        if (!_settings.Current.FlyoutRememberScroll)
+        {
+            // back to the first page and the top: frees what the scroll pulled in, and
+            // the next open is already in place
+            _viewModel.TrimToFirstPage();
+            ResetListToTop();
+        }
+        Controls.PathToThumbnailConverter.TrimCache(Controls.PathToThumbnailConverter.HiddenCacheSize);
         _closing = false;
 
         if (restoreFocus && weHadFocus)
@@ -607,7 +880,7 @@ public partial class HistoryFlyoutWindow
     /// <summary>A click outside the flyout closes it (screen point, physical px).</summary>
     private void OnGlobalClick(int screenX, int screenY)
     {
-        if (!IsVisible || _closing)
+        if (!IsVisible || _closing || _menuOpen)
             return;
 
         // real window rect in physical pixels
@@ -634,19 +907,35 @@ public partial class HistoryFlyoutWindow
     private const int VK_D = 0x44;
     private const int VK_E = 0x45;
     private const int VK_F = 0x46;
+    private const int VK_SPACE = 0x20;
+    private const int VK_PRIOR = 0x21;
+    private const int VK_NEXT = 0x22;
+    // Ctrl and Alt themselves (left/right): they only drive the number badges
+    private const int VK_LCONTROL = 0xA2;
+    private const int VK_RMENU = 0xA5;
 
-    // RF-P1.04: conjuntos de descarte pre-calculados. Estaticos para que
+    // conjuntos de descarte pre-calculados. Estaticos para que
     // UpdateSwallowMasks nao aloque nada a cada troca de estado.
-    private static readonly int[] SwallowAlways = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_DELETE];
-    private static readonly int[] SwallowWithCtrl = [VK_TAB, VK_P, VK_D, VK_E, VK_F];
+    private static readonly int[] SwallowAlways = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_DELETE, VK_SPACE];
+    private static readonly int[] SwallowWithCtrl = [VK_TAB, VK_P, VK_D, VK_E, VK_F, .. DigitKeys];
+    private static readonly int[] SwallowWithAlt = [.. DigitKeys];
     private static readonly int[] SwallowAlwaysOnEmoji = [VK_ESCAPE, VK_UP, VK_DOWN];
+    private static readonly int[] SwallowOnSnippets = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN];
+    private static readonly int[] SwallowOnPreview = [VK_ESCAPE, VK_SPACE, VK_UP, VK_DOWN, VK_PRIOR, VK_NEXT];
+    private static readonly int[] SwallowOnSnippetEditor = [VK_ESCAPE];
+
+    // 1 to 9 on the top row (numpad digits too)
+    private static int[] DigitKeys => [0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+        0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69];
 
     /// <summary>Superconjunto das mascaras: teclas que <see cref="ExecuteHookedKey"/> trata em algum estado.</summary>
     private static bool IsHookedKey(int vk) => vk is VK_ESCAPE or VK_RETURN or VK_UP or VK_DOWN
-        or VK_DELETE or VK_TAB or VK_P or VK_D or VK_E or VK_F;
+        or VK_DELETE or VK_TAB or VK_P or VK_D or VK_E or VK_F or VK_SPACE or VK_PRIOR or VK_NEXT
+        || vk is >= VK_LCONTROL and <= VK_RMENU
+        || PreviewFormat.ShortcutNumber(vk) > 0;
 
     /// <summary>
-    /// RF-P1.04 / ADR-P.01: roda na thread WORKER do host, NUNCA na UI thread. Aqui so
+    /// roda na thread WORKER do host, NUNCA na UI thread. Aqui so
     /// pode existir despacho assincrono - o Dispatcher.Invoke sincrono que existia antes
     /// segurava a Raw Input Thread do Windows a cada tecla do sistema inteiro enquanto
     /// SQLite e clipboard rodavam na UI thread.
@@ -655,6 +944,13 @@ public partial class HistoryFlyoutWindow
     {
         switch (ev.Message)
         {
+            case NativeMethods.WM_KEYUP:
+            case NativeMethods.WM_SYSKEYUP:
+                // a Ctrl or Alt let go: the number badges follow the real key state
+                if (ev.A is >= VK_LCONTROL and <= VK_RMENU)
+                    Dispatcher.BeginInvoke(RefreshShortcutBadges);
+                return;
+
             case NativeMethods.WM_KEYDOWN:
             case NativeMethods.WM_SYSKEYDOWN:
                 int vk = ev.A;
@@ -678,7 +974,7 @@ public partial class HistoryFlyoutWindow
     }
 
     /// <summary>
-    /// RF-P1.04: publica no <see cref="HookPolicy"/> a decisao "engolir ou nao" que o
+    /// publica no <see cref="HookPolicy"/> a decisao "engolir ou nao" que o
     /// callback do hook precisa tomar em O(1). Roda na UI thread e e chamada sempre que
     /// muda algo de que a decisao depende: abrir/fechar o flyout, ganhar/perder foco
     /// (WndProc) e abrir/fechar o painel de emoji.
@@ -699,6 +995,7 @@ public partial class HistoryFlyoutWindow
             return;
         }
 
+        HookPolicy.SetSwallowKeysWithAlt(ReadOnlySpan<int>.Empty);
         if (EmojiPanel.Visibility == Visibility.Visible)
         {
             // Painel de emoji: Esc volta para Recentes e as setas somem; o resto passa
@@ -706,10 +1003,27 @@ public partial class HistoryFlyoutWindow
             HookPolicy.SetSwallowKeys(SwallowAlwaysOnEmoji);
             HookPolicy.SetSwallowKeysWithCtrl(ReadOnlySpan<int>.Empty);
         }
+        else if (_viewModel.IsSnippetEditing)
+        {
+            // typing in the editor goes through WPF; only Esc needs the hook
+            HookPolicy.SetSwallowKeys(SwallowOnSnippetEditor);
+            HookPolicy.SetSwallowKeysWithCtrl(ReadOnlySpan<int>.Empty);
+        }
+        else if (_viewModel.IsPreviewOpen)
+        {
+            HookPolicy.SetSwallowKeys(SwallowOnPreview);
+            HookPolicy.SetSwallowKeysWithCtrl(ReadOnlySpan<int>.Empty);
+        }
+        else if (_viewModel.SelectedTab == HistoryTab.Snippets)
+        {
+            HookPolicy.SetSwallowKeys(SwallowOnSnippets);
+            HookPolicy.SetSwallowKeysWithCtrl(SwallowWithCtrl.Where(k => k is VK_TAB or VK_F).ToArray());
+        }
         else
         {
             HookPolicy.SetSwallowKeys(SwallowAlways);
             HookPolicy.SetSwallowKeysWithCtrl(SwallowWithCtrl);
+            HookPolicy.SetSwallowKeysWithAlt(SwallowWithAlt);
         }
 
         // Ativa por ultimo: assim o callback nunca enxerga a mascara do estado anterior.
@@ -717,7 +1031,7 @@ public partial class HistoryFlyoutWindow
     }
 
     /// <summary>
-    /// RF-P1.04: o EFEITO da tecla, ja na UI thread via BeginInvoke. Nao retorna nada -
+    /// o EFEITO da tecla, ja na UI thread via BeginInvoke. Nao retorna nada -
     /// quem decidiu o descarte foi a mascara publicada por <see cref="UpdateSwallowMasks"/>.
     /// Mantem as mesmas acoes do antigo HandleHookedKey; os modificadores sao relidos do
     /// SO porque o flyout abre sem foco e Keyboard.Modifiers do WPF nao vale aqui.
@@ -741,35 +1055,60 @@ public partial class HistoryFlyoutWindow
         }
 
         var ctrl = NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
+        var alt = NativeMethods.IsKeyDown(NativeMethods.VK_MENU);
         var shift = NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
+
+        // Ctrl or Alt pressed: show the numbers on the cards
+        if (vk is >= VK_LCONTROL and <= VK_RMENU)
+        {
+            EnsureShortcutBadges();
+            return;
+        }
+
+        // Ctrl+1..9 copies, Alt+1..9 pastes
+        var number = PreviewFormat.ShortcutNumber(vk);
+        if (number > 0)
+        {
+            if (ctrl || alt)
+                RunNumberShortcut(number, paste: !ctrl && alt);
+            return;
+        }
+
+        if (_viewModel.IsSnippetEditing)
+        {
+            if (vk == VK_ESCAPE)
+                _viewModel.CancelSnippetEditCommand.Execute(null);
+            return;
+        }
+
+        if (_viewModel.IsPreviewOpen)
+        {
+            HandlePreviewKey(vk);
+            return;
+        }
+
+        var onSnippets = _viewModel.SelectedTab == HistoryTab.Snippets;
 
         switch (vk)
         {
             case VK_ESCAPE:
-                if (_viewModel.IsMultiSelectMode)
-                    _viewModel.CancelMultiSelectCommand.Execute(null);
-                else if (SearchBox.Text.Length > 0)
-                    SearchBox.Text = "";
-                else
-                    HideFlyout();
+                HandleEscape();
                 return;
 
             case VK_RETURN:
-                if (_viewModel.IsMultiSelectMode)
-                    _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
-                else if (ctrl)
-                    _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
-                else if (shift)
-                    _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
-                else
-                    _viewModel.PasteCommand.Execute(ItemsList.SelectedItem);
+                HandleEnter(ctrl, shift);
                 return;
 
             case VK_DOWN:
-                MoveSelection(+1);
+                HandleArrow(+1, shift);
                 return;
             case VK_UP:
-                MoveSelection(-1);
+                HandleArrow(-1, shift);
+                return;
+
+            case VK_SPACE:
+                if (!onSnippets)
+                    _viewModel.TogglePreview(ItemsList.SelectedItem as HistoryItemViewModel);
                 return;
 
             case VK_TAB when ctrl:
@@ -781,20 +1120,20 @@ public partial class HistoryFlyoutWindow
             // ativacao, quando nenhum TextBox do WPF detem o teclado. Mante-la agora
             // faria a tecla SUMIR nos casos de borda - a mascara ja engoliu o Delete e
             // a acao o ignoraria. Mascara e acao precisam concordar.
-            case VK_DELETE:
+            case VK_DELETE when !onSnippets:
                 _viewModel.DeleteCommand.Execute(ItemsList.SelectedItem);
                 return;
-            case VK_P when ctrl:
+            case VK_P when ctrl && !onSnippets:
                 _viewModel.TogglePinCommand.Execute(ItemsList.SelectedItem);
                 return;
-            case VK_D when ctrl:
+            case VK_D when ctrl && !onSnippets:
                 _viewModel.ToggleFavoriteCommand.Execute(ItemsList.SelectedItem);
                 return;
-            case VK_E when ctrl:
+            case VK_E when ctrl && !onSnippets:
                 _viewModel.OpenInEditorCommand.Execute(ItemsList.SelectedItem);
                 return;
             case VK_F when ctrl:
-                // RF-P1.04: dar foco ao campo de busca NAO muda a mascara. Enquanto o
+                // dar foco ao campo de busca NAO muda a mascara. Enquanto o
                 // flyout nao for ativado (_hasFocus), o teclado continua chegando pelo
                 // hook e a navegacao segue funcionando - igual ao comportamento antigo.
                 SearchBox.Focus();
@@ -806,10 +1145,14 @@ public partial class HistoryFlyoutWindow
 
     protected override void OnPreviewKeyDown(KeyEventArgs e)
     {
+        // Alt combos arrive as Key.System
+        var key = e.Key == Key.System ? e.SystemKey : e.Key;
+        var mods = Keyboard.Modifiers;
+
         // emoji panel is open: only Esc matters, let the rest through
         if (EmojiPanel.Visibility == Visibility.Visible)
         {
-            if (e.Key == Key.Escape)
+            if (key == Key.Escape)
             {
                 TabRecent.IsChecked = true; // back to history
                 e.Handled = true;
@@ -817,73 +1160,159 @@ public partial class HistoryFlyoutWindow
             return;
         }
 
-        switch (e.Key)
+        // Ctrl or Alt held: numbers on the cards
+        if (key is Key.LeftCtrl or Key.RightCtrl or Key.LeftAlt or Key.RightAlt)
+            EnsureShortcutBadges();
+
+        // Ctrl+1..9 copies, Alt+1..9 pastes (the history list only)
+        if (!_viewModel.IsSnippetEditing && !_viewModel.IsPreviewOpen &&
+            _viewModel.SelectedTab != HistoryTab.Snippets &&
+            (mods == ModifierKeys.Control || mods == ModifierKeys.Alt) &&
+            PreviewFormat.ShortcutNumber(KeyInterop.VirtualKeyFromKey(key)) is > 0 and var number)
+        {
+            RunNumberShortcut(number, paste: mods == ModifierKeys.Alt);
+            e.Handled = true;
+            return;
+        }
+
+        // the snippet editor owns the keyboard: only Esc is ours
+        if (_viewModel.IsSnippetEditing)
+        {
+            if (key == Key.Escape)
+            {
+                _viewModel.CancelSnippetEditCommand.Execute(null);
+                e.Handled = true;
+            }
+            return;
+        }
+
+        if (_viewModel.IsPreviewOpen)
+        {
+            var handledKey = key switch
+            {
+                Key.Escape or Key.Space => ClosePreviewKey(),
+                Key.Up => ScrollPreview(-1),
+                Key.Down => ScrollPreview(+1),
+                Key.PageUp => ScrollPreview(-8),
+                Key.PageDown => ScrollPreview(+8),
+                _ => false,
+            };
+            if (handledKey)
+                e.Handled = true;
+            return;
+        }
+
+        var onSnippets = _viewModel.SelectedTab == HistoryTab.Snippets;
+
+        switch (key)
         {
             case Key.Escape:
-                // Esc: sai do modo de seleção, se não limpa a busca, se não fecha
-                if (_viewModel.IsMultiSelectMode)
-                    _viewModel.CancelMultiSelectCommand.Execute(null);
-                else if (SearchBox.Text.Length > 0)
-                    SearchBox.Text = "";
-                else
-                    HideFlyout();
+                HandleEscape();
                 e.Handled = true;
                 return;
-            case Key.Enter when _viewModel.IsMultiSelectMode:
-                _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
-                e.Handled = true;
-                return;
-            case Key.Enter when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.Enter when !_viewModel.IsMultiSelectMode && mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.Enter when Keyboard.Modifiers == ModifierKeys.Shift:
-                _viewModel.PastePlainCommand.Execute(ItemsList.SelectedItem);
-                e.Handled = true;
-                return;
             case Key.Enter:
-                _viewModel.PasteCommand.Execute(ItemsList.SelectedItem);
+                HandleEnter(mods == ModifierKeys.Control, mods == ModifierKeys.Shift);
                 e.Handled = true;
                 return;
-            case Key.Delete when !SearchBox.IsKeyboardFocusWithin:
+            case Key.Space when !SearchBox.IsKeyboardFocusWithin && !onSnippets:
+                _viewModel.TogglePreview(ItemsList.SelectedItem as HistoryItemViewModel);
+                e.Handled = true;
+                return;
+            case Key.Delete when !SearchBox.IsKeyboardFocusWithin && !onSnippets:
                 _viewModel.DeleteCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.P when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.P when mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.TogglePinCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.D when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.D when mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.ToggleFavoriteCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.E when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.E when mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.OpenInEditorCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.F when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.F when mods == ModifierKeys.Control:
                 SearchBox.Focus();
                 e.Handled = true;
                 return;
-            case Key.Tab when Keyboard.Modifiers == (ModifierKeys.Control | ModifierKeys.Shift):
+            case Key.Tab when mods == (ModifierKeys.Control | ModifierKeys.Shift):
                 _viewModel.CycleTab(-1);
                 e.Handled = true;
                 return;
-            case Key.Tab when Keyboard.Modifiers == ModifierKeys.Control:
+            case Key.Tab when mods == ModifierKeys.Control:
                 _viewModel.CycleTab(+1);
                 e.Handled = true;
                 return;
             // window level navigation, doesn't matter which control has focus
-            case Key.Down when !SearchBox.IsKeyboardFocusWithin || ItemsList.Items.Count > 0:
-                MoveSelection(+1);
+            case Key.Down when !SearchBox.IsKeyboardFocusWithin || ActiveListCount > 0:
+                HandleArrow(+1, mods == ModifierKeys.Shift);
                 e.Handled = true;
                 return;
             case Key.Up when !SearchBox.IsKeyboardFocusWithin:
-                MoveSelection(-1);
+                HandleArrow(-1, mods == ModifierKeys.Shift);
                 e.Handled = true;
                 return;
         }
         base.OnPreviewKeyDown(e);
+    }
+
+    protected override void OnPreviewKeyUp(KeyEventArgs e)
+    {
+        if (e.Key is Key.LeftCtrl or Key.RightCtrl || (e.Key == Key.System && e.SystemKey is Key.LeftAlt or Key.RightAlt))
+            RefreshShortcutBadges();
+        base.OnPreviewKeyUp(e);
+    }
+
+    // Esc peels one layer at a time: picked cards, multi-select, search, then the flyout
+    private void HandleEscape()
+    {
+        if (_viewModel.HasChecks)
+            _viewModel.ClearChecks();
+        else if (_viewModel.IsMultiSelectMode)
+            _viewModel.CancelMultiSelectCommand.Execute(null);
+        else if (SearchBox.Text.Length > 0)
+            SearchBox.Text = "";
+        else
+            HideFlyout();
+    }
+
+    private void HandleEnter(bool ctrl, bool shift)
+    {
+        if (_viewModel.SelectedTab == HistoryTab.Snippets)
+        {
+            _viewModel.PasteSnippetCommand.Execute(SnippetsList.SelectedItem);
+            return;
+        }
+        var selected = ItemsList.SelectedItem as HistoryItemViewModel;
+        if (_viewModel.IsMultiSelectMode)
+            _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
+        else if (ctrl)
+            _viewModel.CopyOnlyCommand.Execute(selected);
+        else if (shift)
+            _viewModel.PastePlainCommand.Execute(selected);
+        else
+            _viewModel.ChooseCurrent(selected);
+    }
+
+    // Shift+arrow also picks the cards it walks over, for "paste together"
+    private void HandleArrow(int delta, bool shift)
+    {
+        if (shift && _viewModel.SelectedTab != HistoryTab.Snippets && ItemsList.SelectedItem is HistoryItemViewModel current)
+        {
+            _viewModel.SetCheck(current, true);
+            MoveSelection(delta);
+            if (ItemsList.SelectedItem is HistoryItemViewModel next)
+                _viewModel.SetCheck(next, true);
+            return;
+        }
+        MoveSelection(delta);
     }
 
     /// <summary>Typing with the list focused throws the text into the search box.</summary>
@@ -911,19 +1340,26 @@ public partial class HistoryFlyoutWindow
         base.OnPreviewTextInput(e);
     }
 
+    private ListBox ActiveList => _viewModel.SelectedTab == HistoryTab.Snippets ? SnippetsList : ItemsList;
+
+    private int ActiveListCount => ActiveList.Items.Count;
+
     private void MoveSelection(int delta)
     {
-        if (ItemsList.Items.Count == 0)
+        var list = ActiveList;
+        if (list.Items.Count == 0)
             return;
-        var index = Math.Clamp(ItemsList.SelectedIndex + delta, 0, ItemsList.Items.Count - 1);
-        ItemsList.SelectedIndex = index;
-        ItemsList.ScrollIntoView(ItemsList.SelectedItem);
+        var index = Math.Clamp(list.SelectedIndex + delta, 0, list.Items.Count - 1);
+        list.SelectedIndex = index;
+        list.ScrollIntoView(list.SelectedItem);
     }
 
     // ----- Infinite scroll -----
 
     private void OnListScroll(object sender, ScrollChangedEventArgs e)
     {
+        if (_badgesOn)
+            ShowShortcutBadges(true); // renumber for what is on screen now
         if (e.VerticalChange <= 0 || e.ExtentHeight <= 0)
             return;
         if (e.VerticalOffset + e.ViewportHeight >= e.ExtentHeight * 0.8)
@@ -934,10 +1370,17 @@ public partial class HistoryFlyoutWindow
 
     private void OnListClick(object sender, MouseButtonEventArgs e)
     {
+        // the mouse-up that ends a drag is not a click
+        if (_suppressClick)
+        {
+            _suppressClick = false;
+            return;
+        }
+
         // clicks on the card's action buttons (pin/fav/more) are handled there
         if (e.OriginalSource is not DependencyObject source ||
             FindItem(source) is not { } item ||
-            e.OriginalSource is System.Windows.Controls.Primitives.ButtonBase)
+            IsInsideButton(source))
             return;
 
         var mods = Keyboard.Modifiers;
@@ -959,19 +1402,15 @@ public partial class HistoryFlyoutWindow
             return;
         }
 
-        // Ctrl+click copies without pasting (unless we're already queueing)
+        // Ctrl+click picks the card for "paste together" (Ctrl+Enter still copies)
         if (mods == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
         {
-            _viewModel.CopyOnlyCommand.Execute(item);
-            // the click stole focus (MOUSEACTIVATE dropped NOACTIVATE); since we
-            // stay open, hand focus back to the app and re-arm no-activate so the
-            // flyout is still usable without sitting on top of the user's caret
-            ReleaseFocusButStayOpen();
+            _viewModel.ToggleCheck(item);
             return;
         }
 
-        // plain click pastes (or queues, if multi-select is active)
-        _viewModel.PasteCommand.Execute(item);
+        // plain click pastes or copies (setting), or queues if multi-select is active
+        _viewModel.ChooseCommand.Execute(item);
     }
 
     /// <summary>
@@ -1005,54 +1444,8 @@ public partial class HistoryFlyoutWindow
     {
         if (sender is not FrameworkElement { DataContext: HistoryItemViewModel item } element)
             return;
-
-        var menu = new ContextMenu { PlacementTarget = element };
-        AddMenuItem(menu, Localization.Loc.MenuPaste, "\uE77F", () => _viewModel.PasteCommand.Execute(item));
-        AddMenuItem(menu, Localization.Loc.MenuPastePlain, "\uE8E9", () => _viewModel.PastePlainCommand.Execute(item));
-        AddMenuItem(menu, Localization.Loc.MenuCopy, "\uE8C8", () => _viewModel.CopyOnlyCommand.Execute(item));
-        menu.Items.Add(new Separator());
-        if (item.IsImage)
-        {
-            AddMenuItem(menu, Localization.Loc.MenuSaveAs, "\uE792", () => _viewModel.SaveAsCommand.Execute(item));
-            AddMenuItem(menu, Localization.Loc.MenuOpenInEditor, "\uE70F", () => _viewModel.OpenInEditorCommand.Execute(item));
-            menu.Items.Add(new Separator());
-        }
-        // RF-F5.16: gif/mp4 de arquivo unico abre no editor de midia, se ele
-        // existir nesta build e o arquivo ainda estiver no disco
-        if (item.MediaFilePath is { } mediaPath &&
-            Services.MediaEditorGateway.IsAvailable &&
-            System.IO.File.Exists(mediaPath))
-        {
-            AddMenuItem(menu, Localization.Loc.MenuOpenInMediaEditor, "\uE714", () =>
-            {
-                HideFlyout();
-                Services.MediaEditorGateway.Open(mediaPath);
-            });
-            menu.Items.Add(new Separator());
-        }
-        AddMenuItem(menu, item.IsPinned ? Localization.Loc.MenuUnpin : Localization.Loc.MenuPin, item.IsPinned ? "\uE77A" : "\uE718",
-            () => _viewModel.TogglePinCommand.Execute(item));
-        AddMenuItem(menu, item.IsFavorite ? Localization.Loc.MenuUnfavorite : Localization.Loc.MenuFavorite, item.IsFavorite ? "\uE8D9" : "\uE734",
-            () => _viewModel.ToggleFavoriteCommand.Execute(item));
-        menu.Items.Add(new Separator());
-        AddMenuItem(menu, Localization.Loc.MenuDelete, "\uE74D", () => _viewModel.DeleteCommand.Execute(item));
-
-        menu.IsOpen = true;
+        ShowItemMenu(item, element);
         e.Handled = true;
-
-        static void AddMenuItem(ContextMenu menu, string header, string glyph, Action action)
-        {
-            var menuItem = new MenuItem { Header = header, Icon = MenuGlyph(glyph) };
-            menuItem.Click += (_, _) => action();
-            menu.Items.Add(menuItem);
-        }
-
-        static TextBlock MenuGlyph(string glyph) => new()
-        {
-            Text = glyph,
-            FontFamily = new System.Windows.Media.FontFamily("Segoe Fluent Icons"),
-            FontSize = 14,
-        };
     }
 
     private static HistoryItemViewModel? FindItem(DependencyObject source)

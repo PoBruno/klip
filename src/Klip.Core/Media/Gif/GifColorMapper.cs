@@ -1,10 +1,10 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Mapeia cores RGB para indices da paleta global (RF-F4.08): cache
+/// Mapeia cores RGB para indices da paleta global: cache
 /// Dictionary cor-&gt;indice com fallback de busca do vizinho mais proximo
 /// (distancia euclidiana RGB, primeiro indice em caso de empate).
-/// Suporta dithering ordenado Bayer 8x8 (RF-F4.09): o offset e aplicado a
+/// Suporta dithering ordenado Bayer 8x8: o offset e aplicado a
 /// cor ANTES do cache, entao o cache continua valido por cor ajustada.
 /// </summary>
 internal sealed class GifColorMapper(uint[] palette, GifDithering dithering)

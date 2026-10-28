@@ -9,7 +9,7 @@ using System.Windows.Threading;
 namespace Klip.App.Controls;
 
 /// <summary>
-/// RF-F4.05: preview de GIF no card do historico. Mostra a thumbnail estatica
+/// preview de GIF no card do historico. Mostra a thumbnail estatica
 /// (primeiro frame) e anima SOMENTE enquanto o mouse esta sobre o card:
 /// MouseEnter dispara o decode (in-box, GifBitmapDecoder) numa thread de fundo
 /// e um DispatcherTimer avanca os frames respeitando os delays; MouseLeave
@@ -32,7 +32,7 @@ namespace Klip.App.Controls;
 /// </summary>
 public sealed class HoverGifPlayer : System.Windows.Controls.Image
 {
-    private const long MaxAnimatedFileBytes = 20L * 1024 * 1024; // RF-F4.05: guarda de tamanho
+    private const long MaxAnimatedFileBytes = 20L * 1024 * 1024; // guarda de tamanho
     private const long MaxStaticFileBytes = 50L * 1024 * 1024;   // guarda do caminho estatico
     private const int MaxAnimatedFrames = 300;
     private const int DecodeWidth = 256; // frames do hover decodificados pequenos (card mostra ~96px)
@@ -273,7 +273,7 @@ public sealed class HoverGifPlayer : System.Windows.Controls.Image
     /// <summary>
     /// Decodifica e compoe os frames do GIF (delta + offset + disposal) ja
     /// reduzidos para ~256 px. A composicao segue o mesmo esquema do
-    /// GifFrameCache do editor de midia (RF-F5.02), mas aqui cada frame vira um
+    /// GifFrameCache do editor de midia, mas aqui cada frame vira um
     /// bitmap PEQUENO e congelado: so o canvas de trabalho fica em tamanho
     /// cheio, entao o pico de memoria nao escala com o numero de frames.
     /// Retorna null quando o GIF estoura a guarda de 300 frames.

@@ -2,7 +2,7 @@ using Klip.Core.Recording;
 
 namespace Klip.Core.Tests.Recording;
 
-/// <summary>RF-F3.06: nomeacao e resolucao da pasta de gravacoes.</summary>
+/// <summary>nomeacao e resolucao da pasta de gravacoes.</summary>
 public class RecordingPathsTests
 {
     [Fact]

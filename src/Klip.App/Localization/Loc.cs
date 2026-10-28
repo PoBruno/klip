@@ -7,7 +7,7 @@ namespace Klip.App.Localization;
 /// Strings resolve at startup; switching language needs a restart.
 /// Used from XAML via x:Static (e.g. {x:Static loc:Loc.SettingsTitle}).
 /// </summary>
-public static class Loc
+public static partial class Loc
 {
     // null until Initialize; Get falls back to Pt (static initializers run in text order)
     private static Dictionary<string, string>? _table;
@@ -57,6 +57,17 @@ public static class Loc
             return;
         foreach (var key in En.Keys)
             app.Resources["Loc." + key] = Get(key);
+    }
+
+    // each feature area keeps its strings in its own Loc.<Area>.cs file; they get
+    // folded into the main tables here, after every static field is initialized
+    static Loc()
+    {
+        foreach (var (pt, en) in new[] { (PtHistory, EnHistory), (PtFlyout, EnFlyout), (PtCapture, EnCapture), (PtRecording, EnRecording), (PtClipboard, EnClipboard), (PtSystem, EnSystem) })
+        {
+            foreach (var kv in pt) Pt[kv.Key] = kv.Value;
+            foreach (var kv in en) En[kv.Key] = kv.Value;
+        }
     }
 
     private static Dictionary<string, string> ResolveTable(string code)
@@ -183,7 +194,7 @@ public static class Loc
     public static string RecordingItemTitle => Get(nameof(RecordingItemTitle));
     public static string RecordingMicIndicator => Get(nameof(RecordingMicIndicator));
     public static string RecordingSystemIndicator => Get(nameof(RecordingSystemIndicator));
-    // toolbar control hub (spec M2-02, RF-T2.05/06): tooltips dos toggles ao vivo
+    // toolbar control hub: tooltips dos toggles ao vivo
     public static string RecordingMicMute => Get(nameof(RecordingMicMute));
     public static string RecordingMicUnmute => Get(nameof(RecordingMicUnmute));
     public static string RecordingSystemMute => Get(nameof(RecordingSystemMute));
@@ -355,11 +366,11 @@ public static class Loc
     public static string AboutText => Get(nameof(AboutText));
     public static string ItemsInHistory => Get(nameof(ItemsInHistory));
 
-    // RF-S.07: rotulo curto da navegacao lateral (o mockup usa "Atalhos", nao "Atalhos do Klip")
+    // rotulo curto da navegacao lateral (o mockup usa "Atalhos", nao "Atalhos do Klip")
     public static string SectionHotkeys => Get(nameof(SectionHotkeys));
     public static string AppVersion => Get(nameof(AppVersion));
 
-    // RF-S.07: rotulos do diagnostico, antes fixos em pt-BR no code-behind
+    // rotulos do diagnostico, antes fixos em pt-BR no code-behind
     public static string DiagItems => Get(nameof(DiagItems));
     public static string DiagDbSize => Get(nameof(DiagDbSize));
     public static string DiagHotkeyHistory => Get(nameof(DiagHotkeyHistory));
@@ -374,7 +385,7 @@ public static class Loc
     public static string DiagCopy => Get(nameof(DiagCopy));
     public static string DiagCopied => Get(nameof(DiagCopied));
 
-    // RF-S.07: valores formatados que estavam concatenados em codigo
+    // valores formatados que estavam concatenados em codigo
     public static string CadenceValue => Get(nameof(CadenceValue));
     public static string GifScaleValue => Get(nameof(GifScaleValue));
     public static string Mp4BitrateValue => Get(nameof(Mp4BitrateValue));
@@ -654,7 +665,7 @@ public static class Loc
         [nameof(ExcludedAppsCaption)] = "Nada copiado a partir destes aplicativos é salvo no histórico. Informe o nome do processo (ex.: keepass.exe).",
         [nameof(AddApp)] = "Adicionar",
         [nameof(RemoveApp)] = "Remover",
-        [nameof(SectionClipboard)] = "Histórico de clipboard",
+        [nameof(SectionClipboard)] = "Histórico",
         [nameof(MaxItemsTitle)] = "Máximo de itens",
         [nameof(MaxItemsCaption)] = "Fixados e favoritos nunca são removidos. 0 = ilimitado.",
         [nameof(MaxAgeTitle)] = "Apagar apos (dias)",
@@ -998,7 +1009,7 @@ public static class Loc
         [nameof(ExcludedAppsCaption)] = "Nothing copied from these apps is saved to history. Enter the process name (e.g. keepass.exe).",
         [nameof(AddApp)] = "Add",
         [nameof(RemoveApp)] = "Remove",
-        [nameof(SectionClipboard)] = "Clipboard history",
+        [nameof(SectionClipboard)] = "History",
         [nameof(MaxItemsTitle)] = "Maximum items",
         [nameof(MaxItemsCaption)] = "Pinned and favorited items are never removed. 0 = unlimited.",
         [nameof(MaxAgeTitle)] = "Delete after (days)",

@@ -4,7 +4,7 @@ namespace Klip.Core.Media.Gif;
 /// Um frame de entrada para o encoder GIF: buffer BGRA32 top-down
 /// (stride = width * 4) com o delay desejado em milissegundos.
 /// A materializacao do buffer pode ser lazy (frames em spill de disco,
-/// RF-F4.06): cada leitura de <see cref="Bgra"/> pode reler o arquivo,
+/// ): cada leitura de <see cref="Bgra"/> pode reler o arquivo,
 /// entao consumidores devem capturar o array uma vez por passada.
 /// </summary>
 public sealed class GifFrameSource

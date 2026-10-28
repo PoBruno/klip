@@ -1,13 +1,13 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Encoder GIF89a two-pass proprio (D-F4.1, sem dependencias externas).
-/// Pass 1 (RF-F4.07): histograma global exato; paleta lossless quando o
+/// Encoder GIF89a two-pass proprio (sem dependencias externas).
+/// Pass 1: histograma global exato; paleta lossless quando o
 /// conteudo cabe em 256 cores, senao median cut variante palettegen.
-/// Pass 2 (RF-F4.08): delta frames com disposal 1, sub-retangulo dirty e
+/// Pass 2: delta frames com disposal 1, sub-retangulo dirty e
 /// indice transparente para pixels inalterados; LZW proprio; loop via
-/// NETSCAPE2.0. Tolerancia de diff opcional (RF-F4.10) e Bayer 8x8
-/// opcional (RF-F4.09).
+/// NETSCAPE2.0. Tolerancia de diff opcional e Bayer 8x8
+/// opcional.
 /// </summary>
 public sealed class GifEncoder : IGifEncoder
 {
@@ -33,7 +33,7 @@ public sealed class GifEncoder : IGifEncoder
                 throw new ArgumentException("Todos os frames devem ter as mesmas dimensoes.", nameof(frames));
         }
 
-        // ---- Pass 1 (RF-F4.07): histograma global exato sobre RGB888 ----
+        // ---- Pass 1: histograma global exato sobre RGB888 ----
         var histogram = BuildHistogram(frames);
 
         // Multi-frame precisa reservar 1 indice transparente para o delta.
@@ -49,7 +49,7 @@ public sealed class GifEncoder : IGifEncoder
         var minCodeSize = Math.Max(2, bitsPerPixel);
 
         // Dithering so faz sentido com quantizacao: no caminho lossless toda
-        // cor existe exata na paleta (CA-F4.3), offset so degradaria.
+        // cor existe exata na paleta, offset so degradaria.
         var dithering = lossless ? GifDithering.None : options.Dithering;
         var mapper = new GifColorMapper(palette, dithering);
 
@@ -59,9 +59,9 @@ public sealed class GifEncoder : IGifEncoder
         if (options.LoopForever)
             GifWriter.WriteNetscapeLoop(output);
 
-        // ---- Pass 2 (RF-F4.08): delta frames com emissao adiada ----
+        // ---- Pass 2: delta frames com emissao adiada ----
         // "pending" e o proximo frame a emitir; frames seguintes iguais dentro
-        // da tolerancia acumulam delay nele (CA-F4.2: duracao preservada).
+        // da tolerancia acumulam delay nele (duracao preservada).
         byte[]? previousEmitted = null;
         var pending = frames[0].Bgra;
         long pendingDelay = frames[0].DelayMs;

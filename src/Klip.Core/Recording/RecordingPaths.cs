@@ -1,6 +1,6 @@
 namespace Klip.Core.Recording;
 
-/// <summary>Caminhos da gravacao de tela (RF-F3.06).</summary>
+/// <summary>Caminhos da gravacao de tela.</summary>
 public static class RecordingPaths
 {
     /// <summary>
@@ -16,7 +16,7 @@ public static class RecordingPaths
             : configuredFolder;
 
     /// <summary>
-    /// Nome "Gravacao YYYY-MM-DD HHMMSS.ext" (RF-F3.06), com sufixo " (n)"
+    /// Nome "Gravacao YYYY-MM-DD HHMMSS.ext", com sufixo " (n)"
     /// quando ja existe arquivo homonimo na pasta.
     /// </summary>
     public static string BuildOutputPath(string folder, DateTime timestamp, string extension)

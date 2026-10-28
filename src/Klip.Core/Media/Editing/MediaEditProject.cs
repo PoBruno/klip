@@ -1,28 +1,28 @@
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// Non-destructive edit project over an immutable source file (RF-F5.05).
+/// Non-destructive edit project over an immutable source file.
 /// Segments reference ranges of the source and carry an explicit position on
-/// the EDITED timeline (RF-F5.17). Every operation is immutable and returns a
-/// new project, so undo/redo (RF-F5.10, RF-F5.18) is just a stack of instances.
+/// the EDITED timeline. Every operation is immutable and returns a
+/// new project, so undo/redo is just a stack of instances.
 ///
 /// Invariants:
 /// - at least one segment; segments are never empty (start &lt; end);
-/// - segments are ordered by timeline position and NEVER overlap (RF-F5.19);
+/// - segments are ordered by timeline position and NEVER overlap;
 /// - gaps may exist between segments and before the first one; gaps render
-///   black and count towards <see cref="EditedDuration"/> (RF-F5.17);
+///   black and count towards <see cref="EditedDuration"/>;
 /// - there is never a gap AFTER the last segment by construction: the edited
 ///   timeline ends exactly at the last segment's end.
 ///
 /// Timeline semantics decided for v2 (documented per task):
 /// - <see cref="MoveSegmentTo"/>/<see cref="MoveSegmentToFrame"/> clamp against
-///   the neighbours' edges instead of overlapping or swapping order (RF-F5.19);
+///   the neighbours' edges instead of overlapping or swapping order;
 ///   reordering remains an index-based operation (<see cref="MoveSegment"/>).
 /// - <see cref="MoveSegment"/> (reorder) re-packs the WHOLE timeline
 ///   contiguously from zero: reordering is a list operation and discards any
 ///   existing gaps (simplest deterministic semantics; a UI that wants to keep
 ///   gaps repositions with <see cref="MoveSegmentTo"/> instead).
-/// - <see cref="RemoveSegment"/> leaves a gap in place (RF-F5.18);
+/// - <see cref="RemoveSegment"/> leaves a gap in place;
 ///   <see cref="RemoveSegmentRipple"/> closes the hole (legacy behaviour).
 /// - Trim: trimming the RIGHT edge keeps <see cref="TimelineSegment.TimelineStart"/>
 ///   fixed; trimming the LEFT edge keeps the RIGHT timeline edge fixed (the
@@ -43,7 +43,7 @@ public sealed class MediaEditProject
     /// <summary>Total number of frames in the source (GIF only).</summary>
     public int SourceFrameCount { get; }
 
-    /// <summary>Segments in timeline order (which is also the export order, RF-F5.17).</summary>
+    /// <summary>Segments in timeline order (which is also the export order).</summary>
     public IReadOnlyList<TimelineSegment> Segments { get; }
 
     /// <summary>Audio streams of the source (Video only; empty for GIF).</summary>
@@ -94,7 +94,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Total duration of the edited timeline (Video only). Gaps count: the
-    /// timeline ends at the end of the LAST segment (RF-F5.17). A gap after the
+    /// timeline ends at the end of the LAST segment. A gap after the
     /// last segment cannot exist by construction.
     /// </summary>
     public TimeSpan EditedDuration
@@ -108,7 +108,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Total number of frame slots on the edited timeline (GIF only), gaps
-    /// included (RF-F5.17).
+    /// included.
     /// </summary>
     public int EditedFrameCount
     {
@@ -188,9 +188,9 @@ public sealed class MediaEditProject
     }
 
     /// <summary>
-    /// Repositions a video segment on the edited timeline (RF-F5.17). The
+    /// Repositions a video segment on the edited timeline. The
     /// target position is clamped so the segment never overlaps its neighbours
-    /// nor goes negative (RF-F5.19): lower bound is the previous segment's end
+    /// nor goes negative: lower bound is the previous segment's end
     /// (or zero); upper bound is the next segment's start minus this segment's
     /// duration (unbounded for the last segment - moving it right grows the
     /// timeline). Order between segments never changes here; use
@@ -220,7 +220,7 @@ public sealed class MediaEditProject
     /// <summary>
     /// GIF variant of <see cref="MoveSegmentTo"/>: repositions the segment to
     /// timeline slot <paramref name="newTimelineFrameStart"/>, clamped against
-    /// the neighbours (RF-F5.19).
+    /// the neighbours.
     /// </summary>
     public MediaEditProject MoveSegmentToFrame(Guid id, int newTimelineFrameStart)
     {
@@ -244,7 +244,7 @@ public sealed class MediaEditProject
     }
 
     /// <summary>
-    /// Removes a segment LEAVING A GAP in its place (RF-F5.18): no other
+    /// Removes a segment LEAVING A GAP in its place: no other
     /// segment moves, so the edited duration only shrinks when the LAST segment
     /// is removed. Throws if it is the last remaining one (the timeline must
     /// always keep at least one segment) or if the Id is unknown. Use
@@ -263,7 +263,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Removes a segment AND shifts every later segment left by the removed
-    /// segment's length, closing the hole it occupied (RF-F5.18 "excluir e
+    /// segment's length, closing the hole it occupied ("excluir e
     /// fechar"). Gaps that existed before or after the removed segment are
     /// preserved as-is. Throws if it is the last remaining segment or the Id is
     /// unknown.
@@ -289,7 +289,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Moves a segment to list position <paramref name="newIndex"/> (clamped,
-    /// drag-and-drop friendly, RF-F5.07). Reordering RE-PACKS the whole
+    /// drag-and-drop friendly). Reordering RE-PACKS the whole
     /// timeline contiguously from zero: any gaps are discarded (documented
     /// semantics - reorder is a list operation; use <see cref="MoveSegmentTo"/>
     /// to reposition while keeping gaps). Moving to the same index is a no-op
@@ -315,7 +315,7 @@ public sealed class MediaEditProject
     /// (documented per task): the timeline start shifts by the SAME delta as
     /// the source start, so a right-edge trim keeps TimelineStart fixed and a
     /// left-edge trim keeps the RIGHT timeline edge fixed. The resulting span
-    /// additionally clamps against the neighbours' edges (RF-F5.19) by
+    /// additionally clamps against the neighbours' edges by
     /// shrinking the source range. Throws if the final range would be empty.
     /// </summary>
     public MediaEditProject TrimSegment(Guid id, TimeSpan newStart, TimeSpan newEnd)
@@ -333,7 +333,7 @@ public sealed class MediaEditProject
         // edge fixed when only the left edge is trimmed).
         var timelineStart = seg.TimelineStart + (start - seg.SourceStart);
 
-        // RF-F5.19: clamp against neighbours (and timeline zero) by shrinking
+        // clamp against neighbours (and timeline zero) by shrinking
         // the source range instead of overlapping.
         var lower = index > 0 ? Segments[index - 1].TimelineEnd : TimeSpan.Zero;
         if (timelineStart < lower)
@@ -362,7 +362,7 @@ public sealed class MediaEditProject
     /// Retrims a GIF segment over [newStart, newEnd) in SOURCE frame indices,
     /// clamped to [0, SourceFrameCount]. Same timeline semantics as
     /// <see cref="TrimSegment"/>: the timeline slot shifts with the left edge
-    /// and the span clamps against the neighbours (RF-F5.19). Throws if the
+    /// and the span clamps against the neighbours. Throws if the
     /// final range is empty.
     /// </summary>
     public MediaEditProject TrimSegmentFrames(Guid id, int newStart, int newEnd)
@@ -403,7 +403,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Sets volume/mute for the audio stream <paramref name="streamIndex"/>
-    /// (RF-F5.09). Updates the existing track or appends a new one. Video only.
+    /// Updates the existing track or appends a new one. Video only.
     /// </summary>
     public MediaEditProject WithAudioTrack(int streamIndex, double volume, bool muted)
     {
@@ -422,7 +422,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// Maps a position on the EDITED timeline to the corresponding source time
-    /// (RF-F5.20). Returns false when the position falls inside a gap, before
+    /// Returns false when the position falls inside a gap, before
     /// zero or at/after <see cref="EditedDuration"/> - the player paints black
     /// there; <paramref name="sourcePosition"/> is zero in that case.
     /// </summary>
@@ -445,7 +445,7 @@ public sealed class MediaEditProject
     }
 
     /// <summary>
-    /// GIF variant of <see cref="TryMapToSource"/> (RF-F5.20): returns false
+    /// GIF variant of <see cref="TryMapToSource"/>: returns false
     /// for slots inside gaps or outside the timeline (the player paints a
     /// black frame); <paramref name="sourceFrame"/> is -1 in that case.
     /// </summary>
@@ -509,8 +509,8 @@ public sealed class MediaEditProject
     /// <summary>
     /// Gaps of the edited VIDEO timeline in order: [start, end) spans not
     /// covered by any segment, including a leading gap before the first
-    /// segment (RF-F5.17). There is never a trailing gap by construction.
-    /// Used by the UI (black regions) and by the export (RF-F5.20).
+    /// segment. There is never a trailing gap by construction.
+    /// Used by the UI (black regions) and by the export.
     /// </summary>
     public IReadOnlyList<(TimeSpan Start, TimeSpan End)> GetGaps()
     {
@@ -528,7 +528,7 @@ public sealed class MediaEditProject
 
     /// <summary>
     /// GIF variant of <see cref="GetGaps"/>: half-open [start, end) ranges of
-    /// timeline frame slots not covered by any segment (RF-F5.17).
+    /// timeline frame slots not covered by any segment.
     /// </summary>
     public IReadOnlyList<(int Start, int End)> GetFrameGaps()
     {
@@ -572,7 +572,7 @@ public sealed class MediaEditProject
 
     private MediaEditProject WithSegments(IReadOnlyList<TimelineSegment> segments)
     {
-        // Safety net for the RF-F5.19 invariant: ordered by timeline position,
+        // Safety net for the invariant: ordered by timeline position,
         // no overlaps. Every operation maintains this by construction.
         for (var i = 1; i < segments.Count; i++)
         {
@@ -580,7 +580,7 @@ public sealed class MediaEditProject
                 ? segments[i].TimelineStart < segments[i - 1].TimelineEnd
                 : segments[i].TimelineFrameStart < segments[i - 1].TimelineFrameEnd;
             if (overlap)
-                throw new InvalidOperationException("Timeline segments must be ordered and must not overlap (RF-F5.19).");
+                throw new InvalidOperationException("Timeline segments must be ordered and must not overlap.");
         }
         return new(Kind, SourcePath, SourceDuration, SourceFrameCount, segments, AudioTracks);
     }

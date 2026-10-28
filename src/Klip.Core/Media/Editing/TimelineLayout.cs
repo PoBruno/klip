@@ -1,10 +1,10 @@
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// Matematica pura de layout do controle de timeline (RF-F5.05/06/07):
+/// Matematica pura de layout do controle de timeline:
 /// segmentos viram blocos proporcionais a duracao, e posicoes em pixel
 /// mapeiam de/para unidades da timeline EDITADA (segundos no video, frames
-/// no GIF). Timeline livre (RF-F5.17): use
+/// no GIF). Timeline livre: use
 /// <see cref="ComputePositionedBlocks"/> para posicionar blocos por
 /// TimelineStart (com gaps) e <see cref="HitTestGap"/> para detectar cliques
 /// em gaps. Sem WPF - testavel em Klip.Core.Tests.
@@ -46,7 +46,7 @@ public static class TimelineLayout
     }
 
     /// <summary>
-    /// Blocos POSICIONADOS pela timeline livre (RF-F5.17): cada span e
+    /// Blocos POSICIONADOS pela timeline livre: cada span e
     /// (inicio, comprimento) em unidades da timeline editada (TimelineStart +
     /// duracao no video; TimelineFrameStart + contagem no GIF). A regua vai
     /// ate <paramref name="totalUnits"/> (EditedDuration/EditedFrameCount);
@@ -71,7 +71,7 @@ public static class TimelineLayout
     }
 
     /// <summary>
-    /// Hit-test de gap (RF-F5.17): true quando <paramref name="x"/> esta
+    /// Hit-test de gap: true quando <paramref name="x"/> esta
     /// dentro da regua ([0, totalWidth)) mas fora de todos os blocos.
     /// </summary>
     public static bool HitTestGap(IReadOnlyList<Block> blocks, double x, double totalWidth)
@@ -109,7 +109,7 @@ public static class TimelineLayout
     }
 
     /// <summary>
-    /// Indice de insercao do drag-and-drop de reordenacao (RF-F5.07): conta os
+    /// Indice de insercao do drag-and-drop de reordenacao: conta os
     /// blocos (exceto o arrastado) cujo centro fica a esquerda de
     /// <paramref name="x"/>. O resultado e o newIndex esperado por
     /// <see cref="MediaEditProject.MoveSegment"/> (remove + insere).

@@ -4,7 +4,7 @@ using System.Runtime.InteropServices;
 namespace Klip.Interop;
 
 /// <summary>
-/// Controle de QoS de energia do Windows (RF-P3.03): EcoQoS por processo e por
+/// Controle de QoS de energia do Windows: EcoQoS por processo e por
 /// thread, prioridade de memoria e background IO mode para trabalho de manutencao.
 /// <para>
 /// Nenhum metodo lanca. Quando o Windows nao expoe a API (builds antigos do

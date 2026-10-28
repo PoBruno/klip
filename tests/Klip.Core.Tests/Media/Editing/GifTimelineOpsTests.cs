@@ -2,7 +2,7 @@ using Klip.Core.Media.Editing;
 
 namespace Klip.Core.Tests.Media.Editing;
 
-/// <summary>RF-F5.08 / CA-F5.4: decimation preserves total duration.</summary>
+/// <summary>decimation preserves total duration.</summary>
 public class GifTimelineOpsTests
 {
     [Fact]

@@ -6,12 +6,16 @@ using Klip.App.Services;
 namespace Klip.App.Diagnostics;
 
 /// <summary>
-/// RF-P0.02: mede quanto tempo a UI thread demora para atender uma mensagem.
+/// Mede quanto tempo a UI thread demora para atender uma mensagem.
 /// Um bloqueio longo na UI thread do Klip e o que congela o input do sistema
 /// quando ha hook LL instalado - transformar isso em evidencia rastreavel.
 /// <para>
-/// Criterio de aceite CA-P2.1: nenhum bloqueio acima de 50 ms durante 30 min de
+/// Meta: nenhum bloqueio acima de 50 ms durante 30 min de
 /// uso intenso.
+/// </para>
+/// <para>
+/// Roda so com hook LL vivo (ou com --verbose): e quando um travamento da UI vira
+/// travamento de input do sistema. Em repouso fica parado.
 /// </para>
 /// </summary>
 public sealed class UiThreadWatchdog : IDisposable
@@ -59,7 +63,7 @@ public sealed class UiThreadWatchdog : IDisposable
     /// <summary>
     /// Sobe o watchdog. Idempotente.
     /// <para>
-    /// RF-P0.02: <see cref="System.Threading.Timer"/>, nunca DispatcherTimer - a
+    /// <see cref="System.Threading.Timer"/>, nunca DispatcherTimer - a
     /// sonda precisa nascer FORA da UI thread, senao ela mediria a si mesma e
     /// jamais detectaria um bloqueio.
     /// </para>

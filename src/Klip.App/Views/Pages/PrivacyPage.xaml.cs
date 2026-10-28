@@ -1,26 +1,22 @@
 using System.Windows;
+using System.Windows.Controls;
+using Klip.App.Localization;
 using Klip.Core.Settings;
 
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// RF-S.05 - secao "Privacidade" (absorve <c>SectionPrivacy</c>): pular conteudo de
-/// gerenciadores de senha, restaurar o clipboard e limpar o historico ao sair.
-/// Migrada de <c>MainWindow.xaml:520-559</c> + <c>MainWindow.xaml.cs:203-205,
-/// 422-424</c>.
-/// <para>
-/// ADR-S.07: a pagina e dona do proprio guard de reentrancia, em <c>try/finally</c>.
-/// </para>
+/// Privacy: skip (or briefly keep) things that look like secrets, clear the history
+/// on exit and restore the clipboard after pasting.
 /// </summary>
 public partial class PrivacyPage : ISettingsPage
 {
+    // 0 = don't keep (skipped like before), then 30 s, 60 s, 2 min
+    private static readonly int[] SecretKeepPresets = [0, 30, 60, 120];
+
     private readonly SettingsService _settings;
 
-    /// <summary>
-    /// ADR-S.07: guard de reentrancia, sempre em <c>try/finally</c>. O <c>_loading</c>
-    /// da MainWindow (<c>MainWindow.xaml.cs:414-486</c>) nao estava: uma excecao no
-    /// meio do refresh deixava a tela inteira somente-leitura ate reiniciar o app.
-    /// </summary>
+    // reentrancy guard, always reset in a finally
     private bool _loading;
 
     public PrivacyPage(SettingsService settings)
@@ -29,10 +25,12 @@ public partial class PrivacyPage : ISettingsPage
         _settings = settings;
         InitializeComponent();
 
-        // RF-S.05: assinatura NO CONSTRUTOR, nunca em Loaded. A pagina e singleton
-        // (ADR-S.03) e o Loaded dispara a cada re-entrada na arvore visual, o que
-        // duplicaria os handlers a cada ida e volta na navegacao.
+        foreach (var seconds in SecretKeepPresets)
+            SecretKeepCombo.Items.Add(new ComboBoxItem { Tag = seconds });
+
+        // handlers in the constructor, never in Loaded (singleton page)
         SkipSecretsToggle.Click += OnSkipSecretsClick;
+        SecretKeepCombo.SelectionChanged += OnSecretKeepChanged;
         RestoreClipboardToggle.Click += OnRestoreClipboardClick;
         ClearOnExitToggle.Click += OnClearOnExitClick;
 
@@ -45,9 +43,11 @@ public partial class PrivacyPage : ISettingsPage
         _loading = true;
         try
         {
-            // MainWindow.xaml.cs:422-424
             var s = _settings.Current;
             SkipSecretsToggle.IsChecked = s.SkipSecrets;
+            SecretKeepCard.IsEnabled = s.SkipSecrets;
+            RelabelSecretKeep();
+            SecretKeepCombo.SelectedItem = FindPreset(s.SecretKeepSeconds) ?? FindPreset(0);
             RestoreClipboardToggle.IsChecked = s.RestoreClipboardAfterPaste;
             ClearOnExitToggle.IsChecked = s.ClearHistoryOnExit;
         }
@@ -57,16 +57,50 @@ public partial class PrivacyPage : ISettingsPage
         }
     }
 
-    /// <summary>MainWindow.xaml.cs:203. Vale para a proxima ingestao.</summary>
+    private void RelabelSecretKeep()
+    {
+        foreach (var item in SecretKeepCombo.Items)
+        {
+            if (item is not ComboBoxItem { Tag: int seconds } entry)
+                continue;
+            entry.Content = seconds switch
+            {
+                0 => Loc.SecretKeepNever,
+                < 120 => string.Format(Loc.SecretKeepSeconds, seconds),
+                _ => string.Format(Loc.SecretKeepMinutes, seconds / 60),
+            };
+        }
+    }
+
+    private ComboBoxItem? FindPreset(int seconds)
+    {
+        foreach (var item in SecretKeepCombo.Items)
+        {
+            if (item is ComboBoxItem { Tag: int tag } entry && tag == seconds)
+                return entry;
+        }
+        return null;
+    }
+
+    // applies to the next ingest
     private void OnSkipSecretsClick(object sender, RoutedEventArgs e)
     {
+        var on = SkipSecretsToggle.IsChecked == true;
+        SecretKeepCard.IsEnabled = on;
         if (_loading)
             return;
 
-        _settings.Update(s => s.SkipSecrets = SkipSecretsToggle.IsChecked == true);
+        _settings.Update(s => s.SkipSecrets = on);
     }
 
-    /// <summary>MainWindow.xaml.cs:204.</summary>
+    private void OnSecretKeepChanged(object sender, SelectionChangedEventArgs e)
+    {
+        if (_loading || SecretKeepCombo.SelectedItem is not ComboBoxItem { Tag: int seconds })
+            return;
+
+        _settings.Update(s => s.SecretKeepSeconds = seconds);
+    }
+
     private void OnRestoreClipboardClick(object sender, RoutedEventArgs e)
     {
         if (_loading)
@@ -75,7 +109,6 @@ public partial class PrivacyPage : ISettingsPage
         _settings.Update(s => s.RestoreClipboardAfterPaste = RestoreClipboardToggle.IsChecked == true);
     }
 
-    /// <summary>MainWindow.xaml.cs:205.</summary>
     private void OnClearOnExitClick(object sender, RoutedEventArgs e)
     {
         if (_loading)

@@ -3,7 +3,7 @@ using Klip.Core.Media.Editing;
 namespace Klip.Core.Tests.Media.Editing;
 
 /// <summary>
-/// RF-F5.11 golden-string tests: the builder is pure and deterministic, so we
+///  golden-string tests: the builder is pure and deterministic, so we
 /// assert the exact argument string.
 /// </summary>
 public class FfmpegArgsBuilderTests
@@ -16,7 +16,7 @@ public class FfmpegArgsBuilderTests
         var p = MediaEditProject.CreateVideo(@"C:\rec\in.mp4", Sec(60), audioTracks)
             .SplitAt(Sec(5)).SplitAt(Sec(20)).SplitAt(Sec(30)).SplitAt(Sec(45));
         // [0-5][5-20][20-30][30-45][45-60]
-        // ripple removal keeps the timeline contiguous (RF-F5.18)
+        // ripple removal keeps the timeline contiguous
         p = p.RemoveSegmentRipple(p.Segments[0].Id); // drop 0-5
         p = p.RemoveSegmentRipple(p.Segments[1].Id); // drop 20-30
         p = p.RemoveSegmentRipple(p.Segments[2].Id); // drop 45-60
@@ -25,7 +25,7 @@ public class FfmpegArgsBuilderTests
     }
 
     /// <summary>
-    /// Video project [0-20] | 5 s gap | [20-60] from a 60 s source (RF-F5.17):
+    /// Video project [0-20] | 5 s gap | [20-60] from a 60 s source:
     /// the second segment is dragged from 20 s to 25 s on the edited timeline.
     /// </summary>
     private static MediaEditProject GapInTheMiddle(int audioTracks)
@@ -37,7 +37,7 @@ public class FfmpegArgsBuilderTests
     [Fact]
     public void Video_GapInMiddle_VideoAndAudio_GoldenString()
     {
-        // RF-F5.20: the gap becomes synthetic black video (color) + silence
+        // the gap becomes synthetic black video (color) + silence
         // (anullsrc) interleaved in timeline order inside the concat
         var p = GapInTheMiddle(audioTracks: 1);
         var s = new VideoExportSettings { VideoCodec = "h264_nvenc", FastStart = true, Width = 1280, Height = 720, Fps = 30 };
@@ -52,7 +52,7 @@ public class FfmpegArgsBuilderTests
     [Fact]
     public void Video_GapInMiddle_NoAudio_GoldenString()
     {
-        // RF-F5.20: without audible tracks the gap filler is video-only + -an
+        // without audible tracks the gap filler is video-only + -an
         var p = GapInTheMiddle(audioTracks: 0);
         var s = new VideoExportSettings(); // defaults: libopenh264, faststart, 1920x1080@30
 
@@ -195,7 +195,7 @@ public class FfmpegArgsBuilderTests
     [Fact]
     public void Gif_FromVideoWithGap_BlackFillerAtTargetFps_GoldenString()
     {
-        // RF-F5.20: MP4->GIF route also fills gaps with black (at the GIF fps)
+        // MP4->GIF route also fills gaps with black (at the GIF fps)
         var p = MediaEditProject.CreateVideo(@"C:\rec\in.mp4", Sec(10)).SplitAt(Sec(4));
         p = p.MoveSegmentTo(p.Segments[1].Id, Sec(6)); // gap (4,6)
         var s = new GifFromVideoSettings { Fps = 10, ScaleWidth = null, Dithering = "none", Width = 1280, Height = 720 };

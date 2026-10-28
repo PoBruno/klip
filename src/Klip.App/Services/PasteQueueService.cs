@@ -10,7 +10,7 @@ namespace Klip.App.Services;
 /// A global hook drops the next item on the clipboard right before each Ctrl+V
 /// reaches the target app.
 /// <para>
-/// RF-P1.03 / ADR-P.02: o hook so existe enquanto a fila esta armada. O escopo e
+/// O hook so existe enquanto a fila esta armada. O escopo e
 /// adquirido no <see cref="Arm"/> e devolvido no <see cref="Finish"/>/<see cref="Cancel"/>,
 /// o que REMOVE o WH_KEYBOARD_LL do sistema - nao apenas o desativa.
 /// </para>
@@ -24,7 +24,7 @@ public sealed class PasteQueueService : IDisposable
     private readonly Core.Clipboard.PasteQueue<ClipboardItem> _queue = new();
     private DateTime _armedAt;
 
-    // RF-P1.03: escopo do hook de teclado. Nulo = nenhum hook instalado por esta fila.
+    // escopo do hook de teclado. Nulo = nenhum hook instalado por esta fila.
     private IDisposable? _hookScope;
 
     /// <summary>Queue state for the UI counters (X of N).</summary>
@@ -33,13 +33,16 @@ public sealed class PasteQueueService : IDisposable
 
     public bool IsArmed => _queue.IsArmed;
 
+    /// <summary>Collect mode can hand over more than the 1 to 5 picker.</summary>
+    public const int MaxItems = Core.Clipboard.PasteJoin.MaxCollected;
+
     public PasteQueueService(ClipboardWriteGuard writeGuard, MediaStore mediaStore)
     {
         _writeGuard = writeGuard;
         _mediaStore = mediaStore;
         _dispatcher = Dispatcher.CurrentDispatcher;
 
-        // RF-P1.01: o host entrega os eventos numa thread worker propria; a assinatura
+        // o host entrega os eventos numa thread worker propria; a assinatura
         // dura a vida do servico (singleton) e nao instala hook nenhum sozinha.
         LowLevelHookHost.Shared.Observed += OnHookEvent;
     }
@@ -52,7 +55,7 @@ public sealed class PasteQueueService : IDisposable
         _queue.Reset();
         if (items.Count == 0)
             return;
-        _queue.Begin(Math.Min(items.Count, 5));
+        _queue.Begin(items.Count, MaxItems);
         foreach (var item in items)
             _queue.Toggle(item);
         _armedAt = DateTime.UtcNow;
@@ -75,7 +78,7 @@ public sealed class PasteQueueService : IDisposable
     }
 
     /// <summary>
-    /// RF-P1.04 / ADR-P.01: roda na thread WORKER do host, nunca no callback do hook e
+    /// Roda na thread WORKER do host, nunca no callback do hook e
     /// nunca na UI thread.
     /// </summary>
     private void OnHookEvent(InputEvent ev)
@@ -159,8 +162,8 @@ public sealed class PasteQueueService : IDisposable
         {
             if (item.Type == ClipboardItemType.Image && item.FilePath is not null)
                 _writeGuard.WriteImageFromPngFile(_mediaStore.ToAbsolute(item.FilePath));
-            else if (item.TextContent is not null)
-                _writeGuard.WriteText(item.TextContent);
+            else
+                _writeGuard.WriteItem(item); // text keeps html/rtf, files go as files
         }
         catch (Exception ex)
         {
@@ -186,7 +189,7 @@ public sealed class PasteQueueService : IDisposable
     }
 
     /// <summary>
-    /// RF-P1.03: desarma e REMOVE o hook do sistema. Desarmar tambem devolve o guard de
+    /// Desarma e REMOVE o hook do sistema. Desarmar tambem devolve o guard de
     /// colagem em voo (ver <see cref="HookPolicy.CtrlVArmed"/>), entao nao ha estado
     /// preso para o proximo arme.
     /// </summary>

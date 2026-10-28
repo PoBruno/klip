@@ -3,7 +3,7 @@ using Klip.Core.Diagnostics;
 
 namespace Klip.Core.Tests.Diagnostics;
 
-/// <summary>RF-P1.04: metricas do callback do hook contra o orcamento LowLevelHooksTimeout.</summary>
+/// <summary>metricas do callback do hook contra o orcamento LowLevelHooksTimeout.</summary>
 public class HookMetricsTests
 {
     private static double TicksToMicroseconds(long ticks) => ticks * 1_000_000.0 / Stopwatch.Frequency;

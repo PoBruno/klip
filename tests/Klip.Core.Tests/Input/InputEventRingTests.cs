@@ -3,7 +3,7 @@ using Klip.Core.Input;
 
 namespace Klip.Core.Tests.Input;
 
-/// <summary>RF-P1.01/RF-P1.02: fila SPSC lock-free do hook, com descarte contabilizado.</summary>
+/// <summary>fila SPSC lock-free do hook, com descarte contabilizado.</summary>
 public class InputEventRingTests
 {
     [Theory]

@@ -7,7 +7,7 @@ namespace Klip.Core.Clipboard;
 /// Parser for the Windows "HTML Format" (CF_HTML) clipboard format.
 /// Payload is UTF-8 with an ASCII header of offsets:
 /// Version / StartHTML / EndHTML / StartFragment / EndFragment [/ SourceURL].
-/// RF-P2.03: o header e lido direto sobre ReadOnlySpan&lt;byte&gt;, sem
+/// o header e lido direto sobre ReadOnlySpan&lt;byte&gt;, sem
 /// materializar nenhuma string intermediaria - so o fragmento, o HTML e a
 /// SourceURL de saida alocam.
 /// </summary>
@@ -16,7 +16,7 @@ public static class CfHtmlParser
     public sealed record CfHtmlResult(string Html, string Fragment, string? SourceUrl);
 
     /// <summary>
-    /// RF-P2.03: o header CF_HTML nunca passa de algumas centenas de bytes.
+    /// o header CF_HTML nunca passa de algumas centenas de bytes.
     /// Sondar alem disso so varreria o corpo do HTML a toa.
     /// </summary>
     private const int MaxHeaderProbeBytes = 512;
@@ -34,7 +34,7 @@ public static class CfHtmlParser
     /// <summary>
     /// O header gerado por <see cref="BuildCfHtml"/> tem largura fixa e e ASCII
     /// puro, entao o tamanho em bytes e igual ao tamanho em chars e da pra
-    /// saber quanto ele ocupa sem formatar nada antes (RF-P2.03).
+    /// saber quanto ele ocupa sem formatar nada antes.
     /// </summary>
     private static readonly int HeaderLength =
         VersionLine.Length +
@@ -53,7 +53,7 @@ public static class CfHtmlParser
         TryParse((ReadOnlySpan<byte>)payload, out result);
 
     /// <summary>
-    /// RF-P2.03: parse sem alocar o header. Offsets do CF_HTML sao posicoes em
+    /// parse sem alocar o header. Offsets do CF_HTML sao posicoes em
     /// BYTES a partir do inicio do dado, nunca em caracteres.
     /// </summary>
     public static bool TryParse(ReadOnlySpan<byte> payload, out CfHtmlResult result)
@@ -64,7 +64,7 @@ public static class CfHtmlParser
 
         var header = ReadHeader(payload);
 
-        // RF-P2.03: offsets ausentes, fora dos limites do payload ou invertidos
+        // offsets ausentes, fora dos limites do payload ou invertidos
         // retornam false em vez de estourar uma excecao de range
         if (header.StartFragment < 0 || header.EndFragment < 0)
             return false;
@@ -91,7 +91,7 @@ public static class CfHtmlParser
     /// <summary>
     /// Monta um payload CF_HTML valido (com o header de offsets) a partir de um
     /// fragmento HTML, pra recolar mantendo a formatacao.
-    /// RF-P2.03: header de largura fixa + <c>string.Create</c>, uma unica alocacao.
+    /// header de largura fixa + <c>string.Create</c>, uma unica alocacao.
     /// </summary>
     public static string BuildCfHtml(string fragment)
     {

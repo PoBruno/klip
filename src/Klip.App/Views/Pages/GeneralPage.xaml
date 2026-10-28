@@ -6,15 +6,11 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- RF-S.03: nenhum Background aqui - qualquer preenchimento opaco mataria o Mica
-         que o shell compoe atras do conteudo. Tambem sem ScrollViewer: quem rola e o
-         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
-         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <!-- nenhum Background aqui - qualquer preenchimento opaco mataria o Mica que o shell compoe atras do conteudo. Tambem sem ScrollViewer: quem rola e o DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
     <StackPanel MaxWidth="680">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionGeneral}" />
 
-        <!-- RF-S.02 / ADR-S.05: os 4 Grid escritos a mao de MainWindow.xaml:234-279
-             viram 4 SettingsCard. As margens deixam de ser decididas cartao a cartao. -->
+        <!-- os 4 Grid escritos a mao de MainWindow.xaml:234-279 viram 4 SettingsCard. As margens deixam de ser decididas cartao a cartao. -->
 
         <!-- MainWindow.xaml:234-243. Sem legenda: nenhuma chave existente do Loc
              descreve o ajuste, e inventar texto exigiria mexer no Loc.cs (fora
@@ -43,6 +39,13 @@
             Description="{DynamicResource Loc.ShowEmojiTabCaption}"
             Icon="&#xE76E;">
             <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ShowSnippetsTabTitle}"
+            Description="{DynamicResource Loc.ShowSnippetsTabCaption}"
+            Icon="&#xE943;">
+            <ui:ToggleSwitch x:Name="ShowSnippetsTabToggle" />
         </controls:SettingsCard>
     </StackPanel>
 </Page>

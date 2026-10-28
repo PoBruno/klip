@@ -48,7 +48,6 @@ public class SchemaMigrationTests : IDisposable
     [Fact]
     public void MigrationV3_CreatesOrderCoveringIndexes_AndDropsTheRedundantOnes()
     {
-        // RF-P2.08
         using var db = new Database(_dbPath);
         db.Initialize();
         db.Initialize(); // idempotente: rodar de novo nao pode recriar os indices removidos

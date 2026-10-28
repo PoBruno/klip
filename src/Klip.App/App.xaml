@@ -3,16 +3,18 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:services="clr-namespace:Klip.App.Services"
     ShutdownMode="OnExplicitShutdown">
     <Application.Resources>
         <ResourceDictionary>
             <ResourceDictionary.MergedDictionaries>
-                <ui:ThemesDictionary Theme="Dark" />
+                <!-- parsed already on the saved theme, so startup doesn't parse Dark
+                     and then swap to Light right after -->
+                <services:StartupThemesDictionary />
                 <ui:ControlsDictionary />
                 <ResourceDictionary Source="/Styles/Keycaps.xaml" />
-                <!-- RF-S.01: design system da tela de Configuracoes. Precisa vir DEPOIS
-                     do ThemesDictionary e do ControlsDictionary, senao os overrides de
-                     brush (NavigationViewItemBackgroundPointerOver) nao vencem. -->
+                <!-- has to come after the theme and controls dictionaries, otherwise
+                     the brush overrides (NavigationViewItemBackgroundPointerOver) lose -->
                 <ResourceDictionary Source="/Styles/Settings.xaml" />
             </ResourceDictionary.MergedDictionaries>
         </ResourceDictionary>

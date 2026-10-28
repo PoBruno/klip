@@ -6,35 +6,59 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+    <Page.Resources>
+        <!-- one row of an app list (excluded apps, apps that keep formatting). The remove
+             button has no Click: it bubbles up to the ItemsControl, where one handler
+             reads the DataContext. -->
+        <DataTemplate x:Key="AppRowTemplate">
+            <Border
+                Margin="0,0,0,4"
+                Padding="10,6"
+                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                CornerRadius="4">
+                <Grid>
+                    <TextBlock VerticalAlignment="Center" Text="{Binding}" />
+                    <Button
+                        HorizontalAlignment="Right"
+                        Padding="6,2"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Cursor="Hand"
+                        ToolTip="{DynamicResource Loc.RemoveApp}"
+                        AutomationProperties.Name="{DynamicResource Loc.RemoveApp}">
+                        <TextBlock
+                            FontFamily="{StaticResource KlipIconFont}"
+                            FontSize="12"
+                            Text="&#xE74D;" />
+                    </Button>
+                </Grid>
+            </Border>
+        </DataTemplate>
+
+        <Style x:Key="AppListStyle" TargetType="{x:Type ItemsControl}">
+            <Setter Property="Margin" Value="0,8,0,0" />
+            <Setter Property="ItemTemplate" Value="{StaticResource AppRowTemplate}" />
+            <Style.Triggers>
+                <Trigger Property="HasItems" Value="False">
+                    <Setter Property="Visibility" Value="Collapsed" />
+                </Trigger>
+            </Style.Triggers>
+        </Style>
+    </Page.Resources>
+
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer: quem rola e o
          DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
          template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
     <StackPanel MaxWidth="680">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionClipboard}" />
 
-        <!-- DECISAO (RF-S.08): os dois ui:NumberBox FICAM.
-             Medido nesta versao (WPF-UI 4.3.0, harness fora do repo): o ui:NumberBox
-             monta 35 elementos visuais em ~4,0 ms; o ui:TextBox, 16 em ~1,4 ms. Trocar
-             os dois economizaria 38 elementos e ~5 ms - e so isso.
-             Com ADR-S.01/ADR-S.03 esta pagina so nasce na PRIMEIRA navegacao ate
-             "Historico de clipboard": os ~8 ms nao estao mais no startup, que e o que
-             RF-S.08 ataca, e sao pagos uma unica vez dentro de uma navegacao que o
-             proprio usuario pediu.
-             Do outro lado da conta, um ui:TextBox numerico exigiria reimplementar a
-             mao: clamp em Minimum/Maximum (o NumberBox ja corta 99999 para 3650 -
-             verificado), filtro de entrada, incremento por seta do teclado, os botoes
-             de spinner e o padrao de automacao de intervalo do leitor de tela. Nao se
-             troca comportamento acessivel testado por 5 ms invisiveis numa pagina ja
-             aberta.
-             O que faria reavaliar: a pagina deixar de ser lazy, ou o numero de
-             NumberBox crescer.
-             ClearButtonEnabled=False nao muda a contagem de elementos (o botao esta no
-             template dos dois jeitos, so colapsado) - e decisao de comportamento: o "x"
-             zera o Text, Value vira null e o handler (que exige `is { } value`) nao
-             grava, entao a caixa mostraria vazio com o setting ainda no valor antigo.
-             Zero ja e o "sem limite" e se digita.
-             MaxDecimalPlaces=0 casa a exibicao com o cast (int) do handler; verificado
-             que 10000, 0 e 250 continuam sendo exibidos sem casas decimais. -->
+        <!-- ================= Retencao ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.HistorySectionRetention}" />
+
+        <!-- ui:NumberBox stays: clamp, arrow keys, spinner and the range automation pattern
+             come for free, and this page is only built on the first visit.
+             ClearButtonEnabled=False: the "x" would leave the box empty while the setting
+             keeps its old value. -->
         <controls:SettingsCard
             Title="{DynamicResource Loc.MaxItemsTitle}"
             Description="{DynamicResource Loc.MaxItemsCaption}"
@@ -47,6 +71,41 @@
                 MaxDecimalPlaces="0"
                 ClearButtonEnabled="False"
                 Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxImagesTitle}"
+            Description="{DynamicResource Loc.MaxImagesCaption}"
+            Icon="&#xE91B;">
+            <ui:NumberBox
+                x:Name="MaxImagesBox"
+                Width="140"
+                Maximum="100000"
+                Minimum="0"
+                MaxDecimalPlaces="0"
+                ClearButtonEnabled="False"
+                Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxMediaTitle}"
+            Description="{DynamicResource Loc.MaxMediaCaption}"
+            Icon="&#xEDA2;">
+            <StackPanel Orientation="Horizontal">
+                <ui:NumberBox
+                    x:Name="MaxMediaBox"
+                    Width="140"
+                    Maximum="1024"
+                    Minimum="0"
+                    MaxDecimalPlaces="1"
+                    SmallChange="0.5"
+                    ClearButtonEnabled="False"
+                    Style="{StaticResource SettingsNumberBox}" />
+                <TextBlock
+                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
+                    Text="{DynamicResource Loc.MaxMediaUnit}" />
+            </StackPanel>
         </controls:SettingsCard>
 
         <controls:SettingsCard
@@ -63,8 +122,7 @@
                 Style="{StaticResource SettingsNumberBox}" />
         </controls:SettingsCard>
 
-        <!-- Campo + botao + lista ficam no Footer (RF-S.02): o cartao nao tem controle
-             a direita, tudo e empilhado abaixo do titulo e da legenda. -->
+        <!-- field + button + list go in the Footer: no control on the right of the card -->
         <controls:SettingsCard
             Title="{DynamicResource Loc.ExcludedAppsTitle}"
             Description="{DynamicResource Loc.ExcludedAppsCaption}"
@@ -76,7 +134,6 @@
                             <ColumnDefinition Width="*" />
                             <ColumnDefinition Width="Auto" />
                         </Grid.ColumnDefinitions>
-                        <!-- RF-S.07: "processo.exe" estava hardcoded no XAML da MainWindow. -->
                         <ui:TextBox
                             x:Name="ExcludeAppBox"
                             PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
@@ -89,48 +146,22 @@
                             Content="{DynamicResource Loc.AddApp}" />
                     </Grid>
 
-                    <!-- RF-S.09: virtualizacao de verdade.
-                         Um VirtualizingStackPanel medido com altura DISPONIVEL INFINITA
-                         realiza todos os itens - a virtualizacao desliga em silencio. E
-                         infinita e o que esta lista recebe: o DynamicScrollViewer do
-                         NavigationViewContentPresenter mede a pagina inteira assim.
-                         Duas condicoes precisam valer juntas:
-                         1) o painel tem que ser o IScrollInfo de um ScrollViewer, e por
-                            isso o ScrollViewer mora DENTRO do Template (como no template
-                            default do ListBox). Um ScrollViewer por fora envolvendo o
-                            ItemsControl nao serve: o filho dele seria o ItemsControl, que
-                            nao e IScrollInfo, e o scroll voltaria a ser por pixel;
-                         2) a altura tem que ser finita - dai o MaxHeight, que da a
-                            viewport e faz a lista rolar sozinha. Este MaxHeight e o UNICO
-                            do conjunto e e da LISTA, nao da pagina: e ele que liga a
-                            virtualizacao, nao um remendo de rolagem.
-                         O poco de scroll que isso cria e devolvido no code-behind
-                         (OnExcludedAppsPreviewMouseWheel), que reemite o MouseWheelEvent
-                         a partir do ItemsControl. Como o evento so borbulha, ele sobe
-                         ate o DynamicScrollViewer do presenter - antes parava no
-                         ScrollViewer da pagina, que nao existe mais. O handler nao
-                         precisou mudar: ele so depende de haver um ScrollViewer acima.
-                         HasItems=False colapsa a lista para nao sobrar margem vazia. -->
+                    <!-- real virtualization: a VirtualizingStackPanel measured with infinite
+                         height (what the page scroller gives) realizes everything. So the
+                         ScrollViewer lives INSIDE the template (the panel is its IScrollInfo)
+                         and MaxHeight gives it a finite viewport. The wheel goes back to the
+                         page scroller in OnListPreviewMouseWheel. -->
                     <ItemsControl
                         x:Name="ExcludedAppsList"
                         MaxHeight="216"
-                        Margin="0,8,0,0"
+                        Style="{StaticResource AppListStyle}"
                         VirtualizingPanel.IsVirtualizing="True"
                         VirtualizingPanel.VirtualizationMode="Recycling"
                         ScrollViewer.CanContentScroll="True">
-                        <ItemsControl.Style>
-                            <Style TargetType="{x:Type ItemsControl}">
-                                <Style.Triggers>
-                                    <Trigger Property="HasItems" Value="False">
-                                        <Setter Property="Visibility" Value="Collapsed" />
-                                    </Trigger>
-                                </Style.Triggers>
-                            </Style>
-                        </ItemsControl.Style>
                         <ItemsControl.Template>
                             <ControlTemplate TargetType="{x:Type ItemsControl}">
                                 <ScrollViewer
-                                    x:Name="PART_ExcludedAppsScroll"
+                                    x:Name="PART_ListScroll"
                                     Focusable="False"
                                     CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
                                     HorizontalScrollBarVisibility="Disabled"
@@ -144,39 +175,110 @@
                                 <VirtualizingStackPanel />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
-                        <ItemsControl.ItemTemplate>
-                            <DataTemplate>
-                                <Border
-                                    Margin="0,0,0,4"
-                                    Padding="10,6"
-                                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                                    CornerRadius="4">
-                                    <Grid>
-                                        <TextBlock VerticalAlignment="Center" Text="{Binding}" />
-                                        <!-- Sem Click="..." e sem Tag: o Click borbulha ate o
-                                             ItemsControl, onde um unico handler ligado em C#
-                                             (compile-checked) le o DataContext do botao.
-                                             RF-S.07: Loc.RemoveApp existia e nao era usado. -->
-                                        <Button
-                                            HorizontalAlignment="Right"
-                                            Padding="6,2"
-                                            Background="Transparent"
-                                            BorderThickness="0"
-                                            Cursor="Hand"
-                                            ToolTip="{DynamicResource Loc.RemoveApp}"
-                                            AutomationProperties.Name="{DynamicResource Loc.RemoveApp}">
-                                            <TextBlock
-                                                FontFamily="{StaticResource KlipIconFont}"
-                                                FontSize="12"
-                                                Text="&#xE74D;" />
-                                        </Button>
-                                    </Grid>
-                                </Border>
-                            </DataTemplate>
-                        </ItemsControl.ItemTemplate>
                     </ItemsControl>
                 </StackPanel>
             </controls:SettingsCard.Footer>
         </controls:SettingsCard>
+
+        <!-- ================= Painel Win+V ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.HistorySectionFlyout}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.FlyoutOpenAtCaretTitle}"
+            Description="{DynamicResource Loc.FlyoutOpenAtCaretCaption}"
+            Icon="&#xE8AC;">
+            <ui:ToggleSwitch x:Name="OpenAtCaretToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.FlyoutRememberScrollTitle}"
+            Description="{DynamicResource Loc.FlyoutRememberScrollCaption}"
+            Icon="&#xE81C;">
+            <ui:ToggleSwitch x:Name="RememberScrollToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.FlyoutEnterActionTitle}"
+            Description="{DynamicResource Loc.FlyoutEnterActionCaption}"
+            Icon="&#xE751;">
+            <ComboBox
+                x:Name="EnterActionCombo"
+                Width="160"
+                Style="{StaticResource SettingsComboBox}">
+                <ComboBoxItem Content="{DynamicResource Loc.FlyoutEnterPaste}" Tag="paste" />
+                <ComboBoxItem Content="{DynamicResource Loc.FlyoutEnterCopy}" Tag="copy" />
+            </ComboBox>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.FlyoutSizeTitle}"
+            Description="{DynamicResource Loc.FlyoutSizeCaption}"
+            Icon="&#xE740;">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock
+                    Margin="0,0,8,0"
+                    VerticalAlignment="Center"
+                    Text="{DynamicResource Loc.FlyoutWidthLabel}" />
+                <ui:NumberBox
+                    x:Name="FlyoutWidthBox"
+                    Width="120"
+                    Maximum="1600"
+                    Minimum="360"
+                    MaxDecimalPlaces="0"
+                    SmallChange="10"
+                    ClearButtonEnabled="False"
+                    Style="{StaticResource SettingsNumberBox}" />
+                <TextBlock
+                    Margin="16,0,8,0"
+                    VerticalAlignment="Center"
+                    Text="{DynamicResource Loc.FlyoutHeightLabel}" />
+                <ui:NumberBox
+                    x:Name="FlyoutHeightBox"
+                    Width="120"
+                    Maximum="1600"
+                    Minimum="460"
+                    MaxDecimalPlaces="0"
+                    SmallChange="10"
+                    ClearButtonEnabled="False"
+                    Style="{StaticResource SettingsNumberBox}" />
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.AlwaysPlainTextTitle}"
+            Description="{DynamicResource Loc.AlwaysPlainTextCaption}"
+            Icon="&#xE8E9;">
+            <ui:ToggleSwitch x:Name="AlwaysPlainTextToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            x:Name="RichPasteAppsCard"
+            Title="{DynamicResource Loc.RichPasteAppsTitle}"
+            Description="{DynamicResource Loc.RichPasteAppsCaption}"
+            Icon="&#xE8D2;">
+            <controls:SettingsCard.Footer>
+                <StackPanel>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox
+                            x:Name="RichAppBox"
+                            PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
+                            Style="{StaticResource SettingsTextBox}" />
+                        <ui:Button
+                            x:Name="AddRichAppButton"
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            MinHeight="32"
+                            Content="{DynamicResource Loc.AddApp}" />
+                    </Grid>
+                    <!-- a handful of entries at most: plain ItemsControl -->
+                    <ItemsControl x:Name="RichAppsList" Style="{StaticResource AppListStyle}" />
+                </StackPanel>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+        <views:PasteAsFileSettings xmlns:views="clr-namespace:Klip.App.Views.Controls" />
     </StackPanel>
 </Page>

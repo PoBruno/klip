@@ -6,7 +6,7 @@ namespace Klip.App.Windows;
 
 /// <summary>
 /// Janelinha de progresso indeterminado pos-gravacao: "Convertendo..." (GIF)
-/// ou "Finalizando gravação..." (MP4, RF-F3.16). Some sozinha quando o
+/// ou "Finalizando gravação..." (MP4). Some sozinha quando o
 /// controller conclui.
 /// </summary>
 public sealed class RecordingProgressWindow : Window

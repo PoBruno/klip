@@ -1,0 +1,44 @@
+<UserControl
+    x:Class="Klip.App.Views.Controls.PasteAsFileSettings"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls">
+
+    <StackPanel>
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.PasteAsFileSection}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.PasteAsFileAttachTitle}"
+            Description="{DynamicResource Loc.PasteAsFileAttachCaption}"
+            Icon="&#xE723;">
+            <ui:ToggleSwitch x:Name="AttachToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.PasteAsFileExplorerTitle}"
+            Description="{DynamicResource Loc.PasteAsFileExplorerCaption}"
+            Icon="&#xE77F;">
+            <ui:ToggleSwitch x:Name="ExplorerToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.PasteAsFileNameTitle}"
+            Description="{DynamicResource Loc.PasteAsFileNameCaption}"
+            Icon="&#xE8AC;">
+            <controls:SettingsCard.Footer>
+                <StackPanel>
+                    <ui:TextBox
+                        x:Name="TemplateBox"
+                        Style="{StaticResource SettingsTextBox}"
+                        AutomationProperties.Name="{DynamicResource Loc.PasteAsFileNameTitle}" />
+                    <TextBlock
+                        x:Name="PreviewText"
+                        Margin="0,8,0,0"
+                        Style="{StaticResource CardCaption}" />
+                    <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.PasteAsFileNameTokens}" />
+                </StackPanel>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+    </StackPanel>
+</UserControl>

@@ -1,12 +1,12 @@
 namespace Klip.Core.Input;
 
 /// <summary>
-/// RF-P1.01: fila SPSC (um produtor, um consumidor) lock-free entre a thread do
+/// fila SPSC (um produtor, um consumidor) lock-free entre a thread do
 /// hook de baixo nivel e a thread do worker. O callback do hook precisa devolver
 /// dentro do LowLevelHooksTimeout, entao o caminho de escrita nao pode bloquear
 /// nem alocar: o array e pre-alocado e o evento e escrito no slot por referencia.
 ///
-/// RF-P1.02: quando cheia, a fila DESCARTA e contabiliza em <see cref="DroppedCount"/>
+/// quando cheia, a fila DESCARTA e contabiliza em <see cref="DroppedCount"/>
 /// em vez de bloquear o produtor - perder input e melhor do que o Windows
 /// desinstalar o hook por estouro de tempo.
 /// </summary>
@@ -78,7 +78,7 @@ public sealed class InputEventRing
         Volatile.Write(ref _writeIndex, unchecked(w + 1));
         Interlocked.Increment(ref _enqueuedCount);
 
-        // RF-P1.01: uma syscall por evento mataria o orcamento do callback. Sinaliza
+        // uma syscall por evento mataria o orcamento do callback. Sinaliza
         // apenas na transicao vazio -> nao-vazio. A releitura do indice de leitura
         // acontece DEPOIS da publicacao: se o consumidor ainda esta no indice
         // anterior, ele esta dormindo ou prestes a dormir, e o Set nao se perde.

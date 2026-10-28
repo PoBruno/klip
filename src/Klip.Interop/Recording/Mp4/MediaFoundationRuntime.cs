@@ -6,14 +6,14 @@ namespace Klip.Interop.Recording;
 /// Ciclo de vida do runtime do Media Foundation com contagem de referencias:
 /// MFStartup na primeira gravacao, MFShutdown quando a ultima libera.
 /// Em Windows N/KN sem o Media Feature Pack o startup falha e a mensagem
-/// orienta a instalacao (RF-F3.17).
+/// orienta a instalacao.
 /// </summary>
 internal static class MediaFoundationRuntime
 {
     private static readonly object Lock = new();
     private static int _refCount;
 
-    /// <exception cref="PlatformNotSupportedException">Media Foundation indisponivel (RF-F3.17).</exception>
+    /// <exception cref="PlatformNotSupportedException">Media Foundation indisponivel.</exception>
     public static void Acquire()
     {
         lock (Lock)

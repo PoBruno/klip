@@ -3,7 +3,7 @@ using Klip.Core.Media.Gif;
 namespace Klip.Core.Tests.Media.Gif;
 
 /// <summary>
-/// Round-trip do encoder completo (RF-F4.07, RF-F4.08, RF-F4.11): encoda,
+/// Round-trip do encoder completo: encoda,
 /// decoda com o decoder de referencia e compara pixels, delays,
 /// sub-retangulos e loop.
 /// </summary>
@@ -28,7 +28,7 @@ public class GifEncoderRoundTripTests
         Assert.Equal(64, decoded.Width);
         Assert.Equal(48, decoded.Height);
         var frame = Assert.Single(decoded.Frames);
-        Assert.Equal(GifTestUtil.ToRgb(bgra), frame.Canvas); // CA-F4.3: bit a bit
+        Assert.Equal(GifTestUtil.ToRgb(bgra), frame.Canvas); // bit a bit
         Assert.Equal(new DirtyRect(0, 0, 64, 48), new DirtyRect(frame.X, frame.Y, frame.Width, frame.Height));
         Assert.False(frame.HasTransparency); // primeiro frame sem transparencia
         Assert.Equal(10, frame.DelayCs);
@@ -119,7 +119,7 @@ public class GifEncoderRoundTripTests
             new GifFrameSource(b, 20, 20, 70),
         ]);
 
-        // CA-F4.2: frame parado nao e reemitido e a duracao total se mantem.
+        // frame parado nao e reemitido e a duracao total se mantem.
         Assert.Equal(2, decoded.Frames.Count);
         Assert.Equal(15, decoded.Frames[0].DelayCs); // 100 + 50 ms
         Assert.Equal(7, decoded.Frames[1].DelayCs);
@@ -128,7 +128,7 @@ public class GifEncoderRoundTripTests
     [Fact]
     public void DiffTolerance_FoldsCodecNoiseFrames()
     {
-        // RF-F4.10: ruido de +/-1 por canal nao pode quebrar o delta encoding.
+        // ruido de +/-1 por canal nao pode quebrar o delta encoding.
         var clean = GifTestUtil.MakeBgra(24, 24, (_, _) => (100, 100, 100));
         var noisy = GifTestUtil.MakeBgra(24, 24, (x, y) => ((byte)(100 + (x + y) % 2), 100, (byte)(101 - x % 2)));
 

@@ -3,7 +3,7 @@ using Microsoft.Win32.SafeHandles;
 
 namespace Klip.Interop;
 
-/// <summary>P/Invoke do motor de gravacao (spec F2).</summary>
+/// <summary>P/Invoke do motor de gravacao.</summary>
 public static partial class NativeMethods
 {
     /// <summary>
@@ -17,7 +17,7 @@ public static partial class NativeMethods
     /// <summary>
     /// Timer de alta resolucao (1803+): ticks com jitter sub-ms independentes da
     /// resolucao global do sistema (~15,6 ms) e do estado da janela do processo.
-    /// Usado pelo loop CFR do FrameCaptureEngine (RF-F2.05) - ver comentario la
+    /// Usado pelo loop CFR do FrameCaptureEngine - ver comentario la
     /// sobre por que timeBeginPeriod nao serve.
     /// </summary>
     public const uint CREATE_WAITABLE_TIMER_HIGH_RESOLUTION = 0x00000002;
@@ -49,4 +49,30 @@ public static partial class NativeMethods
         nint pfnCompletionRoutine,
         nint lpArgToCompletionRoutine,
         [MarshalAs(UnmanagedType.Bool)] bool fResume);
+
+    // ----- recorder process priority -----
+
+    /// <summary>
+    /// MMCSS: the calling thread joins the task (e.g. "Capture") and gets boosted while it
+    /// runs. Returns 0 on failure. Undo with AvRevertMmThreadCharacteristics.
+    /// </summary>
+    [LibraryImport("avrt.dll", EntryPoint = "AvSetMmThreadCharacteristicsW", StringMarshalling = StringMarshalling.Utf16, SetLastError = true)]
+    public static partial nint AvSetMmThreadCharacteristicsW(string taskName, ref uint taskIndex);
+
+    [LibraryImport("avrt.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool AvRevertMmThreadCharacteristics(nint avrtHandle);
+
+    // D3DKMT_SCHEDULINGPRIORITYCLASS
+    public const int D3DKMT_SCHEDULINGPRIORITYCLASS_NORMAL = 2;
+    public const int D3DKMT_SCHEDULINGPRIORITYCLASS_ABOVE_NORMAL = 3;
+    public const int D3DKMT_SCHEDULINGPRIORITYCLASS_HIGH = 4;
+    public const int D3DKMT_SCHEDULINGPRIORITYCLASS_REALTIME = 5;
+
+    /// <summary>
+    /// GPU scheduling class of a process. Returns an NTSTATUS (0 = ok). REALTIME needs
+    /// SeIncreaseBasePriorityPrivilege, the lower classes do not.
+    /// </summary>
+    [LibraryImport("gdi32.dll")]
+    public static partial int D3DKMTSetProcessSchedulingPriorityClass(nint hProcess, int priority);
 }

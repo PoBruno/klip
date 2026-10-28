@@ -6,8 +6,8 @@ using Klip.App.Localization;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Janela modal de progresso da exportacao do editor de midia (RF-F5.12/13)
-/// com cancelamento (CA-F5.7: quem cancela nao deixa arquivo parcial - o
+/// Janela modal de progresso da exportacao do editor de midia
+/// com cancelamento (quem cancela nao deixa arquivo parcial - o
 /// servico de exportacao usa temp + move atomico).
 /// </summary>
 public sealed class MediaEditorExportDialog : Window

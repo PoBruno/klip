@@ -4,7 +4,7 @@ namespace Klip.Interop;
 
 /// <summary>
 /// Estado de notificacao do usuario reportado por SHQueryUserNotificationState.
-/// Base da auto-suspensao quando ha jogo/apresentacao em tela cheia (RF-P1.06).
+/// Base da auto-suspensao quando ha jogo/apresentacao em tela cheia.
 /// </summary>
 public enum QUERY_USER_NOTIFICATION_STATE
 {

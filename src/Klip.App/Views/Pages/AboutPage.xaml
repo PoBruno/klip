@@ -6,9 +6,7 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
-         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
-         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
     <StackPanel MaxWidth="680">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionAbout}" />
 
@@ -25,11 +23,7 @@
                 VerticalAlignment="Center" />
         </controls:SettingsCard>
 
-        <!-- RF-S.06: a contagem de itens mora AQUI. Na tela antiga ela dividia o
-             StatusText com outros 3 papeis e sobrescrevia as mensagens de
-             resultado dos takeovers (MainWindow.xaml.cs:484) antes de o usuario
-             conseguir le-las.
-             RF-S.08: a legenda e preenchida em background - ver o code-behind. -->
+        <!-- a contagem de itens mora AQUI. Na tela antiga ela dividia o StatusText com outros 3 papeis e sobrescrevia as mensagens de resultado dos takeovers (MainWindow.xaml.cs:484) antes de o usuario conseguir le-las. a legenda e preenchida em background - ver o code-behind. -->
         <controls:SettingsCard
             x:Name="HistoryCard"
             Title="{DynamicResource Loc.SectionClipboard}"

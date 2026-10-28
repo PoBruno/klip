@@ -7,33 +7,31 @@ using Vortice.MediaFoundation;
 namespace Klip.Interop.Recording;
 
 /// <summary>
-/// Gravador MP4 (H.264 + AAC) da spec F3 + motor v2 (spec M2): consome frames
-/// GPU do <see cref="FrameCaptureEngine"/> (CFR, crop na GPU), copia cada um
-/// para um sample do IMFVideoSampleAllocatorEx (RF-M2.01, lifetime rastreado
-/// pelo MF) e os envia ao IMFSinkWriter com encoder de hardware (RF-F3.08/09);
-/// audio WASAPI mixado numa trilha AAC (RF-F3.11/12) com mutes ao vivo por
-/// rampa de ganho (RF-M2.09). A escrita e serializada por um gate unico; o
-/// muxer injeta silencio quando o mixer para de entregar (RF-M2.03) e
-/// reconcilia os timestamps de video com o audio entregue (RF-M2.04).
-/// Silence padding e reconciliacao adaptados do OutputManager/
-/// PrepareAndRenderFrame do sskodje/ScreenRecorderLib (MIT) - ver
-/// THIRD-PARTY-NOTICES.md.
+/// MP4 recorder: takes gpu frames from <see cref="FrameCaptureEngine"/> (CFR; crop, scale
+/// and NV12 conversion already done by the gpu video processor, or plain BGRA crops when
+/// the gpu cannot), copies each into a sample of the IMFVideoSampleAllocatorEx (lifetime
+/// tracked by MF) and sends them to the IMFSinkWriter with a hardware encoder. WASAPI
+/// audio is mixed into one AAC track with live mutes through a gain ramp. Writes go
+/// through a single gate; the muxer injects silence when the mixer stops delivering and
+/// slaves video timestamps to the delivered audio.
+/// Silence padding and reconciliation adapted from OutputManager/PrepareAndRenderFrame of
+/// sskodje/ScreenRecorderLib (MIT), see THIRD-PARTY-NOTICES.md.
 /// </summary>
 public sealed class Mp4Recorder : IMp4Recorder
 {
-    // Fila de video com DropOldest (writer atrasado -> drop, sem bloquear).
-    // Com o throttling do SinkWriter desabilitado o WriteSample nao bloqueia;
-    // a fila so absorve rajadas do catch-up do engine (frames duplicados).
-    private const int VideoQueueCapacity = 8;
+    // video queue with DropOldest (writer behind -> drop, never block). With SinkWriter
+    // throttling off WriteSample does not block; the queue only soaks up catch-up bursts,
+    // so it grows with the fps (8 at 30, 16 at 60)
+    private static int VideoQueueCapacity(int fps) => Math.Max(8, fps * 27 / 100);
 
     private const int AudioQueueCapacity = 256;
 
-    // RF-F3.15: guarda-corpo de disco
+    // guarda-corpo de disco
     private const long DiskWarningBytes = 2L * 1024 * 1024 * 1024;
     private const long DiskStopBytes = 500L * 1024 * 1024;
     private static readonly TimeSpan DiskCheckInterval = TimeSpan.FromSeconds(10);
 
-    // ----- muxer de audio (RF-M2.03/04), unidades em frames de 48 kHz -----
+    // ----- muxer de audio, unidades em frames de 48 kHz -----
 
     private const int AudioSampleRate = AudioCaptureSource.TargetSampleRate;
     private const int AudioBytesPerFrame = AudioCaptureSource.TargetChannels * sizeof(short);
@@ -41,11 +39,11 @@ public sealed class Mp4Recorder : IMp4Recorder
     // lag NOMINAL do audio atras do video: o jitter buffer do mixer (100 ms).
     // O padding do muxer so age quando o atraso passa DISSO + o limiar de
     // starvation - senao estaria injetando silencio sobre audio que o mixer
-    // ainda vai entregar (RF-M2.03).
+    // ainda vai entregar.
     private const long AudioNominalLagFrames = AudioMixer.JitterFrames;
 
     // mixer sem entregar alem DISTO (alem do lag nominal) = starvation real
-    // (pump morto/travado); ai o muxer assume com silencio (RF-M2.03).
+    // (pump morto/travado); ai o muxer assume com silencio.
     // DEVE ficar bem acima da espera legitima do mixer: com o due limitado ao
     // que as fontes entregaram, o head de audio pode ficar ate a tolerancia
     // de gap das fontes (400 ms) atras do relogio, MAIS o atraso de scheduling
@@ -60,7 +58,7 @@ public sealed class Mp4Recorder : IMp4Recorder
     // silencio gerado em blocos de ate 200 ms (buffer unico reutilizado)
     private const int MuxSilenceChunkFrames = AudioSampleRate / 5;
 
-    // RF-M2.04: teto absoluto do deslocamento de PTS de video (40 ms) e slew
+    // teto absoluto do deslocamento de PTS de video (40 ms) e slew
     // maximo por frame (0,5 ms) - ajuste fino continuo, nunca deforma a grade
     // CFR visivelmente nem quebra a monotonicidade (o passo e << 1/fps)
     private const long MaxAvShiftTicks = TimeSpan.TicksPerMillisecond * 40;
@@ -69,6 +67,7 @@ public sealed class Mp4Recorder : IMp4Recorder
     private readonly object _lock = new();
 
     private Mp4RecordingOptions? _options;
+    private volatile VideoEncodingPlan? _plan;
     private int _fps = 30;
     private long _frameDurationTicks = TimeSpan.TicksPerSecond / 30;
     private bool _mfAcquired;
@@ -101,28 +100,28 @@ public sealed class Mp4Recorder : IMp4Recorder
     private volatile bool _realignVideo;
 
     // contadores da sessao, logados no Trace ao parar + Warning unico se drops
-    // > 1% dos frames (RF-M2.12 consolida com a telemetria do encoder)
+    // > 1% dos frames (consolida com a telemetria do encoder)
     private long _videoFramesEmitted;    // frames aceitos e enfileirados
-    private long _videoAllocatorDrops;   // RF-M2.02: MF_E_SAMPLEALLOCATOR_EMPTY apos retry
+    private long _videoAllocatorDrops;   // MF_E_SAMPLEALLOCATOR_EMPTY apos retry
     private long _videoChannelDrops;     // DropOldest na fila de video
 
     // ----- estado do muxer serializado (SEMPRE sob _writeGate) -----
     private long _audioHeadFrames;              // fim (exclusivo) do audio ja escrito
     private bool _audioTimelineStarted;         // 1o bloco real do mixer ja escrito
-    private bool _audioWroteRealSinceLastVideo; // excecao do RF-M2.03
+    private bool _audioWroteRealSinceLastVideo; // pula o padding se houve audio real
     private bool _muxPaddingActive;             // starvation confirmada: padding continuo
-    private long _muxSilenceInsertedFrames;     // RF-M2.03 (diagnostico)
+    private long _muxSilenceInsertedFrames;     // diagnostico
     private long _muxOverlapTrimmedFrames;      // chegada tardia sobreposta ao silencio injetado
-    private double _avLagFilteredTicks;         // RF-M2.04: EMA do erro de lag A/V
-    private long _videoPtsShiftTicks;           // RF-M2.04: deslocamento corrente de PTS
+    private double _avLagFilteredTicks;         // EMA do erro de lag A/V
+    private long _videoPtsShiftTicks;           // deslocamento corrente de PTS
     private byte[]? _muxSilenceBuffer;
 
-    // ----- telemetria (RF-M2.12) e watchdog (RF-M2.13) -----
+    // ----- telemetria e watchdog -----
     private long _maxEncoderBacklog;
     private long _maxQueuedBytes;
     private long _wgcStallEpisodes;
 
-    // ----- toggles ao vivo (RF-M2.09..11) -----
+    // ----- toggles ao vivo -----
     private volatile bool _micMuted;
     private volatile bool _systemMuted;
     private volatile bool _cursorCaptureEnabled = true;
@@ -140,9 +139,24 @@ public sealed class Mp4Recorder : IMp4Recorder
     private Task<Mp4RecordingResult>? _stopTask;
     private bool _disposed;
 
+    // prepared during the countdown: everything runs, frames are thrown away until the
+    // start. Grid slots lost while armed (encoder init stalls the context) do not count
+    private volatile bool _armed;
+    private bool _everStarted;
+    private bool _preparedThenFailed;
+    private string? _fatalMessage;
+    private long _lostSlotsBaseline;
+    private long _catchUpBaseline;
+
     private readonly record struct VideoItem(IMFSample Sample, long TimestampTicks);
 
     private sealed record AudioItem(byte[] Pcm, int ByteCount, long TimestampTicks, long DurationTicks);
+
+    /// <summary>
+    /// MMCSS and gpu priority for the capture loop. Set by the recorder process, never
+    /// inside the ui process.
+    /// </summary>
+    public bool HighPriority { get; init; }
 
     /// <inheritdoc />
     public bool IsRecording => _isRecording;
@@ -164,6 +178,23 @@ public sealed class Mp4Recorder : IMp4Recorder
     }
 
     /// <inheritdoc />
+    public VideoEncodingPlan? ActivePlan => _plan;
+
+    /// <inheritdoc />
+    public double DroppedFrameRatio
+    {
+        get
+        {
+            long emitted = Interlocked.Read(ref _videoFramesEmitted);
+            long drops = Interlocked.Read(ref _videoAllocatorDrops)
+                + Interlocked.Read(ref _videoChannelDrops)
+                + Math.Max(0, (_engine?.CfrLostGridSlots ?? 0) - Interlocked.Read(ref _lostSlotsBaseline));
+            long total = emitted + drops;
+            return total == 0 ? 0 : drops / (double)total;
+        }
+    }
+
+    /// <inheritdoc />
     public event Action<RecordingFailure>? Failed;
 
     /// <inheritdoc />
@@ -172,12 +203,12 @@ public sealed class Mp4Recorder : IMp4Recorder
     /// <inheritdoc />
     public event Action<Mp4RecordingResult>? AutoStopped;
 
-    // ----- toggles ao vivo (RF-M2.09..11) -----
+    // ----- toggles ao vivo -----
 
     /// <inheritdoc />
     public void SetMicrophoneMuted(bool muted)
     {
-        // RF-M2.09/11: antes do start vira estado inicial (aplicado ao criar o
+        // antes do start vira estado inicial (aplicado ao criar o
         // mixer); durante a gravacao ajusta o alvo do ganho (rampa de ~8 ms)
         _micMuted = muted;
         _audioMixer?.SetMicrophoneMuted(muted);
@@ -199,7 +230,7 @@ public sealed class Mp4Recorder : IMp4Recorder
     /// <inheritdoc />
     public void SetCursorCaptureEnabled(bool enabled)
     {
-        // RF-M2.10: ao vivo delega ao engine (re-sync defensivo la); antes do
+        // ao vivo delega ao engine (re-sync defensivo la); antes do
         // start apenas registra o desejo (vira estado inicial no StartCoreAsync)
         _cursorCaptureEnabled = enabled;
         lock (_lock)
@@ -221,7 +252,44 @@ public sealed class Mp4Recorder : IMp4Recorder
     public bool IsCursorCaptureEnabled => _cursorCaptureEnabled;
 
     /// <inheritdoc />
-    public async Task StartAsync(Mp4RecordingOptions options, CancellationToken ct = default)
+    public Task PrepareAsync(Mp4RecordingOptions options, CancellationToken ct = default) =>
+        BeginSessionAsync(options, armed: true, ct);
+
+    /// <inheritdoc />
+    public Task StartAsync(Mp4RecordingOptions options, CancellationToken ct = default)
+    {
+        lock (_lock)
+        {
+            if (_armed && _isRecording)
+            {
+                Go();
+                return Task.CompletedTask;
+            }
+
+            // prepared, but it died before the start (device lost, encoder refused)
+            if (_preparedThenFailed)
+                throw new InvalidOperationException(_fatalMessage ?? "A gravacao falhou durante a preparacao.");
+        }
+
+        return BeginSessionAsync(options, armed: false, ct);
+    }
+
+    // caller holds _lock
+    private void Go()
+    {
+        if (_engine is { } engine)
+        {
+            Interlocked.Exchange(ref _lostSlotsBaseline, engine.CfrLostGridSlots);
+            Interlocked.Exchange(ref _catchUpBaseline, engine.CfrCatchUpDuplicates);
+        }
+
+        // the mixer only starts now, so nothing said during the countdown ends up in the file
+        _audioMixer?.Start();
+        _everStarted = true;
+        _armed = false;
+    }
+
+    private async Task BeginSessionAsync(Mp4RecordingOptions options, bool armed, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(options);
         if (options.Fps <= 0)
@@ -235,6 +303,8 @@ public sealed class Mp4Recorder : IMp4Recorder
             if (_stopTask is { IsCompleted: false })
                 throw new InvalidOperationException("A gravacao anterior ainda esta finalizando.");
             ResetSessionState();
+            _armed = armed;
+            _everStarted = !armed;
             _isRecording = true; // antes do engine: falhas de startup ja roteiam pelo caminho fatal
         }
 
@@ -246,6 +316,7 @@ public sealed class Mp4Recorder : IMp4Recorder
         catch
         {
             _isRecording = false;
+            _armed = false;
             await CleanupResourcesAsync().ConfigureAwait(false);
             throw;
         }
@@ -259,7 +330,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             if (!_isRecording || _isPaused)
                 return Task.CompletedTask;
             _pauseClock.Restart();
-            _isPaused = true;         // frames/audio durante a pausa sao descartados (RF-F3.13)
+            _isPaused = true;         // frames/audio durante a pausa sao descartados
             _audioMixer?.Pause();
         }
 
@@ -276,7 +347,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             _pausedTotal += _pauseClock.Elapsed;
             _pauseClock.Reset();
             _audioMixer?.Resume();
-            _realignVideo = true;     // proximo frame recalcula o offset (timeline contigua, RF-F3.13)
+            _realignVideo = true;     // proximo frame recalcula o offset (timeline contigua)
             _isPaused = false;
         }
 
@@ -358,24 +429,43 @@ public sealed class Mp4Recorder : IMp4Recorder
         _pausedTotal = TimeSpan.Zero;
         _clock.Reset();
         _pauseClock.Reset();
+        _plan = null;
+        _preparedThenFailed = false;
+        _fatalMessage = null;
+        _lostSlotsBaseline = 0;
+        _catchUpBaseline = 0;
         _writerReady = new TaskCompletionSource<bool>(TaskCreationOptions.RunContinuationsAsynchronously);
     }
 
     private async Task StartCoreAsync(Mp4RecordingOptions options)
     {
         _options = options;
-        _fps = options.Fps;
-        _frameDurationTicks = TimeSpan.TicksPerSecond / _fps;
 
-        MediaFoundationRuntime.Acquire(); // RF-F3.17: lanca com orientacao do Media Feature Pack
+        MediaFoundationRuntime.Acquire(); // throws with a hint about the Media Feature Pack
         _mfAcquired = true;
+
+        // size, codec, fps and bitrate are decided before the engine starts, because the
+        // engine scales on the gpu to that size
+        var request = new VideoEncodingRequest
+        {
+            Source = FrameCaptureEngine.MeasureCrop(options.Region),
+            Fps = options.Fps,
+            Quality = options.Quality,
+            TargetHeight = options.OutputHeight,
+            RequestedCodec = options.Codec,
+            HardwareCodecs = VideoEncoderCatalog.GetHardwareCodecs(),
+            BitrateOverrideKbps = options.BitrateKbps,
+        };
+        var plan = VideoEncodingMath.Plan(request);
+        _fps = plan.Fps;
+        _frameDurationTicks = TimeSpan.TicksPerSecond / _fps;
 
         string outputDirectory = Path.GetDirectoryName(Path.GetFullPath(options.OutputPath)) ?? string.Empty;
         if (outputDirectory.Length > 0)
             Directory.CreateDirectory(outputDirectory);
 
         _videoChannel = Channel.CreateBounded<VideoItem>(
-            new BoundedChannelOptions(VideoQueueCapacity)
+            new BoundedChannelOptions(VideoQueueCapacity(_fps))
             {
                 FullMode = BoundedChannelFullMode.DropOldest,
                 SingleReader = true,
@@ -383,7 +473,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             },
             dropped =>
             {
-                // drop devolve o sample ao pool do alocador (RF-M2.01); contabilizado
+                // drop devolve o sample ao pool do alocador; contabilizado
                 dropped.Sample.Dispose();
                 Interlocked.Increment(ref _videoChannelDrops);
             });
@@ -402,9 +492,9 @@ public sealed class Mp4Recorder : IMp4Recorder
                 SingleWriter = true,
             });
 
-        // RF-F3.11: fontes de audio criadas ANTES do engine para (a) decidir se o
+        // fontes de audio criadas ANTES do engine para (a) decidir se o
         // arquivo tera trilha AAC e (b) garantir StartClock no 1o frame de video.
-        // RF-M2.11: mutes pedidos antes do start viram estado inicial do mixer.
+        // mutes pedidos antes do start viram estado inicial do mixer.
         _audioMixer = AudioMixer.TryCreate(
             options,
             EmitAudioBlockAsync,
@@ -412,9 +502,10 @@ public sealed class Mp4Recorder : IMp4Recorder
             microphoneMuted: _micMuted,
             systemAudioMuted: _systemMuted);
         _hasAudio = _audioMixer is not null;
-        _audioMixer?.Start();
+        if (!_armed)
+            _audioMixer?.Start();
 
-        // RF-M2.10/11: cursor pedido explicitamente antes do start vence as options
+        // cursor pedido explicitamente antes do start vence as options
         bool captureCursor;
         lock (_lock)
         {
@@ -431,8 +522,19 @@ public sealed class Mp4Recorder : IMp4Recorder
         await _engine.StartAsync(options.Region, new FrameCaptureOptions
         {
             CaptureCursor = captureCursor,
-            FixedFps = _fps, // CFR: timestamps sinteticos n/fps (RF-F2.05)
+            FixedFps = _fps,
+            Nv12Output = true,
+            OutputSize = plan.Output,
+            HighPriority = HighPriority,
         }).ConfigureAwait(false);
+
+        // no gpu video processor: BGRA crops at native size and MF converts the color
+        if (!_engine.IsNv12Output)
+            plan = VideoEncodingMath.Plan(request with { CanScale = false, Fps = _fps });
+        _plan = plan;
+        Trace.WriteLine(
+            $"Mp4Recorder: {plan.Output.Width}x{plan.Output.Height} {plan.Codec} {plan.Fps} fps, " +
+            $"{plan.BitrateKbps} kbps (peak {plan.PeakBitrateKbps}), nv12={_engine.IsNv12Output}, software={plan.SoftwareEncoder}");
 
         _device = _engine.Device;
         _context = _device.ImmediateContext;
@@ -441,7 +543,7 @@ public sealed class Mp4Recorder : IMp4Recorder
         var token = _sessionCts.Token;
         _writerTask = Task.Run(() => WriterLoopAsync(token));
         _diskGuardTask = Task.Run(() => DiskGuardLoopAsync(options.OutputPath, token));
-        _telemetryTask = Task.Run(() => TelemetryLoopAsync(token)); // RF-M2.12/13
+        _telemetryTask = Task.Run(() => TelemetryLoopAsync(token));
     }
 
     // ----- pipeline de video (callback do loop CFR do engine, thread unica) -----
@@ -465,9 +567,19 @@ public sealed class Mp4Recorder : IMp4Recorder
             }
 
             var writer = _writer;
+            if (_armed)
+            {
+                // countdown still running: the first frame builds the encoder now, so the
+                // start does not pay for it. Everything else is dropped on the floor
+                if (writer is null)
+                    BeginWriterInitialization(frame.Texture);
+                frame.Dispose();
+                return;
+            }
+
             if (writer is null)
             {
-                // RF-M2.01: o SinkWriter/alocador nascem FORA do callback (a
+                // o SinkWriter/alocador nascem FORA do callback (a
                 // criacao leva dezenas de ms e bloquearia o loop CFR); frames
                 // ate ele ficar pronto sao descartados e o T0 ancora no
                 // primeiro frame realmente alocado
@@ -485,7 +597,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             if (!_videoStarted)
             {
                 // T0 = 1o frame alocavel: timeline do arquivo comeca em 0 e o
-                // relogio do audio ancora no mesmo instante (RF-F3.12)
+                // relogio do audio ancora no mesmo instante
                 _videoStarted = true;
                 _realignVideo = false;
                 _videoIndexOffset = rawIndex;
@@ -498,7 +610,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             }
             else if (_realignVideo)
             {
-                // RF-F3.13: pos-pausa, o 1o frame novo ocupa o slot seguinte ao
+                // pos-pausa, o 1o frame novo ocupa o slot seguinte ao
                 // ultimo escrito (timeline contigua); os frames seguintes
                 // preservam a distancia relativa da grade do engine
                 _realignVideo = false;
@@ -509,10 +621,10 @@ public sealed class Mp4Recorder : IMp4Recorder
             if (outputIndex <= _lastVideoIndex)
             {
                 frame.Dispose();
-                return; // defensivo: timestamps SEMPRE monotonicos (RF-F3.09)
+                return; // defensivo: timestamps SEMPRE monotonicos
             }
 
-            // RF-M2.01/02: sample do pool do MF; pool esgotado = backpressure
+            // sample do pool do MF; pool esgotado = backpressure
             // do encoder -> retry curto e drop contabilizado, nunca bloquear
             IMFSample? sample = AcquireVideoSample(writer);
             if (sample is null)
@@ -526,8 +638,8 @@ public sealed class Mp4Recorder : IMp4Recorder
             {
                 // copia GPU->GPU (context protegido por ID3D11Multithread) para a
                 // textura DO SAMPLE e devolve o frame ao pool do engine
-                // imediatamente (RF-F2.04); o MF mantem a textura viva ate o
-                // encoder soltar a ultima referencia (RF-M2.01)
+                // imediatamente; o MF mantem a textura viva ate o
+                // encoder soltar a ultima referencia
                 using (ID3D11Texture2D target = writer.GetVideoSampleTexture(sample))
                 {
                     context.CopyResource(target, frame.Texture);
@@ -558,7 +670,7 @@ public sealed class Mp4Recorder : IMp4Recorder
     }
 
     /// <summary>
-    /// RF-M2.02: aloca um sample de video com retry curto de ate 1 periodo de
+    /// aloca um sample de video com retry curto de ate 1 periodo de
     /// frame. O callback roda na thread dedicada do loop CFR; um periodo de
     /// atraso vira no maximo 1 slot da grade, coberto pelo catch-up do engine.
     /// </summary>
@@ -581,9 +693,9 @@ public sealed class Mp4Recorder : IMp4Recorder
     }
 
     /// <summary>
-    /// Cria o SinkWriter (e o alocador de samples, RF-M2.01) numa task propria
+    /// Cria o SinkWriter (e o alocador de samples) numa task propria
     /// a partir das dimensoes REAIS do 1o frame (o engine arredonda para PAR e
-    /// clampa a regiao ao monitor, RF-F2.03/09). O callback nunca bloqueia.
+    /// clampa a regiao ao monitor). O callback nunca bloqueia.
     /// </summary>
     private void BeginWriterInitialization(ID3D11Texture2D template)
     {
@@ -593,28 +705,38 @@ public sealed class Mp4Recorder : IMp4Recorder
         var description = template.Description;
         int width = (int)description.Width;
         int height = (int)description.Height;
+        bool nv12 = description.Format == Vortice.DXGI.Format.NV12;
         var options = _options!;
         var device = _device!;
         bool hasAudio = _hasAudio;
-        int fps = _fps;
+        var plan = _plan!;
+
+        // the texture is the truth: if it differs from the plan (monitor changed mode
+        // between measuring and starting) the bitrate follows the real size
+        if (plan.Output.Width != width || plan.Output.Height != height)
+        {
+            var size = new VideoSize(width, height);
+            int kbps = options.BitrateKbps > 0
+                ? options.BitrateKbps
+                : VideoEncodingMath.BitrateKbps(size, plan.Fps, options.Quality, plan.Codec);
+            plan = plan with { Output = size, BitrateKbps = kbps, PeakBitrateKbps = VideoEncodingMath.PeakKbps(kbps) };
+            _plan = plan;
+        }
 
         _ = Task.Run(() =>
         {
             try
             {
-                int bitrateKbps = options.BitrateKbps > 0
-                    ? options.BitrateKbps
-                    : DefaultBitrateKbps(height);
-
                 var writer = new Mp4SinkWriter(
                     options.OutputPath,
                     device,
                     width,
                     height,
-                    fps,
-                    bitrateKbps,
-                    qualityMode: options.BitrateKbps <= 0, // RF-M2.06: auto = Quality(3)
-                    options.FragmentedMp4,
+                    nv12,
+                    plan,
+                    // the fragmented mp4 sink only takes h264 (MF_E_INVALIDMEDIATYPE with
+                    // hevc), so hevc/av1 go to a classic mp4 and lose the crash safety
+                    options.FragmentedMp4 && plan.Codec == VideoCodec.H264,
                     hasAudio);
 
                 lock (_lock)
@@ -701,10 +823,10 @@ public sealed class Mp4Recorder : IMp4Recorder
                     await _writeGate.WaitAsync(token).ConfigureAwait(false);
                     try
                     {
-                        // RF-M2.03: silencio do muxer ANTES do sample de video
+                        // silencio do muxer ANTES do sample de video
                         WritePendingSilencePadding(writer, item.TimestampTicks);
 
-                        // RF-M2.04: PTS reconciliado com o audio entregue
+                        // PTS reconciliado com o audio entregue
                         long pts = ReconcileVideoTimestamp(item.TimestampTicks);
                         item.Sample.SampleTime = pts;
                         item.Sample.SampleDuration = _frameDurationTicks;
@@ -718,7 +840,7 @@ public sealed class Mp4Recorder : IMp4Recorder
                 finally
                 {
                     // devolve o sample ao pool do alocador quando o pipeline
-                    // soltar a ultima referencia (RF-M2.01)
+                    // soltar a ultima referencia
                     item.Sample.Dispose();
                 }
             }
@@ -775,15 +897,15 @@ public sealed class Mp4Recorder : IMp4Recorder
         }
     }
 
-    // ----- muxer: silence padding e reconciliacao A/V (RF-M2.03/04) -----
+    // ----- muxer: silence padding e reconciliacao A/V -----
     // Adaptados do OutputManager::RenderFrame / PrepareAndRenderFrame do
     // sskodje/ScreenRecorderLib (MIT), ajustados ao nosso jitter buffer.
 
     /// <summary>
-    /// RF-M2.03 (D-M2.2): se o mixer parou de entregar (pump morto/travado),
+    /// se o mixer parou de entregar (pump morto/travado),
     /// escreve silencio PCM do tamanho exato do intervalo pendente ANTES do
     /// video - sem isso o SinkWriter estrangula o video esperando audio para
-    /// intercalar. Excecao da spec: se o bloco anterior tinha audio real, nao
+    /// intercalar. Excecao: se o bloco anterior tinha audio real, nao
     /// injeta (o mixer esta vivo e vai entregar; o lag nominal do jitter
     /// buffer NAO e starvation). Sempre sob _writeGate.
     /// </summary>
@@ -833,7 +955,7 @@ public sealed class Mp4Recorder : IMp4Recorder
 
     /// <summary>
     /// Escreve um bloco do mixer reconciliado com o head da trilha (sob
-    /// _writeGate): sobreposicao com silencio ja injetado (RF-M2.03) e aparada
+    /// _writeGate): sobreposicao com silencio ja injetado e aparada
     /// do inicio do bloco; gap defensivo e preenchido com silencio (o mixer e
     /// contiguo por construcao - isso nao deve ocorrer).
     /// </summary>
@@ -875,10 +997,10 @@ public sealed class Mp4Recorder : IMp4Recorder
     }
 
     /// <summary>
-    /// RF-M2.04 (D-M2.3): video escravizado ao audio ENTREGUE - o erro entre o
+    /// video escravizado ao audio ENTREGUE - o erro entre o
     /// head da trilha de audio (+ lag nominal do jitter buffer) e a grade CFR
     /// e filtrado por EMA e aplicado como deslocamento de PTS com slew de ate
-    /// 0,5 ms/frame (teto 40 ms). A grade CFR continua sendo a base (RF-M2.05)
+    /// 0,5 ms/frame (teto 40 ms). A grade CFR continua sendo a base
     /// e o realinhamento pos-pausa por indice fica intacto: este ajuste e um
     /// refino continuo de poucos ms por cima dela, monotonico por construcao
     /// (o passo e muito menor que 1/fps). Sempre sob _writeGate.
@@ -904,11 +1026,7 @@ public sealed class Mp4Recorder : IMp4Recorder
     private static long AudioFramesToTicks(long frames) =>
         frames * TimeSpan.TicksPerSecond / AudioSampleRate;
 
-    // RF-F3.09: preset automatico por resolucao (screen content H.264)
-    private static int DefaultBitrateKbps(int height) =>
-        height >= 1440 ? 14000 : height >= 1080 ? 8000 : 5000;
-
-    // ----- telemetria (RF-M2.12) e watchdog WGC (RF-M2.13) -----
+    // ----- telemetria e watchdog WGC -----
 
     private async Task TelemetryLoopAsync(CancellationToken token)
     {
@@ -918,7 +1036,7 @@ public sealed class Mp4Recorder : IMp4Recorder
         {
             while (await timer.WaitForNextTickAsync(token).ConfigureAwait(false))
             {
-                // RF-M2.12: backlog do encoder e fila em bytes a 1 Hz
+                // backlog do encoder e fila em bytes a 1 Hz
                 var writer = _writer;
                 if (writer is not null)
                 {
@@ -951,7 +1069,7 @@ public sealed class Mp4Recorder : IMp4Recorder
                     }
                 }
 
-                // RF-M2.13: watchdog da sessao WGC (log apenas nesta fase - a
+                // watchdog da sessao WGC (log apenas nesta fase - a
                 // tela ESTATICA tambem zera FrameArrived legitimamente)
                 var engine = _engine;
                 if (engine is not null && _isRecording && !_isPaused)
@@ -964,7 +1082,7 @@ public sealed class Mp4Recorder : IMp4Recorder
                             stallLogged = true;
                             _wgcStallEpisodes++;
                             Trace.WriteLine(
-                                $"Mp4Recorder: watchdog WGC (RF-M2.13) - {sinceLastFrame.TotalSeconds:F1} s sem FrameArrived " +
+                                $"Mp4Recorder: watchdog WGC: {sinceLastFrame.TotalSeconds:F1} s sem FrameArrived " +
                                 "(tela estatica ou sessao de captura travada).");
                         }
                     }
@@ -980,7 +1098,7 @@ public sealed class Mp4Recorder : IMp4Recorder
         }
     }
 
-    // ----- guarda-corpo de disco (RF-F3.15) -----
+    // ----- guarda-corpo de disco -----
 
     private async Task DiskGuardLoopAsync(string outputPath, CancellationToken token)
     {
@@ -1005,7 +1123,7 @@ public sealed class Mp4Recorder : IMp4Recorder
 
                 if (freeBytes < DiskStopBytes)
                 {
-                    // RF-F3.15: < 500 MB -> parada graciosa com arquivo valido
+                    // < 500 MB -> parada graciosa com arquivo valido
                     Warning?.Invoke("Espaco em disco critico (menos de 500 MB livres): a gravacao foi encerrada e o arquivo preservado.");
                     Task<Mp4RecordingResult>? stopTask = null;
                     lock (_lock)
@@ -1064,6 +1182,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             if (_failed || !_isRecording)
                 return;
             _failed = true;
+            _fatalMessage = message;
             _stopTask ??= Task.Run(() => StopCoreAsync(abort: true));
         }
 
@@ -1088,6 +1207,9 @@ public sealed class Mp4Recorder : IMp4Recorder
         TimeSpan elapsed;
         lock (_lock)
         {
+            if (_armed)
+                _preparedThenFailed = true;
+            _armed = false;
             if (_isPaused)
             {
                 _pausedTotal += _pauseClock.Elapsed;
@@ -1129,8 +1251,8 @@ public sealed class Mp4Recorder : IMp4Recorder
             }
 
             // contadores capturados ANTES do CleanupResourcesAsync anular _engine
-            catchUpDuplicates = _engine.CfrCatchUpDuplicates;
-            lostGridSlots = _engine.CfrLostGridSlots;
+            catchUpDuplicates = Math.Max(0, _engine.CfrCatchUpDuplicates - Interlocked.Read(ref _catchUpBaseline));
+            lostGridSlots = Math.Max(0, _engine.CfrLostGridSlots - Interlocked.Read(ref _lostSlotsBaseline));
         }
 
         if (_audioMixer is not null)
@@ -1174,7 +1296,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             }
         }
 
-        // RF-M2.12: telemetria encerra ANTES do Finalize (GetStatistics nunca
+        // telemetria encerra ANTES do Finalize (GetStatistics nunca
         // corre em paralelo com o teardown do writer)
         if (_telemetryTask is not null)
         {
@@ -1187,7 +1309,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             }
         }
 
-        // 4) finaliza o container (RF-F3.16: pode levar segundos)
+        // 4) finaliza o container (pode levar segundos)
         int width = 0;
         int height = 0;
         string outputPath = _options?.OutputPath ?? string.Empty;
@@ -1203,12 +1325,19 @@ public sealed class Mp4Recorder : IMp4Recorder
             catch (Exception)
             {
                 // finalize falhou: com fMP4 o arquivo ainda reproduz ate o
-                // ultimo fragmento (RF-F3.10); reportar sem perder o resultado
+                // ultimo fragmento; reportar sem perder o resultado
                 Warning?.Invoke("Falha ao finalizar o MP4; com fMP4 o conteudo gravado permanece reproduzivel.");
             }
         }
 
         await CleanupResourcesAsync().ConfigureAwait(false);
+
+        // prepared and dropped during the countdown: the file has no frame, remove it
+        if (!_everStarted)
+        {
+            TryDeleteEmptyOutput(outputPath);
+            throw new OperationCanceledException("A gravacao foi cancelada antes de comecar.");
+        }
 
         ReportVideoDiagnostics(catchUpDuplicates, lostGridSlots);
         ReportAudioDiagnostics(audioEmittedFrames, audioSilenceFrames, audioDriftDropFrames, audioUnderflowFrames);
@@ -1227,8 +1356,21 @@ public sealed class Mp4Recorder : IMp4Recorder
         return new Mp4RecordingResult(outputPath, elapsed, width, height, fileSize);
     }
 
+    private static void TryDeleteEmptyOutput(string path)
+    {
+        try
+        {
+            if (path.Length > 0 && File.Exists(path))
+                File.Delete(path);
+        }
+        catch (Exception)
+        {
+            // locked by an antivirus scan: at worst an empty mp4 stays behind
+        }
+    }
+
     /// <summary>
-    /// Diagnostico de video consolidado (RF-M2.12): contadores da sessao +
+    /// Diagnostico de video consolidado: contadores da sessao +
     /// telemetria do encoder no Trace sempre; Warning UMA vez ao parar se os
     /// drops (alocador + fila + slots de grade perdidos) passarem de 1% dos
     /// frames. O contrato do Core (Mp4RecordingResult) e congelado - por isso
@@ -1246,7 +1388,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             $"Mp4Recorder: frames emitidos={emitted}, duplicados de catch-up={catchUpDuplicates}, " +
             $"drops por alocador={allocatorDrops}, drops por fila={channelDrops}, slots de grade perdidos={lostGridSlots}");
         Trace.WriteLine(
-            $"Mp4Recorder: telemetria do encoder (RF-M2.12) - backlog maximo={_maxEncoderBacklog} samples, " +
+            $"Mp4Recorder: telemetria do encoder: backlog maximo={_maxEncoderBacklog} samples, " +
             $"fila maxima={_maxQueuedBytes} bytes, episodios de watchdog WGC={_wgcStallEpisodes}");
 
         if (totalSlots > 0 && totalDrops * 100 > totalSlots)
@@ -1275,7 +1417,7 @@ public sealed class Mp4Recorder : IMp4Recorder
             $"Mp4Recorder: audio frames emitidos={emittedFrames}, silencio inserido={silenceFrames}, " +
             $"descartes por deriva={driftDropFrames}, zeros por underflow={underflowFrames}");
         Trace.WriteLine(
-            $"Mp4Recorder: muxer (RF-M2.03/04) - silencio injetado={_muxSilenceInsertedFrames} frames, " +
+            $"Mp4Recorder: muxer: silencio injetado={_muxSilenceInsertedFrames} frames, " +
             $"overlap aparado={_muxOverlapTrimmedFrames} frames, deslocamento final de PTS={_videoPtsShiftTicks / 10000.0:F1} ms");
 
         long discontinuities = driftDropFrames + underflowFrames;
@@ -1314,7 +1456,7 @@ public sealed class Mp4Recorder : IMp4Recorder
         _audioMixer = null;
 
         // drena samples ainda na fila (voltam ao pool do alocador) antes de
-        // descartar o writer/alocador (RF-M2.01)
+        // descartar o writer/alocador
         if (_videoChannel is not null)
         {
             while (_videoChannel.Reader.TryRead(out var item))
@@ -1340,7 +1482,7 @@ public sealed class Mp4Recorder : IMp4Recorder
 
         lock (_lock)
         {
-            // RF-M2.10/11: o proximo start volta a honrar options.CaptureCursor,
+            // o proximo start volta a honrar options.CaptureCursor,
             // a menos que a toolbar peca de novo antes do StartAsync
             _cursorSetExplicitly = false;
         }

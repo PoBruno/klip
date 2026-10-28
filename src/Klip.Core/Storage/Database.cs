@@ -7,33 +7,27 @@ namespace Klip.Core.Storage;
 /// </summary>
 public sealed class Database : IDisposable
 {
-    /// <summary>
-    /// RF-P2.07: PRAGMAs que vivem no arquivo do banco. Rodam UMA vez, no Initialize().
-    /// journal_mode=WAL e gravado no header do arquivo e sobrevive ao fechamento da
-    /// conexao, entao repetir a cada OpenConnection() so gastava I/O a toa.
-    /// </summary>
+    // journal_mode lives in the file header, so it only needs to run once per file
     private const string PersistentPragmas = "PRAGMA journal_mode=WAL;";
 
-    /// <summary>
-    /// RF-P2.07: PRAGMAs que valem apenas para a conexao atual, entao precisam rodar em
-    /// todo OpenConnection(). Vao juntos em um unico ExecuteNonQuery para pagar um
-    /// round-trip so.
-    /// - busy_timeout=5000: sem ele qualquer SQLITE_BUSY estoura na hora em vez de
-    ///   esperar o escritor terminar (o caso comum em WAL com leitura concorrente).
-    /// - cache_size=-16000: valor negativo = KiB, ou seja 16 MiB de cache de paginas.
-    /// - mmap_size: 64 MiB mapeados, corta copias de buffer nas leituras.
-    /// NAO ha PRAGMA foreign_keys aqui de proposito: o schema (ver SchemaV1) nao declara
-    /// nenhuma FOREIGN KEY, entao o enforcement nunca teve o que checar. Alem disso o
-    /// e_sqlite3 embutido pelo SQLitePCLRaw ja e compilado com foreign_keys ligado por
-    /// padrao, ou seja o "PRAGMA foreign_keys=ON" que existia aqui era literalmente um
-    /// statement a mais por conexao para nao mudar nada (RF-P2.07).
-    /// </summary>
+    // per connection settings, sent in one round trip on every open.
+    // busy_timeout: wait for the writer instead of failing right away.
+    // cache_size: negative = KiB, so 16 MiB of page cache.
+    // journal_size_limit: keeps the -wal from staying huge after a big import.
+    // no foreign_keys here on purpose: the schema has none.
     private const string PerConnectionPragmas =
         "PRAGMA synchronous=NORMAL;" +
         "PRAGMA busy_timeout=5000;" +
         "PRAGMA cache_size=-16000;" +
         "PRAGMA temp_store=MEMORY;" +
-        "PRAGMA mmap_size=67108864;";
+        "PRAGMA mmap_size=67108864;" +
+        "PRAGMA journal_size_limit=67108864;";
+
+    /// <summary>Latest schema version (PRAGMA user_version).</summary>
+    public const int SchemaVersion = 5;
+
+    // free pages above this go back to the OS on the next maintenance pass (~4 MiB)
+    private const int FreePagesWorthReclaiming = 1024;
 
     public string ConnectionString { get; }
 
@@ -52,7 +46,6 @@ public sealed class Database : IDisposable
     {
         var conn = new SqliteConnection(ConnectionString);
         conn.Open();
-        // RF-P2.07: so os por-conexao; journal_mode ficou no Initialize()
         using var pragma = conn.CreateCommand();
         pragma.CommandText = PerConnectionPragmas;
         pragma.ExecuteNonQuery();
@@ -72,12 +65,16 @@ public sealed class Database : IDisposable
     {
         using var conn = OpenConnection();
 
-        // RF-P2.07: PRAGMA persistente, uma vez so por arquivo
-        Exec(conn, PersistentPragmas);
-
         var version = GetUserVersion(conn);
 
-        // migracoes incrementais e idempotentes: cada bloco sobe o user_version
+        // a brand new file can pick incremental auto_vacuum for free, before any table exists.
+        // old files get converted later, off the startup path (see RunMaintenance)
+        if (version == 0 && !HasTables(conn))
+            Exec(conn, "PRAGMA auto_vacuum=INCREMENTAL;");
+
+        Exec(conn, PersistentPragmas);
+
+        // each block is idempotent and bumps user_version
         if (version < 1)
         {
             Exec(conn, SchemaV1);
@@ -93,71 +90,135 @@ public sealed class Database : IDisposable
         }
         if (version < 3)
         {
-            // v3: indices de cobertura do ORDER BY (RF-P2.08)
             Exec(conn, SchemaV3);
             SetUserVersion(conn, 3);
             version = 3;
         }
+        var migrated = false;
+        if (version < 4)
+        {
+            using var tx = conn.BeginTransaction(deferred: false);
+            if (!HasColumn(conn, tx, "items", "preview"))
+                Exec(conn, "ALTER TABLE items ADD COLUMN preview TEXT;", tx);
+            Exec(conn, SchemaV4, tx);
+            Exec(conn, "PRAGMA user_version = 4;", tx);
+            tx.Commit();
+            version = 4;
+            migrated = true;
+        }
+        if (version < 5)
+        {
+            using var tx = conn.BeginTransaction(deferred: false);
+            Exec(conn, SchemaV5, tx);
+            Exec(conn, "PRAGMA user_version = 5;", tx);
+            tx.Commit();
+            version = 5;
+            migrated = true;
+        }
+
+        // fresh stats for the planner after the indexes changed; 0x10002 also covers
+        // tables that were never analyzed (sqlite.org/pragma.html#pragma_optimize)
+        TryExec(conn, migrated ? "PRAGMA optimize=0x10002;" : "PRAGMA optimize;");
     }
 
     /// <summary>
-    /// RF-P2.07: manutencao periodica barata. "PRAGMA optimize" reavalia as estatisticas
-    /// (ANALYZE incremental) das tabelas que mudaram muito, e o checkpoint TRUNCATE devolve
-    /// o -wal ao tamanho zero em vez de deixar o arquivo crescer indefinidamente.
-    /// Cada passo tem seu proprio try/catch: manutencao nunca pode derrubar o app - se o
-    /// banco estiver ocupado por outro leitor, o checkpoint simplesmente nao acontece agora.
+    /// Cheap periodic maintenance, meant for a background thread: planner stats, giving
+    /// free pages back to the OS, and truncating the -wal. Each step has its own try:
+    /// a busy database just skips that step until the next pass.
     /// </summary>
     public void RunMaintenance()
     {
         using var conn = OpenConnection();
 
-        try
-        {
-            Exec(conn, "PRAGMA optimize;");
-        }
-        catch (SqliteException)
-        {
-            // sem estatisticas atualizadas nesta rodada; segue o jogo
-        }
+        TryExec(conn, "PRAGMA optimize;");
 
         try
         {
-            Exec(conn, "PRAGMA wal_checkpoint(TRUNCATE);");
+            if (ScalarLong(conn, "PRAGMA auto_vacuum;") == 0)
+            {
+                // old file from before incremental vacuum: convert it once. VACUUM rewrites
+                // the file, so this runs here (after retention trimmed it) and not on startup
+                Exec(conn, "PRAGMA auto_vacuum=INCREMENTAL;");
+                Exec(conn, "VACUUM;");
+            }
+            else if (ScalarLong(conn, "PRAGMA freelist_count;") > FreePagesWorthReclaiming)
+            {
+                Exec(conn, "PRAGMA incremental_vacuum(4000);");
+            }
         }
         catch (SqliteException)
         {
-            // leitor ativo segurando o WAL; o proximo ciclo tenta de novo
+            // another connection was busy; next pass
+        }
+
+        TryExec(conn, "PRAGMA wal_checkpoint(TRUNCATE);");
+    }
+
+    /// <summary>
+    /// Gives free pages back to the OS without rewriting the whole file (unlike VACUUM).
+    /// Fast enough for app exit.
+    /// </summary>
+    public void ReclaimFreePages()
+    {
+        using var conn = OpenConnection();
+        try
+        {
+            if (ScalarLong(conn, "PRAGMA auto_vacuum;") == 2)
+                Exec(conn, "PRAGMA incremental_vacuum;");
+        }
+        catch (SqliteException)
+        {
         }
     }
 
-    private static int GetUserVersion(SqliteConnection conn)
+    private static bool HasTables(SqliteConnection conn) =>
+        ScalarLong(conn, "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table';") > 0;
+
+    private static bool HasColumn(SqliteConnection conn, SqliteTransaction tx, string table, string column)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = "PRAGMA user_version;";
-        return Convert.ToInt32(cmd.ExecuteScalar());
+        cmd.Transaction = tx;
+        cmd.CommandText = $"SELECT COUNT(*) FROM pragma_table_info('{table}') WHERE name = $c;";
+        cmd.Parameters.AddWithValue("$c", column);
+        return Convert.ToInt64(cmd.ExecuteScalar()) > 0;
     }
 
-    private static void SetUserVersion(SqliteConnection conn, int version)
+    private static long ScalarLong(SqliteConnection conn, string sql)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = $"PRAGMA user_version = {version};";
-        cmd.ExecuteNonQuery();
+        cmd.CommandText = sql;
+        return Convert.ToInt64(cmd.ExecuteScalar() ?? 0L);
     }
 
-    private static void Exec(SqliteConnection conn, string sql)
+    private static int GetUserVersion(SqliteConnection conn) => (int)ScalarLong(conn, "PRAGMA user_version;");
+
+    private static void SetUserVersion(SqliteConnection conn, int version) =>
+        Exec(conn, $"PRAGMA user_version = {version};");
+
+    private static void Exec(SqliteConnection conn, string sql, SqliteTransaction? tx = null)
     {
         using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
         cmd.CommandText = sql;
         cmd.ExecuteNonQuery();
     }
 
+    private static void TryExec(SqliteConnection conn, string sql)
+    {
+        try
+        {
+            Exec(conn, sql);
+        }
+        catch (SqliteException)
+        {
+            // maintenance never takes the app down
+        }
+    }
+
     /// <summary>
-    /// ATENCAO (efeito colateral global): ClearAllPools() e estatico e derruba o pool de
-    /// TODAS as conexoes SQLite do processo, nao so as deste banco. Hoje o app tem um unico
-    /// arquivo de banco e o Dispose acontece no shutdown, entao e aceitavel - e alem disso e
-    /// o que garante que o arquivo fica liberado (importante nos testes, que apagam o .db no
-    /// fim do fixture). Se um dia existir um segundo Database vivo no mesmo processo, isso
-    /// precisa virar um pool por instancia.
+    /// Heads up: ClearAllPools() is global, it drops the pool of every SQLite connection in
+    /// the process. Fine with a single db that is disposed on shutdown, and it is what frees
+    /// the file for the tests that delete it.
     /// </summary>
     public void Dispose() => SqliteConnection.ClearAllPools();
 
@@ -197,7 +258,9 @@ public sealed class Database : IDisposable
             tokenize='unicode61 remove_diacritics 2',
             prefix='2 3'
         );
+        """ + FtsTriggers;
 
+    private const string FtsTriggers = """
         CREATE TRIGGER IF NOT EXISTS items_ai AFTER INSERT ON items BEGIN
             INSERT INTO items_fts(rowid, text_content, source_app, source_title, ocr_text)
             VALUES (new.id, new.text_content, new.source_app, new.source_title, new.ocr_text);
@@ -214,27 +277,80 @@ public sealed class Database : IDisposable
         END;
         """;
 
-    // v3: indices alinhados ao ORDER BY real das listagens (RF-P2.08)
+    // v3: indexes that match the real ORDER BY of the listings
     private const string SchemaV3 = """
-        -- RF-P2.08: as queries filtram por type/favorite mas ordenam por
-        -- (pinned DESC, last_copied_at DESC). Sem um indice que cubra o ORDER BY inteiro
-        -- o SQLite monta uma temp B-tree so pra ordenar - custo O(n log n) sobre TODAS as
-        -- linhas que passam no filtro, antes mesmo de aplicar o LIMIT.
+        -- lists filter by type/favorite but sort by (pinned DESC, last_copied_at DESC);
+        -- without an index on the whole ORDER BY sqlite sorts every matching row in a temp
+        -- b-tree before the LIMIT
         CREATE INDEX IF NOT EXISTS ix_items_type_pinned_recency
             ON items(type, pinned DESC, last_copied_at DESC);
         CREATE INDEX IF NOT EXISTS ix_items_fav_pinned_recency
             ON items(pinned DESC, last_copied_at DESC) WHERE favorite = 1;
 
-        -- indices da v1 que ficaram redundantes e ainda por cima atrapalhavam o planner
-        -- (ele os escolhia pelo filtro e depois ordenava em temp B-tree). Cada um deles era
-        -- tambem um b-tree a mais para manter em todo INSERT/UPDATE.
-        -- ix_items_type_recency(type, last_copied_at): prefixo de ix_items_type_pinned_recency.
+        -- v1 indexes made redundant by the ones above (and they fooled the planner)
         DROP INDEX IF EXISTS ix_items_type_recency;
-        -- ix_items_fav(favorite) WHERE favorite=1: mesmo predicado parcial de
-        -- ix_items_fav_pinned_recency, que ainda resolve a ordenacao.
         DROP INDEX IF EXISTS ix_items_fav;
-        -- ix_items_recency(last_copied_at): nenhuma query ordena so por recencia sem tambem
-        -- restringir/ordenar por pinned, e ix_items_pinned_recency cobre todas elas.
         DROP INDEX IF EXISTS ix_items_recency;
+        """;
+
+    // v4: preview column for the list, FTS without the never used 2 char prefix index,
+    // and indexes for retention so it doesn't walk the whole table every pass
+    private const string SchemaV4 = """
+        UPDATE items SET preview = substr(text_content, 1, 600)
+        WHERE text_content IS NOT NULL AND preview IS NULL;
+
+        DROP TRIGGER IF EXISTS items_ai;
+        DROP TRIGGER IF EXISTS items_ad;
+        DROP TRIGGER IF EXISTS items_au;
+        DROP TABLE IF EXISTS items_fts;
+        CREATE VIRTUAL TABLE items_fts USING fts5(
+            text_content, source_app, source_title, ocr_text,
+            content='items', content_rowid='id',
+            tokenize='unicode61 remove_diacritics 2',
+            prefix='3'
+        );
+        INSERT INTO items_fts(items_fts) VALUES('rebuild');
+        """ + FtsTriggers + """
+
+        -- evictable rows only (pinned and favorites never go): count, byte sums and the
+        -- oldest-first walk all come straight from these, no table scan
+        CREATE INDEX IF NOT EXISTS ix_items_evict
+            ON items(last_copied_at DESC, byte_size) WHERE pinned = 0 AND favorite = 0;
+        CREATE INDEX IF NOT EXISTS ix_items_evict_type
+            ON items(type, last_copied_at DESC, byte_size) WHERE pinned = 0 AND favorite = 0;
+        """;
+
+    // v5: snippets, text the user saves on purpose. Lives apart from items so retention,
+    // "clear all" and the history search never touch it
+    private const string SchemaV5 = """
+        CREATE TABLE IF NOT EXISTS snippets (
+            id          INTEGER PRIMARY KEY,
+            name        TEXT NOT NULL,
+            alias       TEXT,
+            content     TEXT NOT NULL,
+            created_at  INTEGER NOT NULL,
+            updated_at  INTEGER NOT NULL
+        );
+        CREATE INDEX IF NOT EXISTS ix_snippets_alias ON snippets(alias COLLATE NOCASE) WHERE alias IS NOT NULL;
+        CREATE INDEX IF NOT EXISTS ix_snippets_updated ON snippets(updated_at DESC);
+
+        CREATE VIRTUAL TABLE IF NOT EXISTS snippets_fts USING fts5(
+            name, alias, content,
+            content='snippets', content_rowid='id',
+            tokenize='unicode61 remove_diacritics 2',
+            prefix='3'
+        );
+        CREATE TRIGGER IF NOT EXISTS snippets_ai AFTER INSERT ON snippets BEGIN
+            INSERT INTO snippets_fts(rowid, name, alias, content) VALUES (new.id, new.name, new.alias, new.content);
+        END;
+        CREATE TRIGGER IF NOT EXISTS snippets_ad AFTER DELETE ON snippets BEGIN
+            INSERT INTO snippets_fts(snippets_fts, rowid, name, alias, content)
+            VALUES ('delete', old.id, old.name, old.alias, old.content);
+        END;
+        CREATE TRIGGER IF NOT EXISTS snippets_au AFTER UPDATE OF name, alias, content ON snippets BEGIN
+            INSERT INTO snippets_fts(snippets_fts, rowid, name, alias, content)
+            VALUES ('delete', old.id, old.name, old.alias, old.content);
+            INSERT INTO snippets_fts(rowid, name, alias, content) VALUES (new.id, new.name, new.alias, new.content);
+        END;
         """;
 }

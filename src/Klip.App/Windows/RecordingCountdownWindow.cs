@@ -8,8 +8,8 @@ using Klip.Interop;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Contagem regressiva de 3 s sobre a regiao antes da gravacao comecar
-/// (RF-F3.01/RF-F4.01). Mesmo visual do delay de captura (RF-05.05): numero
+/// Contagem regressiva de 3 s sobre a regiao antes da gravacao comecar.
+/// Mesmo visual do delay de captura: numero
 /// grande branco com sombra. Click-through, sem foco e fora de capturas.
 /// </summary>
 public sealed class RecordingCountdownWindow : Window
@@ -61,7 +61,7 @@ public sealed class RecordingCountdownWindow : Window
         var exStyle = (long)NativeMethods.GetWindowLongPtr(helper.Handle, NativeMethods.GWL_EXSTYLE);
         exStyle |= NativeMethods.WS_EX_TRANSPARENT | NativeMethods.WS_EX_NOACTIVATE | NativeMethods.WS_EX_TOOLWINDOW;
         NativeMethods.SetWindowLongPtr(helper.Handle, NativeMethods.GWL_EXSTYLE, (nint)exStyle);
-        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle); // RF-F2.10
+        Klip.Interop.Recording.WindowCaptureExclusion.Exclude(helper.Handle);
 
         NativeMethods.SetWindowPos(helper.Handle, nint.Zero,
             region.Left, region.Top, region.Width, region.Height,

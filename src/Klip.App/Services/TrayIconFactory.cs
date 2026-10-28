@@ -1,53 +1,54 @@
 using System.Drawing;
-using System.Drawing.Drawing2D;
+using System.Windows;
+using Microsoft.Win32;
 
 namespace Klip.App.Services;
 
 /// <summary>
-/// Tray icon drawn at runtime (placeholder until we ship the real .ico).
-/// Draws a rounded clipboard with a clip, monochrome Fluent style.
+/// Tray icon from the two shipped .ico files (dark glyph for a light taskbar, white
+/// glyph for a dark one). Loading an .ico goes through user32, so GDI+ never starts.
 /// </summary>
 public static class TrayIconFactory
 {
-    public static Icon Create()
+    /// <summary>True when the taskbar is light (SystemUsesLightTheme, not the app theme).</summary>
+    public static bool TaskbarIsLight()
     {
-        const int size = 32;
-        using var bmp = new Bitmap(size, size);
-        using var g = Graphics.FromImage(bmp);
-        g.SmoothingMode = SmoothingMode.AntiAlias;
-        g.Clear(Color.Transparent);
-
-        using var body = RoundedRect(new RectangleF(6, 4, 20, 25), 4);
-        using var bodyPen = new Pen(Color.White, 2.4f);
-        g.DrawPath(bodyPen, body);
-
-        // clipboard clip
-        using var clipBrush = new SolidBrush(Color.White);
-        g.FillRectangle(clipBrush, 12, 2, 8, 5);
-
-        // content lines
-        using var linePen = new Pen(Color.White, 2f);
-        g.DrawLine(linePen, 11, 13, 21, 13);
-        g.DrawLine(linePen, 11, 18, 21, 18);
-        g.DrawLine(linePen, 11, 23, 17, 23);
-
-        var hIcon = bmp.GetHicon();
-        // clone it so we don't hold the GDI handle (that one needs DestroyIcon)
-        using var tmp = Icon.FromHandle(hIcon);
-        var icon = (Icon)tmp.Clone();
-        Interop.NativeMethods.DestroyIcon(hIcon);
-        return icon;
+        try
+        {
+            using var key = Registry.CurrentUser.OpenSubKey(
+                @"Software\Microsoft\Windows\CurrentVersion\Themes\Personalize");
+            return key?.GetValue("SystemUsesLightTheme") is int value && value != 0;
+        }
+        catch (Exception)
+        {
+            return false;
+        }
     }
 
-    private static GraphicsPath RoundedRect(RectangleF r, float radius)
+    public static Icon Create(bool lightTaskbar)
     {
-        var path = new GraphicsPath();
-        var d = radius * 2;
-        path.AddArc(r.X, r.Y, d, d, 180, 90);
-        path.AddArc(r.Right - d, r.Y, d, d, 270, 90);
-        path.AddArc(r.Right - d, r.Bottom - d, d, d, 0, 90);
-        path.AddArc(r.X, r.Bottom - d, d, d, 90, 90);
-        path.CloseFigure();
-        return path;
+        var name = lightTaskbar ? "TrayLight.ico" : "TrayDark.ico";
+        var info = Application.GetResourceStream(new Uri($"pack://application:,,,/Assets/{name}"))
+            ?? throw new InvalidOperationException($"missing resource {name}");
+        using var stream = info.Stream;
+        // tray size follows the dpi of the primary monitor (16 at 100%, 24 at 150%...)
+        var size = (int)Math.Round(16 * VisualDpiScale());
+        return new Icon(stream, size, size);
+    }
+
+    private static double VisualDpiScale()
+    {
+        const uint MONITOR_DEFAULTTOPRIMARY = 1;
+        try
+        {
+            // the tray lives on the primary monitor
+            var monitor = Interop.NativeMethods.MonitorFromPoint(default, MONITOR_DEFAULTTOPRIMARY);
+            Interop.NativeMethods.GetDpiForMonitor(monitor, Interop.NativeMethods.MDT_EFFECTIVE_DPI, out var dpi, out _);
+            return dpi > 0 ? dpi / 96.0 : 1.0;
+        }
+        catch (Exception)
+        {
+            return 1.0;
+        }
     }
 }

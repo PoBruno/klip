@@ -3,14 +3,14 @@ using System.Text.Json;
 using System.Text.Json.Serialization;
 using Klip.Core.Common;
 
-// RF-P3.06: o contador de gravacoes existe so pra os testes conseguirem provar
+// o contador de gravacoes existe so pra os testes conseguirem provar
 // que o debounce coalesce N chamadas de Update numa unica escrita em disco.
 [assembly: InternalsVisibleTo("Klip.Core.Tests")]
 
 namespace Klip.Core.Settings;
 
 /// <summary>
-/// Persists AppSettings as JSON. RF-P3.06: a mutacao e aplicada em memoria na
+/// Persists AppSettings as JSON. A mutacao e aplicada em memoria na
 /// hora (e o Changed dispara junto, pra UI reagir), mas a gravacao em disco e
 /// agendada com debounce - 44 call-sites de Update, incluindo ValueChanged de
 /// slider, nao podem custar 3 operacoes de arquivo cada.
@@ -19,12 +19,12 @@ public sealed class SettingsService : IDisposable
 {
     private static readonly JsonSerializerOptions JsonOptions = new()
     {
-        // RF-P3.06: arquivo menor e serializacao mais rapida; continua legivel
+        // arquivo menor e serializacao mais rapida; continua legivel
         WriteIndented = false,
         DefaultIgnoreCondition = JsonIgnoreCondition.Never,
     };
 
-    /// <summary>Janela de coalescencia das gravacoes (RF-P3.06).</summary>
+    /// <summary>Janela de coalescencia das gravacoes.</summary>
     internal const int DebounceMilliseconds = 500;
 
     private readonly string _path;
@@ -94,12 +94,41 @@ public sealed class SettingsService : IDisposable
                     Current = new AppSettings();
                 }
             }
+
+            // in memory only: the file catches up on the next real save. Until then every
+            // start migrates again, which is fine because Migrate only touches old defaults
+            Migrate(Current);
         }
+    }
+
+    /// <summary>Settings schema version this build writes.</summary>
+    public const int CurrentSettingsVersion = 1;
+
+    /// <summary>
+    /// One-time fixes for defaults that changed. Only values still sitting on the OLD
+    /// default are touched; anything the user picked stays. Returns false when the
+    /// settings were already current.
+    /// </summary>
+    internal static bool Migrate(AppSettings s)
+    {
+        if (s.SettingsVersion >= CurrentSettingsVersion)
+            return false;
+
+        if (s.SettingsVersion < 1)
+        {
+            // history default went from 10k to 1k items: 10k made search and the
+            // scroll slow and the db huge. 10000 exactly = never touched it
+            if (s.RetentionMaxItems == 10_000)
+                s.RetentionMaxItems = 1_000;
+        }
+
+        s.SettingsVersion = CurrentSettingsVersion;
+        return true;
     }
 
     /// <summary>
     /// Grava agora, incondicionalmente, e notifica os assinantes.
-    /// RF-P3.06: serializa dentro do lock, escreve o arquivo fora dele.
+    /// serializa dentro do lock, escreve o arquivo fora dele.
     /// </summary>
     public void Save()
     {
@@ -119,7 +148,7 @@ public sealed class SettingsService : IDisposable
     }
 
     /// <summary>
-    /// RF-P3.06: aplica a mutacao em memoria, avisa a UI na hora e agenda a
+    /// aplica a mutacao em memoria, avisa a UI na hora e agenda a
     /// gravacao. Nenhuma operacao de arquivo acontece aqui.
     /// </summary>
     public void Update(Action<AppSettings> mutate)
@@ -139,7 +168,7 @@ public sealed class SettingsService : IDisposable
     }
 
     /// <summary>
-    /// RF-P3.06: para quem nao pode esperar o debounce (takeover de registro,
+    /// para quem nao pode esperar o debounce (takeover de registro,
     /// por exemplo, onde o backup precisa estar em disco antes da escrita).
     /// </summary>
     public void UpdateAndFlush(Action<AppSettings> mutate)
@@ -149,7 +178,7 @@ public sealed class SettingsService : IDisposable
     }
 
     /// <summary>
-    /// RF-P3.06: grava na hora se houver alteracao pendente. Chamar no OnExit /
+    /// grava na hora se houver alteracao pendente. Chamar no OnExit /
     /// OnSessionEnding. Nao segura _sync durante o IO, entao pode ser chamado de
     /// dentro do callback do timer sem risco de deadlock.
     /// </summary>
@@ -188,7 +217,7 @@ public sealed class SettingsService : IDisposable
     private void ScheduleWrite()
     {
         // Change com dueTime reinicia a contagem: N updates seguidos viram uma
-        // gravacao so, 500 ms depois do ultimo (RF-P3.06)
+        // gravacao so, 500 ms depois do ultimo
         try
         {
             _debounce.Change(DebounceMilliseconds, Timeout.Infinite);
@@ -215,7 +244,7 @@ public sealed class SettingsService : IDisposable
 
     private void WriteIfNewer(string json, long version)
     {
-        // RF-P3.06: IO fora do lock de mutacao - segurar _sync durante 3
+        // IO fora do lock de mutacao - segurar _sync durante 3
         // operacoes de arquivo bloquearia o proximo Update vindo da UI thread
         lock (_writeSync)
         {

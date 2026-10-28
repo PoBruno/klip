@@ -2,14 +2,14 @@
 
   <PropertyGroup>
     <!-- TFM 26100 expoe as APIs WGC mais novas (IsBorderRequired 20348, MinUpdateInterval 26100);
-         o minimo suportado continua 17763 com feature-detection em runtime (spec F2). -->
-    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+         o minimo suportado continua 17763 com feature-detection em runtime. -->
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
     <RootNamespace>Klip.Interop</RootNamespace>
     <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
-    <!-- RF-P3.02: PGO dinamico tambem no Interop (loops de captura/encode). -->
+    <!-- PGO dinamico tambem no Interop (loops de captura/encode). -->
     <TieredPGO>true</TieredPGO>
   </PropertyGroup>
 
@@ -18,12 +18,14 @@
   </ItemGroup>
 
   <ItemGroup>
-    <!-- D-F2.2: bindings D3D11/DXGI (MIT) para o motor de captura de frames -->
+    <!-- bindings D3D11/DXGI (MIT) para o motor de captura de frames -->
     <PackageReference Include="Vortice.Direct3D11" Version="3.8.3" />
     <PackageReference Include="Vortice.DXGI" Version="3.8.3" />
-    <!-- D-F3.2: SinkWriter H.264/AAC (MIT); D-F3.4: WASAPI loopback/capture + resample (MIT) -->
+    <!-- SinkWriter H.264/AAC (MIT); WASAPI loopback/capture + resample (MIT).
+         NAudio.Wasapi instead of the NAudio meta package: the meta one drags NAudio.WinForms,
+         which pulls the whole WinForms framework into the self-contained publish -->
     <PackageReference Include="Vortice.MediaFoundation" Version="3.8.3" />
-    <PackageReference Include="NAudio" Version="2.2.1" />
+    <PackageReference Include="NAudio.Wasapi" Version="2.2.1" />
   </ItemGroup>
 
 </Project>

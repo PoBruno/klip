@@ -1,7 +1,7 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Median cut variante palettegen do FFmpeg (RF-F4.07, D-F4.1 - referencia
+/// Median cut variante palettegen do FFmpeg (referencia
 /// blog.pkh.me): split do box de maior VARIANCIA ponderada (nao maior
 /// volume), eixo = canal de maior amplitude (empate G &gt; R &gt; B), corte na
 /// mediana ponderada por contagem, cor final = media ponderada.

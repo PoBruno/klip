@@ -32,7 +32,7 @@ public class GifSequenceBuilderTests
         var seq = GifSequenceBuilder.Build(project, Delays, targetFps: 5);
 
         Assert.True(seq.Count < 6);
-        Assert.Equal(600, seq.Sum(e => e.DelayMs)); // CA-F5.4: duracao preservada
+        Assert.Equal(600, seq.Sum(e => e.DelayMs)); // duracao preservada
     }
 
     [Fact]
@@ -50,7 +50,7 @@ public class GifSequenceBuilderTests
     [Fact]
     public void RemovedSegmentLeavesBlackGapFrames()
     {
-        // RF-F5.18/20: default removal leaves a gap; gap slots materialize as
+        // default removal leaves a gap; gap slots materialize as
         // black entries (SourceFrame = -1) so the preview/export paint black
         var project = MediaEditProject.CreateGif("a.gif", 6).SplitAtFrame(3);
         project = project.RemoveSegment(project.Segments[0].Id);
@@ -67,7 +67,7 @@ public class GifSequenceBuilderTests
     public void GapFramesInheritLocalCadence()
     {
         // gap black frames use the delay of the previous REAL frame; a leading
-        // gap uses the first real frame's delay (documented contract, RF-F5.20)
+        // gap uses the first real frame's delay (documented contract)
         int[] delays = [50, 100, 100, 200, 100, 100];
         var project = MediaEditProject.CreateGif("a.gif", 6).SplitAtFrame(4);
         project = project.MoveSegmentToFrame(project.Segments[1].Id, 7);  // gap slots 5-6
@@ -93,7 +93,7 @@ public class GifSequenceBuilderTests
     public void GapFramesParticipateInFpsReduction()
     {
         // decimation runs over the full slot list (gaps included) and still
-        // preserves the total duration (CA-F5.4)
+        // preserves the total duration
         var project = MediaEditProject.CreateGif("a.gif", 6).SplitAtFrame(3);
         project = project.MoveSegmentToFrame(project.Segments[1].Id, 5); // 2 gap slots
 

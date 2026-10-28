@@ -4,7 +4,7 @@ using System.Text.RegularExpressions;
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// RF-F5.12: parse do progresso emitido pelo ffmpeg.exe no stderr
+/// parse do progresso emitido pelo ffmpeg.exe no stderr
 /// ("... time=00:01:23.45 bitrate=..."). Logica pura para o runner do App
 /// calcular a fracao concluida (time / duracao editada) - testavel sem processo.
 /// </summary>

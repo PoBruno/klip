@@ -8,7 +8,7 @@ public static partial class NativeMethods
     public const int WM_CLIPBOARDUPDATE = 0x031D;
 
     // ----- ids dos formatos padrao (windows.h) -----
-    // RF-P2.01: usados com IsClipboardFormatAvailable para sondar o clipboard
+    // usados com IsClipboardFormatAvailable para sondar o clipboard
     // SEM abrir nada. Formatos sintetizados (CF_TEXT <-> CF_UNICODETEXT,
     // CF_BITMAP <-> CF_DIB <-> CF_DIBV5) tambem sao reportados como disponiveis.
     public const uint CF_TEXT = 1;
@@ -34,7 +34,7 @@ public static partial class NativeMethods
     public static partial nint GetClipboardOwner();
 
     /// <summary>
-    /// RF-P2.01: sonda barata. Le a lista de formatos que o dono do clipboard
+    /// sonda barata. Le a lista de formatos que o dono do clipboard
     /// anunciou (mantida pelo proprio win32) - nao abre o clipboard e NAO faz
     /// round-trip COM ao processo de origem, ao contrario de
     /// IDataObject.GetDataPresent. Serve para escolher o que pedir antes de
@@ -75,10 +75,10 @@ public static partial class NativeMethods
         return len > 0 ? new string(buffer, 0, len) : "";
     }
 
-    // ----- identificacao do processo de origem (RF-P2.02) -----
+    // ----- identificacao do processo de origem -----
 
     /// <summary>
-    /// RF-P2.02: direito minimo para perguntar caminho e tempos de um processo.
+    /// direito minimo para perguntar caminho e tempos de um processo.
     /// Diferente de PROCESS_QUERY_INFORMATION (0x0400), este funciona atravessando
     /// niveis de integridade - e o unico que um app de usuario consegue abrir
     /// contra a maioria dos processos de terceiros.
@@ -118,7 +118,7 @@ public static partial class NativeMethods
         out long lpUserTime);
 
     /// <summary>
-    /// RF-P2.02: caminho completo da imagem de um processo ja aberto. Buffer fixo
+    /// caminho completo da imagem de um processo ja aberto. Buffer fixo
     /// de MAX_PATH estendido; caminho maior que isso simplesmente falha (retorna
     /// null) em vez de crescer o buffer - nao vale a pena para um nome de exe.
     /// </summary>

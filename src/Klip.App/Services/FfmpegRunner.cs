@@ -12,9 +12,9 @@ public sealed record FfmpegRunResult(int ExitCode, string StderrTail)
 }
 
 /// <summary>
-/// Executa o ffmpeg.exe como processo (RF-F5.12): stderr parseado para
+/// Executa o ffmpeg.exe como processo: stderr parseado para
 /// progresso via <see cref="FfmpegProgressParser"/>, cancelamento mata o
-/// processo. O chamador e responsavel pelo temp + move atomico (CA-F5.7).
+/// processo. O chamador e responsavel pelo temp + move atomico.
 /// Anti-orfao (bug do ffmpeg vivo apos fechar o app): todo processo ativo
 /// entra num registro estatico; handlers de ProcessExit/Application.Exit
 /// (assinados uma vez, lazily) matam a arvore dos processos registrados e

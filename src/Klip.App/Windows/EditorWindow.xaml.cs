@@ -45,6 +45,7 @@ public partial class EditorWindow
     private readonly ClipboardItemRepository _repository;
     private readonly MediaStore _mediaStore;
     private readonly OcrService _ocr;
+    private readonly PinnedImageService _pinned;
     private readonly DispatcherTimer _autoCopyDebounce;
 
     private EditorTool _tool = EditorTool.Pen;
@@ -86,8 +87,10 @@ public partial class EditorWindow
         ClipboardIngestService ingest,
         ClipboardItemRepository repository,
         MediaStore mediaStore,
-        OcrService ocr)
+        OcrService ocr,
+        PinnedImageService pinned)
     {
+        _pinned = pinned;
         _writeGuard = writeGuard;
         _ingest = ingest;
         _repository = repository;
@@ -191,6 +194,12 @@ public partial class EditorWindow
         RotateLeftButton.Click += (_, _) => Rotate(clockwise: false);
         RotateRightButton.Click += (_, _) => Rotate(clockwise: true);
         TextActionsButton.Click += async (_, _) => await ExtractTextAsync();
+        // pins what is on the canvas right now, edits included
+        PinButton.Click += (_, _) =>
+        {
+            if (_base is not null)
+                _pinned.Pin(RenderCanvas());
+        };
         QuickRedactButton.Click += async (_, _) => await QuickRedactAsync();
 
         ThicknessSlider.ValueChanged += (_, _) => ApplyDrawingAttributes();
@@ -627,7 +636,7 @@ public partial class EditorWindow
 
     // cache the decoded emoji so the picker and stamping don't re-read the file
     //
-    // RF-P4.03: dois caches distintos porque os dois usos tem resolucoes alvo
+    // dois caches distintos porque os dois usos tem resolucoes alvo
     // opostas. A paleta do popup exibe 20x20 DIP, entao decodificar o Twemoji
     // (72x72 nativo) em 24 px basta - mesmo valor ja usado no painel de emoji do
     // flyout. O stamp, porem, e colocado no canvas de 32 ate 160 DIP (size =
@@ -647,7 +656,7 @@ public partial class EditorWindow
     private static BitmapImage LoadEmojiStampImage(string code) => _emojiStampCache.Get(code);
 
     /// <summary>
-    /// RF-P4.03: cache LRU com teto fixo. O dicionario anterior nao tinha limite
+    /// cache LRU com teto fixo. O dicionario anterior nao tinha limite
     /// e podia reter ~400 BitmapImage vivos pelo resto do processo (percorrer as
     /// categorias ou usar a busca toca o repositorio inteiro). Uso restrito a UI
     /// thread (paleta e stamp), por isso sem lock.
