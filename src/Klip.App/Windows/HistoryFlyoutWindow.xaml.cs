@@ -1148,6 +1148,14 @@ public partial class HistoryFlyoutWindow
                 HandleEscape();
                 return;
 
+            // Alt+Enter types the item as keystrokes. Alt is still down and the Enter never
+            // reaches the app: tap a dummy key so it does not read a lone Alt as "open the
+            // menu bar" (or run its own Alt+Enter, like Properties in Explorer)
+            case VK_RETURN when alt && !ctrl && !shift && !onSnippets && !_viewModel.IsMultiSelectMode:
+                NativeMethods.SendMaskKey();
+                _viewModel.TypeTextCommand.Execute(ItemsList.SelectedItem);
+                return;
+
             case VK_RETURN:
                 HandleEnter(ctrl, shift);
                 return;
