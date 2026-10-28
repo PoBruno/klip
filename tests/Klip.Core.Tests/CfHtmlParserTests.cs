@@ -5,7 +5,7 @@ using Klip.Core.Clipboard;
 namespace Klip.Core.Tests;
 
 /// <summary>
-/// RF-P2.03: cobertura do parse de header CF_HTML sobre span. O nome carrega o
+/// cobertura do parse de header CF_HTML sobre span. O nome carrega o
 /// sufixo Span porque a suite legada em ClipboardEngineTests.cs ja ocupa o tipo
 /// <c>CfHtmlParserTests</c> no mesmo namespace.
 /// </summary>

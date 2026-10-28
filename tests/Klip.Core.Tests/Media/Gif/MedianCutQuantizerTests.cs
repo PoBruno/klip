@@ -2,7 +2,7 @@ using Klip.Core.Media.Gif;
 
 namespace Klip.Core.Tests.Media.Gif;
 
-/// <summary>Median cut variante palettegen (RF-F4.07).</summary>
+/// <summary>Median cut variante palettegen.</summary>
 public class MedianCutQuantizerTests
 {
     [Fact]

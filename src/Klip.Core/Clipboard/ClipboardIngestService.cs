@@ -14,9 +14,17 @@ public sealed class ClipboardIngestService(
     MediaStore mediaStore,
     SettingsService settings,
     IThumbnailGenerator? thumbnailGenerator = null,
-    IImageTextExtractor? textExtractor = null)
+    IImageTextExtractor? textExtractor = null,
+    string? secretPendingFile = null)
 {
     private readonly Lock _writeLock = new(); // writes are serialized
+    private SecretKeeper? _secrets;
+
+    /// <summary>Items that look like secrets and are only kept for a while (SecretKeepSeconds).</summary>
+    public SecretKeeper Secrets => LazyInitializer.EnsureInitialized(ref _secrets, CreateSecretKeeper);
+
+    /// <summary>True while the item is a short-lived secret; the list should mask its preview.</summary>
+    public bool IsSecretItem(long id) => _secrets?.IsSecret(id) == true;
 
     /// <summary>Fires after an item is persisted, so the UI can refresh.</summary>
     public event Action<ClipboardItem>? ItemIngested;
@@ -34,7 +42,7 @@ public sealed class ClipboardIngestService(
             s.ExcludedApps.Any(a => string.Equals(a, snapshot.SourceApp, StringComparison.OrdinalIgnoreCase)))
             return null;
 
-        var item = BuildItem(snapshot, s);
+        var item = BuildItem(snapshot, s, out var keepAsSecret);
         if (item is null)
             return null;
 
@@ -42,10 +50,18 @@ public sealed class ClipboardIngestService(
         if (s.RetentionMaxItemBytes > 0 && item.ByteSize > s.RetentionMaxItemBytes)
             return null;
 
+        // the list only draws Preview, so a masked preview hides the secret there
+        if (keepAsSecret)
+            item.Preview = SecretKeeper.Mask(item.TextContent);
+
         lock (_writeLock)
         {
             repository.Upsert(item);
         }
+
+        // secret kept on purpose (SecretKeepSeconds > 0): goes in, but with a fuse
+        if (keepAsSecret)
+            Secrets.Track(item.Id, TimeSpan.FromSeconds(s.SecretKeepSeconds));
 
         ItemIngested?.Invoke(item);
 
@@ -81,8 +97,46 @@ public sealed class ClipboardIngestService(
         });
     }
 
-    private ClipboardItem? BuildItem(ClipboardSnapshot snapshot, AppSettings s)
+    /// <summary>
+    /// Wipes secrets a previous run left behind (crash, kill). Call once off the UI thread.
+    /// </summary>
+    public int PurgeSecretLeftovers()
     {
+        if (secretPendingFile is null)
+            return 0;
+        var ids = SecretKeeper.ReadLeftovers(secretPendingFile);
+        foreach (var id in ids)
+            DeleteSecret(id);
+        try
+        {
+            File.Delete(secretPendingFile);
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
+        return ids.Count;
+    }
+
+    private SecretKeeper CreateSecretKeeper() => new(DeleteSecret, secretPendingFile);
+
+    private void DeleteSecret(long id)
+    {
+        lock (_writeLock)
+        {
+            // pinned or favorited in the meantime = the user wants to keep it
+            var current = repository.GetById(id);
+            if (current is null || current.Pinned || current.Favorite)
+                return;
+            repository.Delete(id);
+        }
+    }
+
+    private ClipboardItem? BuildItem(ClipboardSnapshot snapshot, AppSettings s, out bool keepAsSecret)
+    {
+        keepAsSecret = false;
         var ts = snapshot.Timestamp;
 
         // type priority: image > files > text
@@ -114,8 +168,8 @@ public sealed class ClipboardIngestService(
             };
         }
 
-        // RF-F3.07: itens de origem propria (gravacao) entram mesmo com a
-        // captura de arquivos do clipboard desligada - o toggle e sobre copias.
+        // our own items (recordings) go in even with file capture turned off,
+        // that toggle is about what the user copies
         if (snapshot.Files is { Count: > 0 } files &&
             (s.CaptureFiles || snapshot.Origin != ClipboardItemOrigin.Clipboard))
         {
@@ -139,7 +193,11 @@ public sealed class ClipboardIngestService(
         {
             // don't keep stuff that looks like a secret (token/password/JWT)
             if (s.SkipSecrets && SecretDetector.LooksLikeSecret(text))
-                return null;
+            {
+                if (s.SecretKeepSeconds <= 0)
+                    return null;
+                keepAsSecret = true;
+            }
 
             var html = s.CaptureHtml ? snapshot.HtmlFragment : null;
             var rtf = s.CaptureHtml ? snapshot.Rtf : null; // o RTF segue o mesmo toggle de formatac[ao

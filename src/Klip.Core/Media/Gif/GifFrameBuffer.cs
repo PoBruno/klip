@@ -1,10 +1,10 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Buffer de retencao de frames da gravacao GIF (RF-F4.06, D-F4.2): dedupe
+/// Buffer de retencao de frames da gravacao GIF: dedupe
 /// vetorizado com o frame anterior na ingestao (frame identico acumula delay
 /// e e descartado), retencao em RAM ate o teto configurado e spill para
-/// arquivos raw BGRA em disco acima disso (RF-F4.04). Nao e thread-safe:
+/// arquivos raw BGRA em disco acima disso. Nao e thread-safe:
 /// a ingestao vem de uma unica thread (o worker do GifFramePipeline).
 /// </summary>
 public sealed class GifFrameBuffer : IDisposable
@@ -30,7 +30,7 @@ public sealed class GifFrameBuffer : IDisposable
 
     // Buffer de comparacao reutilizado entre frames spillados: evita um
     // ToArray() (alocacao LOH) por frame no caminho de ingestao (bug de GC do
-    // pipeline GIF, RF-F4.04).
+    // pipeline GIF).
     private byte[]? _compareScratch;
 
     private int _width;
@@ -54,8 +54,8 @@ public sealed class GifFrameBuffer : IDisposable
 
     /// <summary>
     /// Ingere um frame BGRA32 top-down. Retorna false se o frame e identico
-    /// ao anterior (dedupe RF-F4.06): o delay e acumulado no frame retido e
-    /// nada e armazenado - a duracao total fica preservada (CA-F4.2).
+    /// ao anterior (dedupe): o delay e acumulado no frame retido e
+    /// nada e armazenado - a duracao total fica preservada.
     /// </summary>
     public bool Add(ReadOnlySpan<byte> bgra, int width, int height, int delayMs)
     {

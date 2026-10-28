@@ -2,7 +2,7 @@ using Klip.Core.Media.Gif;
 
 namespace Klip.Core.Tests.Media.Gif;
 
-/// <summary>Dirty-rect entre frames BGRA (RF-F4.06, RF-F4.08, RF-F4.10).</summary>
+/// <summary>Dirty-rect entre frames BGRA.</summary>
 public class DirtyRectDetectorTests
 {
     [Fact]
@@ -39,7 +39,7 @@ public class DirtyRectDetectorTests
     [Fact]
     public void Compute_NoiseWithinTolerance_ReturnsEmpty()
     {
-        // Ruido de codec (RF-F4.10): +/-1 por canal soma no maximo 3.
+        // Ruido de codec: +/-1 por canal soma no maximo 3.
         var a = GifTestUtil.MakeBgra(16, 16, (_, _) => (100, 100, 100));
         var b = GifTestUtil.MakeBgra(16, 16, (x, _) => ((byte)(100 + x % 2), (byte)(100 - x % 2), 101));
 

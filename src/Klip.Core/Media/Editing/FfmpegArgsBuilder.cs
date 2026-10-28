@@ -4,14 +4,14 @@ using System.Text;
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// RF-F5.11: pure, deterministic translation of a <see cref="MediaEditProject"/>
+/// pure, deterministic translation of a <see cref="MediaEditProject"/>
 /// into FFmpeg command-line arguments (the same input always yields the exact
 /// same string, so exports are golden-string testable). No process is started
-/// here; the export service owns the ffmpeg.exe lifecycle (RF-F5.12/RF-F5.14).
+/// here; the export service owns the ffmpeg.exe lifecycle.
 ///
 /// Filter-graph shape (video): the edited timeline is flattened into ITEMS in
 /// timeline order - one trim/setpts chain per segment plus one synthetic black
-/// source per gap (RF-F5.20: "color=c=black:s=WxH:r=FPS:d=SEC"), concat
+/// source per gap ("color=c=black:s=WxH:r=FPS:d=SEC"), concat
 /// (n=K:v=1:a=0), plus one atrim/asetpts chain per NON-MUTED audio track per
 /// segment with the track volume applied (omitted when exactly 1.0) and one
 /// "anullsrc" silence chain per gap, concat per track, and amix (normalize=0,
@@ -20,7 +20,7 @@ namespace Klip.Core.Media.Editing;
 /// Gap filler dimensions/fps come from the settings and must match the source
 /// (see <see cref="VideoExportSettings.Width"/>).
 ///
-/// GIF route (D-F5.4, MP4 source): single-pass palette - the segment chain is
+/// GIF route (MP4 source): single-pass palette - the segment chain is
 /// followed by fps[,scale] then split/palettegen/paletteuse in one filter
 /// graph. Chosen over two-pass (two commands + palette temp file) because it
 /// keeps the builder a single pure string and quality is equivalent for
@@ -29,7 +29,7 @@ namespace Klip.Core.Media.Editing;
 /// </summary>
 public static class FfmpegArgsBuilder
 {
-    /// <summary>One flattened timeline item: a segment or a gap (RF-F5.20).</summary>
+    /// <summary>One flattened timeline item: a segment or a gap.</summary>
     private readonly record struct TimelineItem(TimelineSegment? Segment, TimeSpan GapDuration)
     {
         public bool IsGap => Segment is null;
@@ -47,8 +47,8 @@ public static class FfmpegArgsBuilder
         var items = FlattenTimeline(project);
         var chains = new List<string>();
 
-        // Video: trim/setpts per segment, black filler per gap (RF-F5.20),
-        // concat when more than one item (RF-F5.11)
+        // Video: trim/setpts per segment, black filler per gap,
+        // concat when more than one item
         if (items.Count == 1)
         {
             chains.Add($"[0:v]{TrimChain(items[0].Segment!)}[v]");
@@ -69,7 +69,7 @@ public static class FfmpegArgsBuilder
         }
 
         // Audio: only non-muted tracks make it into the graph; gaps become
-        // silence (anullsrc) so audio and video stay in sync (RF-F5.20)
+        // silence (anullsrc) so audio and video stay in sync
         var audible = project.AudioTracks.Where(t => !t.IsMuted).ToList();
         for (var t = 0; t < audible.Count; t++)
         {
@@ -121,7 +121,7 @@ public static class FfmpegArgsBuilder
     /// <summary>
     /// Builds the full argument string for the MP4-to-GIF export (single-pass
     /// palette via split/palettegen/paletteuse - see class remarks). Gaps
-    /// become black filler at the target GIF framerate (RF-F5.20).
+    /// become black filler at the target GIF framerate.
     /// </summary>
     public static string BuildGifFromVideoArgs(MediaEditProject project, GifFromVideoSettings settings, string outputPath)
     {
@@ -171,7 +171,7 @@ public static class FfmpegArgsBuilder
     /// <summary>
     /// Flattens the edited timeline into items in timeline order: segments
     /// interleaved with the gaps between them (and before the first one).
-    /// There is never a trailing gap by construction (RF-F5.17).
+    /// There is never a trailing gap by construction.
     /// </summary>
     private static List<TimelineItem> FlattenTimeline(MediaEditProject project)
     {
@@ -187,12 +187,12 @@ public static class FfmpegArgsBuilder
         return items;
     }
 
-    // RF-F5.20: synthetic black video for a gap. Size/fps must match the real
+    // synthetic black video for a gap. Size/fps must match the real
     // source (concat requires homogeneous streams).
     private static string BlackSource(int width, int height, int fps, TimeSpan duration)
         => $"color=c=black:s={width.ToString(CultureInfo.InvariantCulture)}x{height.ToString(CultureInfo.InvariantCulture)}:r={fps.ToString(CultureInfo.InvariantCulture)}:d={Sec(duration)}";
 
-    // RF-F5.20: synthetic silence for a gap (48 kHz stereo, the recording
+    // synthetic silence for a gap (48 kHz stereo, the recording
     // default; atrim bounds the otherwise infinite anullsrc).
     private static string SilenceSource(TimeSpan duration)
         => $"anullsrc=channel_layout=stereo:sample_rate=48000,atrim=0:{Sec(duration)}";

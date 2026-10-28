@@ -1,7 +1,7 @@
 namespace Klip.Core.Media.Gif;
 
 /// <summary>
-/// Escrita dos blocos GIF89a (RF-F4.08): header, Logical Screen Descriptor,
+/// Escrita dos blocos GIF89a: header, Logical Screen Descriptor,
 /// Global Color Table, extensao NETSCAPE2.0, Graphic Control Extension,
 /// Image Descriptor e trailer. Layout conforme w3.org/Graphics/GIF/spec-gif89a.
 /// </summary>

@@ -15,12 +15,18 @@ public sealed class PasteQueue<T>
     public bool IsFull => _items.Count >= Target;
     public bool IsArmed => Target > 0 && _items.Count > 0;
 
+    /// <summary>Default cap of the 1 to 5 picker.</summary>
+    public const int DefaultMax = 5;
+
     /// <summary>Starts picking for k items (1 to 5), wiping any state.</summary>
-    public void Begin(int target)
+    public void Begin(int target) => Begin(target, DefaultMax);
+
+    /// <summary>Same, with a different cap (collect mode and free multi-select go past 5).</summary>
+    public void Begin(int target, int max)
     {
         _items.Clear();
         _cursor = 0;
-        Target = Math.Clamp(target, 1, 5);
+        Target = Math.Clamp(target, 1, Math.Max(1, max));
     }
 
     /// <summary>

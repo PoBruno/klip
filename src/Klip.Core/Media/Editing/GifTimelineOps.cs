@@ -1,7 +1,7 @@
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// RF-F5.08: pure frame-based GIF timeline operations (ScreenToGif model:
+/// pure frame-based GIF timeline operations (ScreenToGif model:
 /// frames are a list with per-frame delays; reducing framerate is decimation
 /// with delay redistribution so the total duration is preserved).
 /// </summary>
@@ -12,7 +12,7 @@ public static class GifTimelineOps
     /// dropped when the frame kept before it has not yet covered a full target
     /// interval (1000/targetFps ms); the dropped frame's delay is ADDED to that
     /// previous kept frame, so the sum of delays - i.e. the total duration - is
-    /// exactly preserved (CA-F5.4). Returns (source frame index, new delay) in
+    /// exactly preserved. Returns (source frame index, new delay) in
     /// order. The first frame is always kept.
     /// </summary>
     public static IReadOnlyList<(int FrameIndex, int DelayMs)> ReduceFps(IReadOnlyList<int> delaysMs, int targetFps)

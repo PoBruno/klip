@@ -1,13 +1,13 @@
 namespace Klip.Core.Media.Editing;
 
 /// <summary>
-/// One contiguous slice of the immutable source (RF-F5.05). Video segments use
+/// One contiguous slice of the immutable source. Video segments use
 /// <see cref="SourceStart"/>/<see cref="SourceEnd"/> (time in the source file);
 /// GIF segments use <see cref="FrameStart"/>/<see cref="FrameEnd"/> where the
 /// range is half-open: [FrameStart, FrameEnd). A segment is never empty
 /// (start &lt; end). Instances are immutable.
 ///
-/// RF-F5.17: every segment also carries an EXPLICIT position on the EDITED
+/// every segment also carries an EXPLICIT position on the EDITED
 /// timeline (<see cref="TimelineStart"/> for video, <see cref="TimelineFrameStart"/>
 /// for GIF). Segments may be placed apart from each other, creating gaps that
 /// render as black and extend the edited duration. The source range never
@@ -17,10 +17,10 @@ public sealed class TimelineSegment
 {
     public Guid Id { get; }
 
-    /// <summary>Position of the segment on the EDITED timeline (Video only; zero for GIF). RF-F5.17.</summary>
+    /// <summary>Position of the segment on the EDITED timeline (Video only; zero for GIF).</summary>
     public TimeSpan TimelineStart { get; }
 
-    /// <summary>First timeline frame slot occupied by the segment (GIF only; zero for Video). RF-F5.17.</summary>
+    /// <summary>First timeline frame slot occupied by the segment (GIF only; zero for Video).</summary>
     public int TimelineFrameStart { get; }
 
     /// <summary>Start time in the source (Video only; zero for GIF).</summary>
@@ -41,10 +41,10 @@ public sealed class TimelineSegment
     /// <summary>Number of frames covered by the segment (GIF).</summary>
     public int FrameCount => FrameEnd - FrameStart;
 
-    /// <summary>End of the segment on the EDITED timeline, exclusive (Video). RF-F5.17.</summary>
+    /// <summary>End of the segment on the EDITED timeline, exclusive (Video).</summary>
     public TimeSpan TimelineEnd => TimelineStart + Duration;
 
-    /// <summary>Timeline frame slot one past the segment, exclusive (GIF). RF-F5.17.</summary>
+    /// <summary>Timeline frame slot one past the segment, exclusive (GIF).</summary>
     public int TimelineFrameEnd => TimelineFrameStart + FrameCount;
 
     private TimelineSegment(Guid id, TimeSpan timelineStart, TimeSpan sourceStart, TimeSpan sourceEnd,
@@ -63,7 +63,7 @@ public sealed class TimelineSegment
     public static TimelineSegment ForVideo(TimeSpan sourceStart, TimeSpan sourceEnd)
         => CreateVideo(Guid.NewGuid(), TimeSpan.Zero, sourceStart, sourceEnd);
 
-    /// <summary>Creates a time-based segment at an explicit timeline position (RF-F5.17).</summary>
+    /// <summary>Creates a time-based segment at an explicit timeline position.</summary>
     public static TimelineSegment ForVideoAt(TimeSpan timelineStart, TimeSpan sourceStart, TimeSpan sourceEnd)
         => CreateVideo(Guid.NewGuid(), timelineStart, sourceStart, sourceEnd);
 
@@ -71,7 +71,7 @@ public sealed class TimelineSegment
     public static TimelineSegment ForFrames(int frameStart, int frameEnd)
         => CreateFrames(Guid.NewGuid(), 0, frameStart, frameEnd);
 
-    /// <summary>Creates a frame-based segment at an explicit timeline slot (RF-F5.17).</summary>
+    /// <summary>Creates a frame-based segment at an explicit timeline slot.</summary>
     public static TimelineSegment ForFramesAt(int timelineFrameStart, int frameStart, int frameEnd)
         => CreateFrames(Guid.NewGuid(), timelineFrameStart, frameStart, frameEnd);
 

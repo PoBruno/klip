@@ -1,33 +1,41 @@
 namespace Klip.Core.Recording;
 
-/// <summary>Opcoes de uma gravacao MP4 (spec F3).</summary>
+/// <summary>Options of one mp4 recording.</summary>
 public sealed class Mp4RecordingOptions
 {
-    /// <summary>Regiao em pixels fisicos (coordenadas de desktop virtual).</summary>
+    /// <summary>Region in physical px (virtual desktop coordinates).</summary>
     public required RecordingRegion Region { get; init; }
 
-    /// <summary>Caminho completo do arquivo .mp4 de saida.</summary>
+    /// <summary>Full path of the .mp4 to write.</summary>
     public required string OutputPath { get; init; }
 
-    /// <summary>FPS alvo (CFR no motor de captura). Default 30.</summary>
+    /// <summary>Target fps (30 or 60, CFR in the capture engine).</summary>
     public int Fps { get; init; } = 30;
 
-    /// <summary>Bitrate de video em kbps. 0 = preset automatico pela resolucao (RF-F3.09).</summary>
+    /// <summary>Hidden override in kbps. 0 = bitrate from resolution x fps x quality x codec.</summary>
     public int BitrateKbps { get; init; }
 
-    /// <summary>fMP4 ligado por padrao - crash preserva o gravado (RF-F3.10).</summary>
+    public VideoQualityPreset Quality { get; init; } = VideoQualityPreset.Balanced;
+
+    /// <summary>Output height cap ("1080p" = 1080); null = native. Never scales up.</summary>
+    public int? OutputHeight { get; init; }
+
+    /// <summary>null = auto (h264, hevc when wider than 4096).</summary>
+    public VideoCodec? Codec { get; init; }
+
+    /// <summary>Fragmented mp4 on by default: a crash keeps what was recorded.</summary>
     public bool FragmentedMp4 { get; init; } = true;
 
     public bool CaptureCursor { get; init; } = true;
 
-    /// <summary>Gravar o som do sistema (WASAPI loopback).</summary>
+    /// <summary>Record the system sound (WASAPI loopback).</summary>
     public bool CaptureSystemAudio { get; init; } = true;
 
-    /// <summary>Ids de microfones (de <see cref="AudioSourceInfo.Id"/>) a mixar. Vazio = nenhum.</summary>
+    /// <summary>Microphone ids (from <see cref="AudioSourceInfo.Id"/>) to mix. Empty = none.</summary>
     public IReadOnlyList<string> MicrophoneDeviceIds { get; init; } = [];
 }
 
-/// <summary>Resultado de uma gravacao finalizada com sucesso.</summary>
+/// <summary>Result of a recording that finished fine.</summary>
 public sealed record Mp4RecordingResult(
     string OutputPath,
     TimeSpan Duration,
@@ -35,5 +43,5 @@ public sealed record Mp4RecordingResult(
     int Height,
     long FileSizeBytes);
 
-/// <summary>Falha fatal de gravacao (a gravacao parou; arquivo pode estar parcial/valido se fMP4).</summary>
+/// <summary>Fatal recording failure (recording stopped; with fMP4 the file may still play).</summary>
 public sealed record RecordingFailure(string Message, Exception? Exception = null);

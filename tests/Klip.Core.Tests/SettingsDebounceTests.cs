@@ -4,7 +4,7 @@ using Klip.Core.Settings;
 namespace Klip.Core.Tests;
 
 /// <summary>
-/// RF-P3.06: Update aplica em memoria e notifica na hora, mas a gravacao em
+/// Update aplica em memoria e notifica na hora, mas a gravacao em
 /// disco e coalescida numa janela de debounce. Flush/UpdateAndFlush/Dispose sao
 /// as saidas sincronas.
 /// </summary>
@@ -249,7 +249,7 @@ public sealed class SettingsDebounceTests : IDisposable
         using var service = NewService();
         service.UpdateAndFlush(s => s.HotkeyHistory = "Win+V");
 
-        // WriteIndented = false (RF-P3.06): sem quebras de linha nem recuo
+        // WriteIndented = false: sem quebras de linha nem recuo
         var json = File.ReadAllText(_path);
         Assert.DoesNotContain("\n", json);
         Assert.StartsWith("{\"", json);

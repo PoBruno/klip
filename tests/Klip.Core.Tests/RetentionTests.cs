@@ -3,7 +3,7 @@ using Klip.Core.Storage;
 namespace Klip.Core.Tests;
 
 /// <summary>
-/// RF-P2.09: retencao. Cobre os tres limites (quantidade, idade, bytes), a imunidade de
+/// retencao. Cobre os tres limites (quantidade, idade, bytes), a imunidade de
 /// fixados/favoritos e o contrato da lista de orfaos devolvida ao chamador.
 /// </summary>
 public class RetentionTests : IDisposable

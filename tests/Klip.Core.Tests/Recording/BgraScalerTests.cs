@@ -2,7 +2,7 @@ using Klip.Core.Recording;
 
 namespace Klip.Core.Tests.Recording;
 
-/// <summary>RF-F4.03: downscale box do frame BGRA antes da retencao.</summary>
+/// <summary>downscale box do frame BGRA antes da retencao.</summary>
 public class BgraScalerTests
 {
     [Fact]

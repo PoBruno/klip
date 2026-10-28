@@ -2,7 +2,7 @@ namespace Klip.Core.Media.Gif;
 
 /// <summary>
 /// Encoder GIF89a two-pass (spec F4). Pass 1 constroi a paleta global vendo
-/// todos os frames (RF-F4.07); pass 2 emite delta frames (RF-F4.08).
+/// todos os frames; pass 2 emite delta frames.
 /// </summary>
 public interface IGifEncoder
 {

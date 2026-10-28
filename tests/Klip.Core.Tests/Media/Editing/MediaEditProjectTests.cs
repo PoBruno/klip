@@ -15,7 +15,7 @@ public class MediaEditProjectTests
         var p = Video60s()
             .SplitAt(Sec(10)).SplitAt(Sec(20)).SplitAt(Sec(35)).SplitAt(Sec(40)).SplitAt(Sec(50));
         // [0-10][10-20][20-35][35-40][40-50][50-60]
-        // RF-F5.18: ripple removal keeps the timeline contiguous (RemoveSegment now leaves gaps)
+        // ripple removal keeps the timeline contiguous (RemoveSegment now leaves gaps)
         p = p.RemoveSegmentRipple(p.Segments[1].Id); // drop 10-20
         p = p.RemoveSegmentRipple(p.Segments[2].Id); // drop 35-40
         p = p.RemoveSegmentRipple(p.Segments[3].Id); // drop 50-60
@@ -115,7 +115,7 @@ public class MediaEditProjectTests
     [Fact]
     public void RemoveSegment_LeavesGapInPlace()
     {
-        // RF-F5.18: default removal leaves a gap - nothing shifts
+        // default removal leaves a gap - nothing shifts
         var p = Video60s().SplitAt(Sec(20));
 
         var removed = p.RemoveSegment(p.Segments[0].Id);
@@ -123,7 +123,7 @@ public class MediaEditProjectTests
         var seg = Assert.Single(removed.Segments);
         Assert.Equal(Sec(20), seg.SourceStart);
         Assert.Equal(Sec(20), seg.TimelineStart);              // did not move
-        Assert.Equal(Sec(60), removed.EditedDuration);         // gap counts (RF-F5.17)
+        Assert.Equal(Sec(60), removed.EditedDuration);         // gap counts
         var gap = Assert.Single(removed.GetGaps());
         Assert.Equal((TimeSpan.Zero, Sec(20)), gap);
     }
@@ -143,7 +143,7 @@ public class MediaEditProjectTests
     [Fact]
     public void RemoveSegmentRipple_ClosesTheHole()
     {
-        // RF-F5.18 "excluir e fechar": later segments shift left by the removed length
+        //  "excluir e fechar": later segments shift left by the removed length
         var p = Video60s().SplitAt(Sec(20)).SplitAt(Sec(40));
 
         var removed = p.RemoveSegmentRipple(p.Segments[1].Id);
@@ -264,7 +264,7 @@ public class MediaEditProjectTests
         Assert.Equal(2, updated.AudioTracks.Count);
         var track = updated.AudioTracks.Single(t => t.StreamIndex == 1);
         Assert.True(track.IsMuted);
-        Assert.Equal(2.0, track.Volume); // RF-F5.09: clamped to 200%
+        Assert.Equal(2.0, track.Volume); // clamped to 200%
         Assert.False(updated.AudioTracks.Single(t => t.StreamIndex == 0).IsMuted);
     }
 
@@ -309,7 +309,7 @@ public class MediaEditProjectTests
     [Fact]
     public void Operations_AreImmutable_PreviousInstanceIntact()
     {
-        // RF-F5.10: undo/redo relies on old instances staying untouched
+        // undo/redo relies on old instances staying untouched
         var original = Video60s(audioTracks: 1);
         var originalSegmentId = original.Segments[0].Id;
 
@@ -333,11 +333,11 @@ public class MediaEditProjectTests
     [Fact]
     public void TenMixedOperations_KeepStateConsistent()
     {
-        // CA-F5.5: a chain of mixed edits never corrupts the invariants
-        // (RF-F5.17/19: sorted by timeline position, no overlaps, gaps allowed)
+        // a chain of mixed edits never corrupts the invariants
+        // (sorted by timeline position, no overlaps, gaps allowed)
         var p = Video60s(audioTracks: 1);
         p = p.SplitAt(Sec(10)).SplitAt(Sec(20)).SplitAt(Sec(30)).SplitAt(Sec(40));
-        p = p.RemoveSegment(p.Segments[2].Id);           // leaves a gap (RF-F5.18)
+        p = p.RemoveSegment(p.Segments[2].Id);           // leaves a gap
         p = p.MoveSegment(p.Segments[3].Id, 0);          // reorder re-packs (gaps discarded)
         p = p.TrimSegment(p.Segments[0].Id, Sec(45), Sec(55));
         p = p.MoveSegmentTo(p.Segments[0].Id, Sec(2));   // reposition within the leading gap
@@ -349,7 +349,7 @@ public class MediaEditProjectTests
         Assert.All(p.Segments, s => Assert.True(s.SourceStart >= TimeSpan.Zero && s.SourceEnd <= Sec(60)));
         Assert.All(p.Segments, s => Assert.True(s.TimelineStart >= TimeSpan.Zero));
         for (var i = 1; i < p.Segments.Count; i++)
-            Assert.True(p.Segments[i].TimelineStart >= p.Segments[i - 1].TimelineEnd); // RF-F5.19
+            Assert.True(p.Segments[i].TimelineStart >= p.Segments[i - 1].TimelineEnd);
         Assert.Equal(p.Segments[^1].TimelineEnd, p.EditedDuration);
         // edited duration = segment content + gaps
         var gapTotal = p.GetGaps().Sum(g => (g.End - g.Start).TotalSeconds);
@@ -361,7 +361,7 @@ public class MediaEditProjectTests
     [Fact]
     public void MoveSegmentTo_CreatesGapAndExtendsDuration()
     {
-        // RF-F5.17: dragging a segment away creates a gap and grows the timeline
+        // dragging a segment away creates a gap and grows the timeline
         var p = Video60s().SplitAt(Sec(20));
         var id = p.Segments[1].Id;
 
@@ -377,7 +377,7 @@ public class MediaEditProjectTests
     [Fact]
     public void MoveSegmentTo_ClampsAgainstNeighbours()
     {
-        // RF-F5.19: no overlap and no reorder - clamp on the neighbours' edges
+        // no overlap and no reorder - clamp on the neighbours' edges
         var p = Video60s().SplitAt(Sec(20)).SplitAt(Sec(40));
         var middle = p.Segments[1].Id;
 
@@ -431,7 +431,7 @@ public class MediaEditProjectTests
         var gap = Assert.Single(moved.GetFrameGaps());
         Assert.Equal((40, 50), gap);
 
-        // clamp on the previous neighbour's edge (RF-F5.19)
+        // clamp on the previous neighbour's edge
         var clamped = moved.MoveSegmentToFrame(second, 10);
         Assert.Equal(40, clamped.Segments[1].TimelineFrameStart);
     }
@@ -493,7 +493,7 @@ public class MediaEditProjectTests
     public void TrimSegment_LeftEdge_KeepsRightTimelineEdgeFixed()
     {
         // documented semantics: left trim shifts TimelineStart so the right
-        // timeline edge stays put - a leading gap appears (RF-F5.17)
+        // timeline edge stays put - a leading gap appears
         var p = Video60s();
         var trimmed = p.TrimSegment(p.Segments[0].Id, Sec(10), Sec(60));
 
@@ -507,7 +507,7 @@ public class MediaEditProjectTests
     [Fact]
     public void TrimSegment_ClampsAgainstNeighbours()
     {
-        // RF-F5.19: extending an edge into a neighbour shrinks back to its border
+        // extending an edge into a neighbour shrinks back to its border
         var p = Video60s().SplitAt(Sec(20)).SplitAt(Sec(40));
 
         // right edge of the first segment cannot cross the second's start
@@ -536,7 +536,7 @@ public class MediaEditProjectTests
     [Fact]
     public void TryMapToSource_GapInsideAndOutside()
     {
-        // RF-F5.20: gap positions report false so the player paints black
+        // gap positions report false so the player paints black
         var p = Video60s().SplitAt(Sec(20));
         p = p.MoveSegmentTo(p.Segments[1].Id, Sec(30)); // [0-20]@0 | gap | [20-60]@30
 

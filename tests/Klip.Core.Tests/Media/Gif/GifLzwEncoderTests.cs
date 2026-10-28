@@ -2,7 +2,7 @@ using Klip.Core.Media.Gif;
 
 namespace Klip.Core.Tests.Media.Gif;
 
-/// <summary>Round-trip da compressao LZW propria (RF-F4.08, RF-F4.11).</summary>
+/// <summary>Round-trip da compressao LZW propria.</summary>
 public class GifLzwEncoderTests
 {
     private static byte[] RoundTrip(byte[] indices, int minCodeSize)

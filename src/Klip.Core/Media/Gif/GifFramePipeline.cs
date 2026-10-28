@@ -6,7 +6,7 @@ namespace Klip.Core.Media.Gif;
 
 /// <summary>
 /// Ponte entre o loop de captura CFR e o <see cref="GifFrameBuffer"/>
-/// (RF-F4.03/RF-F4.04). Corrige as pausas de GC do caminho antigo (alocacao
+/// Corrige as pausas de GC do caminho antigo (alocacao
 /// LOH por frame + dedupe/spill sincronos no handler): o produtor faz apenas a
 /// copia do frame (com downscale opcional) para um buffer do
 /// <see cref="ArrayPool{T}"/> e enfileira num canal bounded; um worker
@@ -36,7 +36,7 @@ public sealed class GifFramePipeline : IAsyncDisposable
 
     /// <param name="buffer">Destino da retencao (dedupe + spill). O pipeline nao o descarta.</param>
     /// <param name="firstFrameDelayMs">Delay do primeiro frame (passo nominal da grade CFR).</param>
-    /// <param name="scalePercent">RF-F4.03: escala aplicada ANTES da retencao (100/75/50).</param>
+    /// <param name="scalePercent">escala aplicada ANTES da retencao (100/75/50).</param>
     /// <param name="capacity">Frames em voo no canal antes do DropOldest.</param>
     public GifFramePipeline(GifFrameBuffer buffer, int firstFrameDelayMs, int scalePercent = 100, int capacity = 8)
     {
@@ -60,7 +60,7 @@ public sealed class GifFramePipeline : IAsyncDisposable
         _worker = Task.Run(RunWorkerAsync);
     }
 
-    /// <summary>Total de bytes de pixels retidos (mesma contagem do teto RF-F4.04).</summary>
+    /// <summary>Total de bytes de pixels retidos (mesma contagem do teto).</summary>
     public long RetainedBytes => Interlocked.Read(ref _retainedBytes);
 
     /// <summary>
@@ -146,10 +146,10 @@ public sealed class GifFramePipeline : IAsyncDisposable
 
     private void ProcessFrame(in PendingFrame frame)
     {
-        // Delay real a partir do timestamp CFR (RF-F2.05): diferenca em ms
+        // Delay real a partir do timestamp CFR: diferenca em ms
         // inteiros para o frame anterior processado. Ticks pulados pelo engine
         // e frames dropados pelo canal viram delay acumulado no proximo frame,
-        // entao a duracao total do GIF reflete o tempo real gravado (CA-F4.2).
+        // entao a duracao total do GIF reflete o tempo real gravado.
         var currentMs = (long)Math.Round(frame.Timestamp.TotalMilliseconds);
         var delayMs = _hasPrevious
             ? (int)Math.Clamp(currentMs - _previousMs, 0, int.MaxValue)

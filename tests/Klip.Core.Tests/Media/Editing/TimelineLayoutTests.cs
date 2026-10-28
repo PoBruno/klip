@@ -67,7 +67,7 @@ public class TimelineLayoutTests
     [Fact]
     public void PositionedBlocksFollowTimelineStartsLeavingGaps()
     {
-        // RF-F5.17: [0-10s] | gap 10-25 | [25-40s] on a 40 s ruler, 400 px wide
+        // [0-10s] | gap 10-25 | [25-40s] on a 40 s ruler, 400 px wide
         var blocks = TimelineLayout.ComputePositionedBlocks(
             [(0, 10), (25, 15)], totalUnits: 40, totalWidth: 400);
 

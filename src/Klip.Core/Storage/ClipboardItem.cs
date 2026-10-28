@@ -16,7 +16,7 @@ public enum ClipboardItemOrigin
     Capture,
     Editor,
 
-    /// <summary>Gravacao de tela GIF/MP4 (RF-F3.07). Novo valor no FIM: nao muda os ints persistidos.</summary>
+    /// <summary>Gravacao de tela GIF/MP4. Novo valor no FIM: nao muda os ints persistidos.</summary>
     Recording,
 }
 
@@ -43,4 +43,28 @@ public sealed class ClipboardItem
     public string? OcrText { get; set; }
     public int? Width { get; set; }
     public int? Height { get; set; }
+
+    /// <summary>
+    /// First few hundred chars of the text, saved on ingest. The list reads only this,
+    /// so a 20 MB text never gets loaded just to draw a card.
+    /// </summary>
+    public string? Preview { get; set; }
+
+    /// <summary>
+    /// True when the row came from a list query: text, html, rtf and ocr are NOT loaded.
+    /// Load the full item with ClipboardItemRepository.GetById before using the content.
+    /// </summary>
+    public bool IsSummary { get; set; }
+
+    /// <summary>How many chars of text go into <see cref="Preview"/>.</summary>
+    public const int PreviewLength = 600;
+
+    public static string? BuildPreview(string? text)
+    {
+        if (text is null || text.Length <= PreviewLength)
+            return text;
+        // don't cut an emoji in half
+        var cut = char.IsHighSurrogate(text[PreviewLength - 1]) ? PreviewLength - 1 : PreviewLength;
+        return text[..cut];
+    }
 }

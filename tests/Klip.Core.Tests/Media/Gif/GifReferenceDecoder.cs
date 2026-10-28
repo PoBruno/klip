@@ -1,7 +1,7 @@
 namespace Klip.Core.Tests.Media.Gif;
 
 /// <summary>
-/// Mini-decoder GIF de referencia para os testes de round-trip (RF-F4.11):
+/// Mini-decoder GIF de referencia para os testes de round-trip:
 /// parser de blocos GIF89a, des-LZW e reconstrucao do canvas honrando
 /// disposal 1 + indice transparente. Independente do encoder de producao
 /// (implementado a partir da spec w3.org/Graphics/GIF/spec-gif89a).

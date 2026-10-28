@@ -1,6 +1,6 @@
 namespace Klip.Core.Media.Editing;
 
-/// <summary>Kind of media loaded in the editor (RF-F5.05).</summary>
+/// <summary>Kind of media loaded in the editor.</summary>
 public enum MediaKind
 {
     /// <summary>Frame-based source (frame list + per-frame delay).</summary>

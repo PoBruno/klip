@@ -1,56 +1,74 @@
 namespace Klip.Core.Recording;
 
 /// <summary>
-/// Gravador MP4 (H.264 + AAC) - contrato consumido pelo App, implementado no
-/// Interop (Media Foundation SinkWriter + WASAPI). Spec F3.
+/// MP4 recorder (H.264/HEVC/AV1 + AAC) used by the app, implemented in Interop on top
+/// of the Media Foundation SinkWriter and WASAPI.
 /// </summary>
 public interface IMp4Recorder : IAsyncDisposable
 {
-    /// <summary>Inicia a gravacao. Lanca se ja estiver gravando.</summary>
+    /// <summary>
+    /// Optional warm up while the countdown runs: device, capture, encoder and audio get
+    /// created and frames are thrown away until <see cref="StartAsync"/>. After a prepare,
+    /// StartAsync ignores its options and keeps the prepared ones. Disposing a prepared
+    /// recorder that never started removes the empty file.
+    /// </summary>
+    Task PrepareAsync(Mp4RecordingOptions options, CancellationToken ct = default);
+
+    /// <summary>
+    /// Starts recording (or, after <see cref="PrepareAsync"/>, lets the first frame
+    /// through). Throws if a recording is already running.
+    /// </summary>
     Task StartAsync(Mp4RecordingOptions options, CancellationToken ct = default);
 
-    /// <summary>RF-F3.13: pausa (timestamps seguem contiguos ao retomar).</summary>
+    /// <summary>Pauses; timestamps stay contiguous after resume.</summary>
     Task PauseAsync();
 
     Task ResumeAsync();
 
     /// <summary>
-    /// Para e finaliza o arquivo. Pode levar segundos (RF-F3.16) - o chamador
-    /// deve mostrar estado "finalizando".
+    /// Stops and finalizes the file. Can take seconds, so the caller should show a
+    /// "finalizing" state.
     /// </summary>
     Task<Mp4RecordingResult> StopAsync();
 
     bool IsRecording { get; }
     bool IsPaused { get; }
 
-    /// <summary>Tempo gravado, excluindo pausas.</summary>
+    /// <summary>Recorded time, pauses excluded.</summary>
     TimeSpan Elapsed { get; }
 
-    // ------ Toggles ao vivo (spec M2, RF-M2.09..11) ------
-    // Seguras antes/depois da gravacao (viram estado inicial/no-op).
+    /// <summary>
+    /// What the encoder ended up with (size, codec, fps, software fallback). null before
+    /// the first frame reaches the encoder.
+    /// </summary>
+    VideoEncodingPlan? ActivePlan { get; }
 
-    /// <summary>RF-M2.09: muta/desmuta microfones (ganho no mixer com rampa; captura nunca para).</summary>
+    /// <summary>Share of frames lost so far (0..1), for the live drop indicator.</summary>
+    double DroppedFrameRatio { get; }
+
+    // ------ live toggles, safe before/after recording (become initial state or no-op) ------
+
+    /// <summary>Mutes/unmutes microphones (gain ramp in the mixer; capture never stops).</summary>
     void SetMicrophoneMuted(bool muted);
     bool IsMicrophoneMuted { get; }
 
-    /// <summary>RF-M2.09: muta/desmuta o som do sistema (loopback).</summary>
+    /// <summary>Mutes/unmutes the system sound (loopback).</summary>
     void SetSystemAudioMuted(bool muted);
     bool IsSystemAudioMuted { get; }
 
-    /// <summary>RF-M2.10: mostra/oculta o cursor na gravacao, ao vivo.</summary>
+    /// <summary>Shows/hides the cursor in the recording, live.</summary>
     void SetCursorCaptureEnabled(bool enabled);
     bool IsCursorCaptureEnabled { get; }
 
-    /// <summary>Falha fatal (gravacao parou sozinha). Handler deve chamar StopAsync/DisposeAsync.</summary>
+    /// <summary>Fatal failure (recording stopped by itself). Handler should call StopAsync/DisposeAsync.</summary>
     event Action<RecordingFailure>? Failed;
 
     /// <summary>
-    /// A gravacao parou por conta propria com arquivo valido (ex.: guarda-corpo de
-    /// disco, RF-F3.15). O consumidor deve encerrar a UI de gravacao como se o
-    /// usuario tivesse parado. Nao e disparado em StopAsync explicito.
+    /// Recording stopped on its own with a valid file (low disk, for example). The consumer
+    /// should close the recording ui as if the user had stopped. Not raised by StopAsync.
     /// </summary>
     event Action<Mp4RecordingResult>? AutoStopped;
 
-    /// <summary>Aviso nao-fatal (RF-F3.14: mic removido -> silencio; RF-F3.15: disco baixo).</summary>
+    /// <summary>Non fatal warning (mic removed, low disk, frame drops).</summary>
     event Action<string>? Warning;
 }

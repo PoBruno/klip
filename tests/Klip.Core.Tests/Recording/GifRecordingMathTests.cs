@@ -2,7 +2,7 @@ using Klip.Core.Recording;
 
 namespace Klip.Core.Tests.Recording;
 
-/// <summary>RF-F4.02 / Q-F4.2: cadencia GIF honesta com o limite de centesimos.</summary>
+/// <summary>cadencia GIF honesta com o limite de centesimos.</summary>
 public class GifRecordingMathTests
 {
     [Theory]

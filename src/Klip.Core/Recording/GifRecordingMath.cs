@@ -1,7 +1,7 @@
 namespace Klip.Core.Recording;
 
 /// <summary>
-/// Matematica de cadencia da gravacao GIF (RF-F4.02, Q-F4.2 resolvida:
+/// Matematica de cadencia da gravacao GIF (resolvida:
 /// aceitar o FPS efetivo do formato e mostrar na UI). O GIF armazena delay em
 /// centesimos de segundo, entao os FPS reais possiveis sao 100/round(100/fps):
 /// 10 fps exato (10 cs), 15 vira 14,3 (7 cs), 20 exato (5 cs).

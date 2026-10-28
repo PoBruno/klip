@@ -2,7 +2,7 @@ using Klip.Core.Media.Gif;
 
 namespace Klip.Core.Tests.Media.Gif;
 
-/// <summary>Retencao com dedupe e spill em disco (RF-F4.04, RF-F4.06).</summary>
+/// <summary>Retencao com dedupe e spill em disco.</summary>
 public sealed class GifFrameBufferTests : IDisposable
 {
     private readonly string _spillDirectory = Path.Combine(Path.GetTempPath(), "klip-gif-tests-" + Guid.NewGuid().ToString("N"));
@@ -28,7 +28,7 @@ public sealed class GifFrameBufferTests : IDisposable
 
         Assert.Equal(1, buffer.Count);
         var snapshot = buffer.Snapshot();
-        // CA-F4.2: duracao total preservada no frame retido.
+        // duracao total preservada no frame retido.
         Assert.Equal(175, snapshot[0].DelayMs);
     }
 

@@ -11,7 +11,7 @@ public readonly record struct HookSample(
     long Dropped);
 
 /// <summary>
-/// RF-P1.04: instrumentacao do caminho quente do hook. O callback tem um orcamento
+/// instrumentacao do caminho quente do hook. O callback tem um orcamento
 /// duro (LowLevelHooksTimeout, 300 ms por padrao); se estourar, o Windows remove o
 /// hook silenciosamente. Aqui so ha incremento atomico e um CAS no pior caso -
 /// nenhuma alocacao, nenhum lock, nenhuma lista de amostras.
