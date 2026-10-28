@@ -515,5 +515,6 @@ internal static class De
         ["DiagDbOnDisk"] = "Datenbank auf dem Datenträger",
         ["DiagNone"] = "keine",
         ["DiagYes"] = "ja",
+        ["MenuTypeText"] = "Als Tastenanschläge eingeben (Alt+Enter)",
     };
 }

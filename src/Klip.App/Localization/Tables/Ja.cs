@@ -515,5 +515,6 @@ internal static class Ja
         ["DiagDbOnDisk"] = "ディスク上のデータベース",
         ["DiagNone"] = "なし",
         ["DiagYes"] = "はい",
+        ["MenuTypeText"] = "キー入力として入力 (Alt+Enter)",
     };
 }

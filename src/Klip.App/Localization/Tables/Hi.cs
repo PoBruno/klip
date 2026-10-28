@@ -515,5 +515,6 @@ internal static class Hi
         ["DiagDbOnDisk"] = "डिस्क पर डेटाबेस",
         ["DiagNone"] = "कोई नहीं",
         ["DiagYes"] = "हाँ",
+        ["MenuTypeText"] = "कीस्ट्रोक के रूप में टाइप करें (Alt+Enter)",
     };
 }

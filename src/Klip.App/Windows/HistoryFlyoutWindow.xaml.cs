@@ -175,6 +175,22 @@ public partial class HistoryFlyoutWindow
         // and the paste flow restores its focus afterwards.
         if (msg == NativeMethods.WM_MOUSEACTIVATE)
         {
+            // a plain left click on a card (or an emoji) pastes right away, so don't take
+            // the foreground for it. Stealing it makes the target app restore focus to
+            // its field before our Ctrl+V lands, and apps like TeamViewer or a browser
+            // login form are often not ready in time, so the paste just vanishes.
+            // The keyboard keeps coming through the hook.
+            const int WM_LBUTTONDOWN = 0x0201;
+            var mouseMessage = (int)((lParam >> 16) & 0xFFFF);
+            if (mouseMessage == WM_LBUTTONDOWN
+                && !System.Threading.Volatile.Read(ref _hasFocus)
+                && Keyboard.Modifiers == ModifierKeys.None
+                && IsPasteClickTarget())
+            {
+                handled = true;
+                return NativeMethods.MA_NOACTIVATE;
+            }
+
             var exStyle = (long)NativeMethods.GetWindowLongPtr(hwnd, NativeMethods.GWL_EXSTYLE);
             if ((exStyle & NativeMethods.WS_EX_NOACTIVATE) != 0)
             {
@@ -202,6 +218,43 @@ public partial class HistoryFlyoutWindow
             }
         }
         return nint.Zero;
+    }
+
+    /// <summary>
+    /// True when the mouse is over a history card or an emoji, and not over one of the
+    /// card's buttons. Those clicks paste and close, so they don't need keyboard focus;
+    /// everything else (search, menus, buttons) still activates the panel.
+    /// </summary>
+    private bool IsPasteClickTarget()
+    {
+        try
+        {
+            NativeMethods.GetCursorPos(out var cursor);
+            var point = PointFromScreen(new Point(cursor.x, cursor.y));
+            if (InputHitTest(point) is not DependencyObject hit)
+                return false;
+
+            var overControl = false;
+            for (var node = hit; node is not null; node = node is System.Windows.Media.Visual or System.Windows.Media.Media3D.Visual3D
+                     ? System.Windows.Media.VisualTreeHelper.GetParent(node) ?? LogicalTreeHelper.GetParent(node)
+                     : LogicalTreeHelper.GetParent(node))
+            {
+                if (ReferenceEquals(node, EmojiWrap))
+                    return true; // emoji buttons paste too
+                if (node is System.Windows.Controls.Primitives.ButtonBase or System.Windows.Controls.Primitives.ScrollBar
+                    or System.Windows.Controls.Primitives.TextBoxBase)
+                    overControl = true;
+                if (node is ListBoxItem)
+                    return !overControl; // pin, favorite and more on the card still activate
+                if (ReferenceEquals(node, this))
+                    break;
+            }
+        }
+        catch (Exception)
+        {
+            // hit test is best effort; fall back to the usual activate behavior
+        }
+        return false;
     }
 
     // true once a click activated the flyout, so typing goes through WPF. set in
@@ -1212,6 +1265,10 @@ public partial class HistoryFlyoutWindow
                 return;
             case Key.Enter when !_viewModel.IsMultiSelectMode && mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
+                e.Handled = true;
+                return;
+            case Key.Enter when !_viewModel.IsMultiSelectMode && mods == ModifierKeys.Alt && !onSnippets:
+                _viewModel.TypeTextCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
             case Key.Enter:

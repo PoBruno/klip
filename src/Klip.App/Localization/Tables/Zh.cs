@@ -515,5 +515,6 @@ internal static class Zh
         ["DiagDbOnDisk"] = "磁盘上的数据库",
         ["DiagNone"] = "无",
         ["DiagYes"] = "是",
+        ["MenuTypeText"] = "以按键方式输入 (Alt+Enter)",
     };
 }

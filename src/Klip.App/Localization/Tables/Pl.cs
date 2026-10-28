@@ -515,5 +515,6 @@ internal static class Pl
         ["DiagDbOnDisk"] = "Baza danych na dysku",
         ["DiagNone"] = "brak",
         ["DiagYes"] = "tak",
+        ["MenuTypeText"] = "Wpisz jako naciśnięcia klawiszy (Alt+Enter)",
     };
 }

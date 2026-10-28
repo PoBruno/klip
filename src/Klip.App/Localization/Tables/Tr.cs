@@ -515,5 +515,6 @@ internal static class Tr
         ["DiagDbOnDisk"] = "Diskteki veritabanı",
         ["DiagNone"] = "yok",
         ["DiagYes"] = "evet",
+        ["MenuTypeText"] = "Tuş vuruşu olarak yaz (Alt+Enter)",
     };
 }
