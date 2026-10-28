@@ -516,5 +516,6 @@ internal static class Pl
         ["DiagNone"] = "brak",
         ["DiagYes"] = "tak",
         ["MenuTypeText"] = "Wpisz jako naciśnięcia klawiszy (Alt+Enter)",
+        ["TypingStoppedToast"] = "Wpisywanie przerwane.",
     };
 }

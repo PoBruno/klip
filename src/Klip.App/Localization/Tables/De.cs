@@ -516,5 +516,6 @@ internal static class De
         ["DiagNone"] = "keine",
         ["DiagYes"] = "ja",
         ["MenuTypeText"] = "Als Tastenanschläge eingeben (Alt+Enter)",
+        ["TypingStoppedToast"] = "Eingabe abgebrochen.",
     };
 }

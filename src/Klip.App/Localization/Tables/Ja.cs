@@ -516,5 +516,6 @@ internal static class Ja
         ["DiagNone"] = "なし",
         ["DiagYes"] = "はい",
         ["MenuTypeText"] = "キー入力として入力 (Alt+Enter)",
+        ["TypingStoppedToast"] = "入力を中止しました。",
     };
 }

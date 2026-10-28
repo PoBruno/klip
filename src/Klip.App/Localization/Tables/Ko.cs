@@ -516,5 +516,6 @@ internal static class Ko
         ["DiagNone"] = "없음",
         ["DiagYes"] = "예",
         ["MenuTypeText"] = "키 입력으로 입력 (Alt+Enter)",
+        ["TypingStoppedToast"] = "입력이 중단되었습니다.",
     };
 }

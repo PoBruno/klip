@@ -516,5 +516,6 @@ internal static class Ru
         ["DiagNone"] = "нет",
         ["DiagYes"] = "да",
         ["MenuTypeText"] = "Ввести как нажатия клавиш (Alt+Enter)",
+        ["TypingStoppedToast"] = "Ввод остановлен.",
     };
 }

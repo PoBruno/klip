@@ -95,22 +95,31 @@ public static partial class NativeMethods
     /// clipboard. Works in fields that block paste (password boxes, sites with onpaste
     /// blocked) and in remote sessions like TeamViewer or RDP that do not forward a
     /// synthetic Ctrl+V. Newlines become Enter, tabs become Tab. Sent in small chunks
-    /// so slow targets don't drop characters.
+    /// at about a thousand characters a second: faster than that an app cannot keep up,
+    /// its input queue piles up, it freezes, and stopping later does not help because
+    /// what is already queued still arrives.
+    /// <para>
+    /// <paramref name="cancel"/> is asked before every chunk; when it says yes the rest
+    /// is dropped and this returns false. True means everything was typed.
+    /// </para>
     /// </summary>
-    public static void SendUnicodeText(string text, int chunkSize = 32, int chunkDelayMs = 10)
+    public static bool SendUnicodeText(string text, Func<bool>? cancel = null, int chunkSize = 16, int chunkDelayMs = 15)
     {
         var inputs = new List<INPUT>(Math.Min(text.Length, chunkSize) * 2);
         var size = Marshal.SizeOf<INPUT>();
         var charsInChunk = 0;
 
-        void Flush()
+        bool Flush()
         {
             if (inputs.Count == 0)
-                return;
+                return true;
+            if (cancel?.Invoke() == true)
+                return false;
             SendInput((uint)inputs.Count, [.. inputs], size);
             inputs.Clear();
             charsInChunk = 0;
             Thread.Sleep(chunkDelayMs);
+            return true;
         }
 
         for (var i = 0; i < text.Length; i++)
@@ -136,10 +145,10 @@ public static partial class NativeMethods
                 inputs.Add(UnicodeInput(c, up: true));
             }
 
-            if (++charsInChunk >= chunkSize)
-                Flush();
+            if (++charsInChunk >= chunkSize && !Flush())
+                return false;
         }
-        Flush();
+        return Flush();
     }
 
     private static INPUT UnicodeInput(char c, bool up) => new()

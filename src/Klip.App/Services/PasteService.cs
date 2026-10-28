@@ -36,6 +36,11 @@ public sealed class PasteService(
     /// <summary>Dispara quando a colagem falha, para mostrarmos um toast de fallback.</summary>
     public event Action? PasteFailed;
 
+    /// <summary>Typing as keystrokes ended early: Esc, or the target app lost the front.</summary>
+    public event Action? TypingStopped;
+
+    private const int VK_ESCAPE = 0x1B;
+
     /// <summary>
     /// Salva o app que esta com o foco, para colarmos de volta nele. Se o
     /// foreground for uma janela nossa (reabertura rapida em que o foco ainda
@@ -215,7 +220,7 @@ public sealed class PasteService(
 
         _ = Task.Run(() =>
         {
-            var ok = true;
+            var finished = false;
             try
             {
                 // the list hands us a slim row, so the full text is read here, off the UI thread
@@ -223,20 +228,35 @@ public sealed class PasteService(
                 if (string.IsNullOrEmpty(text))
                     return;
 
-                if (!BringTargetBack(target))
-                    ok = false;
-                NativeMethods.ReleasePressedModifiers();
-                Thread.Sleep(20);
-                NativeMethods.SendUnicodeText(text);
+                // never type into a window that is not the one the user picked
+                if (BringTargetBack(target))
+                {
+                    NativeMethods.ReleasePressedModifiers();
+                    Thread.Sleep(20);
+
+                    // Esc is the panic button. It only counts as a fresh press, so an Esc that
+                    // was already down does not stop us at once. Typing into the wrong window
+                    // is worse than stopping, so the target losing the front stops it too
+                    var escWasDown = NativeMethods.IsKeyDown(VK_ESCAPE);
+                    bool Cancel()
+                    {
+                        var esc = NativeMethods.IsKeyDown(VK_ESCAPE);
+                        var freshPress = esc && !escWasDown;
+                        escWasDown = esc;
+                        return freshPress
+                            || (target != nint.Zero && NativeMethods.GetForegroundWindow() != target);
+                    }
+
+                    finished = NativeMethods.SendUnicodeText(text, Cancel);
+                }
             }
             catch (Exception ex)
             {
                 StartupLog.WriteException("TypeItem", ex);
-                ok = false;
             }
 
-            if (!ok)
-                _uiDispatcher.BeginInvoke(() => PasteFailed?.Invoke());
+            if (!finished)
+                _uiDispatcher.BeginInvoke(() => TypingStopped?.Invoke());
         });
     }
 

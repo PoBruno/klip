@@ -516,5 +516,6 @@ internal static class Fr
         ["DiagNone"] = "aucun",
         ["DiagYes"] = "oui",
         ["MenuTypeText"] = "Saisir au clavier (Alt+Enter)",
+        ["TypingStoppedToast"] = "Saisie interrompue.",
     };
 }

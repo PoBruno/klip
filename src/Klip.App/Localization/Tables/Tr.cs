@@ -516,5 +516,6 @@ internal static class Tr
         ["DiagNone"] = "yok",
         ["DiagYes"] = "evet",
         ["MenuTypeText"] = "Tuş vuruşu olarak yaz (Alt+Enter)",
+        ["TypingStoppedToast"] = "Yazma durduruldu.",
     };
 }

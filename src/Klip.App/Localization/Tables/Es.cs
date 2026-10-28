@@ -516,5 +516,6 @@ internal static class Es
         ["DiagNone"] = "ninguno",
         ["DiagYes"] = "sí",
         ["MenuTypeText"] = "Escribir como pulsaciones (Alt+Enter)",
+        ["TypingStoppedToast"] = "Escritura detenida.",
     };
 }

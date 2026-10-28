@@ -516,5 +516,6 @@ internal static class It
         ["DiagNone"] = "nessuno",
         ["DiagYes"] = "sì",
         ["MenuTypeText"] = "Digita come tasti (Alt+Enter)",
+        ["TypingStoppedToast"] = "Digitazione interrotta.",
     };
 }

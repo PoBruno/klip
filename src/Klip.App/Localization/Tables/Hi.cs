@@ -516,5 +516,6 @@ internal static class Hi
         ["DiagNone"] = "कोई नहीं",
         ["DiagYes"] = "हाँ",
         ["MenuTypeText"] = "कीस्ट्रोक के रूप में टाइप करें (Alt+Enter)",
+        ["TypingStoppedToast"] = "टाइपिंग रोक दी गई।",
     };
 }
