@@ -17,10 +17,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Setup .NET 9
+      - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "9.0.x"
+          dotnet-version: "10.0.x"
 
       - name: Derivar versao da tag
         id: version
@@ -87,20 +87,26 @@ jobs:
       # feito na 1.3.0 via wingetcreate submit - PR microsoft/winget-pkgs#401529).
       # Nota: o manifesto publicado tem SO o instalador Inno (o portable nao entra),
       # entao o update passa apenas a URL do Setup. Id com o case exato do manifesto.
-      # A arquitetura vai FIXADA em x64 no proprio --urls: o stub do Inno e um exe
-      # de 32 bits, entao o wingetcreate detecta x86 e nao consegue casar com o unico
-      # no do manifesto (Architecture: x64), falhando com "multiple matches found".
+      # Arquitetura e escopo vao FIXADOS no proprio --urls ("url|arquitetura|escopo"):
+      # o stub do Inno e um exe de 32 bits, entao o wingetcreate detecta x86 e nao
+      # consegue casar com o unico no do manifesto (Architecture: x64, Scope: user),
+      # falhando com "multiple matches found". O matching usa arquitetura, tipo E escopo,
+      # entao os dois precisam ser explicitos.
       # So roda se o token estiver configurado, entao nao quebra releases sem ele.
+      # continue-on-error: a submissao depende do winget-pkgs (rate limit, PAT expirado,
+      # mudanca de schema); se falhar, os binarios ja estao publicados e o manifesto
+      # pode ser enviado a mao - nao e motivo para marcar a release inteira como quebrada.
       - name: Atualizar winget
         env:
           WINGET_TOKEN: ${{ secrets.WINGET_TOKEN }}
         if: ${{ env.WINGET_TOKEN != '' }}
+        continue-on-error: true
         shell: pwsh
         run: |
           $installerUrl = "https://github.com/${{ github.repository }}/releases/download/${{ github.ref_name }}/Klip-Setup-${{ steps.version.outputs.version }}.exe"
           Invoke-WebRequest -Uri "https://aka.ms/wingetcreate/latest" -OutFile wingetcreate.exe
           .\wingetcreate.exe update PoBruno.Klip `
             --version ${{ steps.version.outputs.version }} `
-            --urls "$installerUrl|x64" `
+            --urls "$installerUrl|x64|user" `
             --submit `
             --token "$env:WINGET_TOKEN"
