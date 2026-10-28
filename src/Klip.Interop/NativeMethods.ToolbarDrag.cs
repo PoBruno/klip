@@ -3,8 +3,8 @@ using System.Runtime.InteropServices;
 namespace Klip.Interop;
 
 /// <summary>
-/// P/Invoke do arraste/snap/persistencia da toolbar de gravacao (spec M2-02,
-/// ). Arquivo separado dos demais NativeMethods.* de proposito:
+/// P/Invoke do arraste/snap/persistencia da toolbar de gravacao.
+/// Arquivo separado dos demais NativeMethods.* de proposito:
 /// evita conflito com trabalho paralelo nos arquivos existentes.
 /// </summary>
 public static partial class NativeMethods
