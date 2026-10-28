@@ -129,7 +129,7 @@ public static class FfmpegArgsBuilder
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentException.ThrowIfNullOrEmpty(outputPath);
         if (project.Kind != MediaKind.Video)
-            throw new ArgumentException("The MP4-to-GIF route requires a Video project (D-F5.4).", nameof(project));
+            throw new ArgumentException("The MP4-to-GIF route requires a Video project.", nameof(project));
         if (settings.Fps <= 0)
             throw new ArgumentOutOfRangeException(nameof(settings), "Fps must be positive.");
         var dither = settings.Dithering switch

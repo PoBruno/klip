@@ -13,7 +13,7 @@ Start-Sleep -Seconds 1
 $publishDir = Join-Path $repoRoot "publish"
 Write-Host "Publicando Klip (self-contained, single-file)..." -ForegroundColor Cyan
 
-# ADR-P.09: flags de publish. Trade-off central = tamanho de download (uma vez)
+# flags de publish. Trade-off central = tamanho de download (uma vez)
 # contra tempo de startup (TODO boot, porque o Klip roda com a chave Run).
 #
 #   PublishReadyToRun=true
