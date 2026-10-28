@@ -5,20 +5,20 @@ using Klip.Core.Settings;
 
 namespace Klip.App.Services;
 
-/// <summary>Ffmpeg.exe nao encontrado em nenhum dos locais (RF-F5.14).</summary>
+/// <summary>Ffmpeg.exe nao encontrado em nenhum dos locais.</summary>
 public sealed class FfmpegNotFoundException : InvalidOperationException
 {
     public FfmpegNotFoundException() : base("ffmpeg.exe nao encontrado.") { }
 }
 
 /// <summary>
-/// Exportacoes do editor de midia (RF-F5.11..15).
-/// - GIF de fonte GIF: encoder proprio do Core, sem FFmpeg (D-F5.4).
+/// Exportacoes do editor de midia.
+/// - GIF de fonte GIF: encoder proprio do Core, sem FFmpeg.
 /// - MP4 re-encode e MP4-para-GIF: ffmpeg.exe como processo, saida em temp
-///   na MESMA pasta do destino + move atomico (CA-F5.7).
+///   na MESMA pasta do destino + move atomico.
 /// Codec MP4: tenta h264_nvenc e recua automaticamente para libx264 e
 /// libopenh264 re-invocando o ffmpeg quando a tentativa anterior falha -
-/// mais simples que sondar encoders e cobre builds LGPL sem libx264 (RF-F5.12).
+/// mais simples que sondar encoders e cobre builds LGPL sem libx264.
 /// </summary>
 public sealed class MediaEditorExportService(SettingsService settings)
 {
@@ -26,13 +26,13 @@ public sealed class MediaEditorExportService(SettingsService settings)
 
     private readonly FfmpegRunner _runner = new();
 
-    /// <summary>Caminho do ffmpeg.exe ou null (o chamador mostra o dialogo RF-F5.14).</summary>
+    /// <summary>Caminho do ffmpeg.exe ou null (o chamador mostra o dialogo).</summary>
     public string? LocateFfmpeg() => FfmpegLocator.Find(settings.Current.FfmpegPath);
 
     /// <summary>
-    /// Exporta o projeto de video como MP4 re-encodado (RF-F5.12).
+    /// Exporta o projeto de video como MP4 re-encodado.
     /// <paramref name="template"/> carrega Width/Height/Fps REAIS do source
-    /// para o filler preto dos gaps (RF-F5.20) - o codec e sobrescrito pela
+    /// para o filler preto dos gaps - o codec e sobrescrito pela
     /// cadeia de fallback.
     /// </summary>
     public async Task ExportVideoAsync(
@@ -75,7 +75,7 @@ public sealed class MediaEditorExportService(SettingsService settings)
         }
     }
 
-    /// <summary>Exporta o projeto de video como GIF via palettegen (RF-F5.13, D-F5.4).</summary>
+    /// <summary>Exporta o projeto de video como GIF via palettegen.</summary>
     public async Task ExportGifFromVideoAsync(
         MediaEditProject project, GifFromVideoSettings gifSettings, string outputPath,
         IProgress<double> progress, CancellationToken cancellationToken)
@@ -98,11 +98,11 @@ public sealed class MediaEditorExportService(SettingsService settings)
     }
 
     /// <summary>
-    /// Exporta uma sequencia GIF materializada com o encoder proprio (RF-F5.13,
+    /// Exporta uma sequencia GIF materializada com o encoder proprio (
     /// sem FFmpeg). O cancelamento e o PROGRESSO sao observados pelos loaders
     /// lazy dos frames (o encoder aborta na primeira leitura apos o cancel;
     /// o progresso e reportado por leitura - ver BuildGifExportFrames no
-    /// editor); temp + move atomico como nas demais rotas (CA-F5.7).
+    /// editor); temp + move atomico como nas demais rotas.
     /// Roda sincrono - chame em Task.Run.
     /// </summary>
     public static void ExportGifFrames(

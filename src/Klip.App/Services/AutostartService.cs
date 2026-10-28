@@ -16,7 +16,7 @@ public sealed class AutostartService
 
     public void SetEnabled(bool enabled)
     {
-        // RF-P3.07: le antes de escrever. Este metodo roda em TODA inicializacao do app
+        // le antes de escrever. Este metodo roda em TODA inicializacao do app
         // (App.OnStartup) e antes gravava no registro sempre, mesmo sem nada a mudar.
         var desired = enabled
             ? $"\"{Environment.ProcessPath ?? throw new InvalidOperationException("ProcessPath indisponivel")}\" --minimized"

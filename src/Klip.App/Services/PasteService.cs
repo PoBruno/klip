@@ -12,16 +12,17 @@ namespace Klip.App.Services;
 /// restaurar o foco (com fallback em AttachThreadInput), disparar Ctrl+V por
 /// SendInput e, no fim, devolver o clipboard anterior se a opcao estiver ligada.
 ///
-/// RF-P2.01 / ADR-P.05: nenhuma etapa de clipboard roda na UI thread. Antes o
-/// snapshot saia sincrono na UI thread e a gravacao voltava para ela por
-/// dispatcher.Invoke; agora tudo vai para a <see cref="ClipboardThread"/>. A UI
-/// thread so e usada para o evento PasteFailed (que mexe no tray).
+/// Nenhuma etapa de clipboard roda na UI thread: tudo vai para a
+/// <see cref="ClipboardThread"/>. A UI thread so e usada para o evento
+/// PasteFailed (que mexe no tray).
 /// </summary>
 public sealed class PasteService(
     ClipboardWriteGuard writeGuard,
     MediaStore mediaStore,
     SettingsService settings,
-    ClipboardThread clipboardThread)
+    ClipboardThread clipboardThread,
+    ClipboardItemRepository repository,
+    PasteQueueService pasteQueue)
 {
     /// <summary>
     /// Dispatcher da UI, resolvido uma vez na construcao (o host sobe na UI
@@ -68,6 +69,8 @@ public sealed class PasteService(
     {
         var target = SavedTargetWindow;
         var restore = settings.Current.RestoreClipboardAfterPaste;
+        var forcePlain = settings.Current.AlwaysPastePlainText;
+        var richApps = forcePlain ? settings.Current.RichPasteApps.ToArray() : [];
 
         // decodifica a imagem (disco + decode) FORA da UI thread; texto e barato
         var isImage = item.Type == ClipboardItemType.Image && item.FilePath is not null;
@@ -79,9 +82,13 @@ public sealed class PasteService(
             System.Windows.IDataObject? previous = null;
             try
             {
-                // RF-P2.01: o snapshot saiu da UI thread. Ele so precisa
-                // acontecer ANTES da gravacao, e continua acontecendo - as duas
-                // operacoes sao sequenciais aqui e caem na mesma fila STA.
+                // the list hands us a slim row; the full content (html, rtf, long text)
+                // is read here, off the UI thread
+                var full = repository.LoadFull(item);
+                var plain = asPlainText || (forcePlain && !IsRichPasteTarget(target, richApps));
+
+                // o snapshot so precisa acontecer ANTES da gravacao, e continua
+                // acontecendo: as duas operacoes sao sequenciais e caem na mesma fila STA
                 if (restore)
                     previous = writeGuard.SnapshotCurrent();
 
@@ -96,7 +103,7 @@ public sealed class PasteService(
                     if (bitmap is not null && pngBytes is not null)
                         writeGuard.WriteImageFromPng(pngBytes, bitmap);
                     else
-                        writeGuard.WriteItem(item, plainTextOnly: asPlainText);
+                        writeGuard.WriteItem(full, plainTextOnly: plain);
                 });
 
                 if (target != nint.Zero && !NativeMethods.ForceForeground(target))
@@ -124,6 +131,47 @@ public sealed class PasteService(
             if (!ok)
                 _uiDispatcher.BeginInvoke(() => PasteFailed?.Invoke());
         });
+    }
+
+    /// <summary>
+    /// With "always paste as plain text" on, these apps still get the formatting.
+    /// Matched by exe name (WINWORD.EXE), with or without the .exe.
+    /// </summary>
+    private static bool IsRichPasteTarget(nint target, string[] richApps)
+    {
+        if (target == nint.Zero || richApps.Length == 0)
+            return false;
+        var exe = ProcessExeName(target);
+        if (exe is null)
+            return false;
+        var bare = System.IO.Path.GetFileNameWithoutExtension(exe);
+        foreach (var app in richApps)
+        {
+            var name = app.Trim();
+            if (string.Equals(name, exe, StringComparison.OrdinalIgnoreCase) ||
+                string.Equals(name, bare, StringComparison.OrdinalIgnoreCase))
+                return true;
+        }
+        return false;
+    }
+
+    private static string? ProcessExeName(nint hwnd)
+    {
+        NativeMethods.GetWindowThreadProcessId(hwnd, out var pid);
+        if (pid == 0)
+            return null;
+        var handle = NativeMethods.OpenProcess(NativeMethods.PROCESS_QUERY_LIMITED_INFORMATION, false, pid);
+        if (handle == nint.Zero)
+            return null;
+        try
+        {
+            var path = NativeMethods.QueryProcessImagePathSafe(handle);
+            return string.IsNullOrEmpty(path) ? null : System.IO.Path.GetFileName(path);
+        }
+        finally
+        {
+            NativeMethods.CloseHandle(handle);
+        }
     }
 
     /// <summary>
@@ -163,7 +211,7 @@ public sealed class PasteService(
                 }
                 else
                 {
-                    writeGuard.WriteItem(item, plainTextOnly: asPlainText);
+                    writeGuard.WriteItem(repository.LoadFull(item), plainTextOnly: asPlainText);
                 }
             }
             catch (Exception ex)
@@ -174,7 +222,62 @@ public sealed class PasteService(
     }
 
     /// <summary>Grava texto puro e cola no alvo (usado pelo painel de emoji).</summary>
-    public void PasteText(string text)
+    public void PasteText(string text) => PasteTextCore(() => text);
+
+    /// <summary>Resolves the snippet placeholders right before pasting it.</summary>
+    public void PasteSnippet(string content) => PasteTextCore(() => ExpandSnippet(content));
+
+    /// <summary>Copies the expanded snippet without pasting.</summary>
+    public void CopySnippet(string content) => CopyText(() => ExpandSnippet(content));
+
+    /// <summary>Plain text to the clipboard, off the UI thread (OCR result, joined items).</summary>
+    public void CopyText(string text) => CopyText(() => text);
+
+    private void CopyText(Func<string> text) =>
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                writeGuard.WriteText(text());
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("CopyText", ex);
+            }
+        });
+
+    /// <summary>
+    /// Several items at once (collect mode, "paste together"). All text: one paste with a
+    /// line break between them. Anything else: the sequential queue, one per Ctrl+V.
+    /// </summary>
+    public void PasteTogether(IReadOnlyList<ClipboardItem> items)
+    {
+        if (items.Count == 0)
+            return;
+        if (Klip.Core.Clipboard.PasteJoin.CanJoinAsText(items))
+        {
+            PasteTextCore(() => Klip.Core.Clipboard.PasteJoin.Join(
+                items.Select(i => repository.LoadFull(i).TextContent)));
+            return;
+        }
+        // the queue writes the content itself, so it gets full rows (at most a hundred)
+        var full = items.Select(repository.LoadFull).ToList();
+        pasteQueue.Arm(full);
+    }
+
+    // {clipboard} reads the clipboard thread; called from a pool thread
+    private string ExpandSnippet(string content)
+    {
+        Func<string?>? clip = null;
+        if (Klip.Core.Snippets.SnippetExpander.UsesClipboard(content))
+        {
+            clip = () => clipboardThread.Invoke(() =>
+                System.Windows.Clipboard.ContainsText() ? System.Windows.Clipboard.GetText() : null);
+        }
+        return Klip.Core.Snippets.SnippetExpander.Expand(content, DateTime.Now, clip);
+    }
+
+    private void PasteTextCore(Func<string> buildText)
     {
         var restore = settings.Current.RestoreClipboardAfterPaste;
         var target = SavedTargetWindow;
@@ -184,9 +287,10 @@ public sealed class PasteService(
             System.Windows.IDataObject? previous = null;
             try
             {
-                // RF-P2.01: snapshot e gravacao sairam da UI thread; a ordem
-                // (snapshot antes da gravacao) continua garantida por serem
-                // sequenciais aqui
+                // built here, off the UI thread: may read the db or the clipboard
+                var text = buildText();
+
+                // snapshot antes da gravacao, garantido por serem sequenciais aqui
                 if (restore)
                     previous = writeGuard.SnapshotCurrent();
 

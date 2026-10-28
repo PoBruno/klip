@@ -1,43 +1,60 @@
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.ComponentModel;
 using System.Collections.Specialized;
 
 namespace Klip.App.ViewModels;
 
 /// <summary>
-/// ObservableCollection that can add a whole page at once with a single Reset
-/// notification, instead of one CollectionChanged per item. Populating the
-/// history flyout with 30 items used to fire 30 notifications (each reprocessed
-/// by the grouped CollectionView); this makes it one.
+/// ObservableCollection with batch helpers for the history list.
+/// Reset swaps the whole content with one notification (first page, reload).
+/// AppendRange raises one Add per item: WPF collection views reject multi item Add
+/// events, and on a flat list a per item Add only touches the new rows, while a Reset
+/// throws away every realized container and remeasures the list.
 /// </summary>
 public sealed class BulkObservableCollection<T> : ObservableCollection<T>
 {
-    /// <summary>Adds many items and raises a single Reset at the end.</summary>
-    public void AddRange(IEnumerable<T> items)
+    /// <summary>Appends items, one Add notification each, Count/indexer raised once.</summary>
+    public void AppendRange(IReadOnlyList<T> items)
     {
-        var added = false;
+        if (items.Count == 0)
+            return;
+        CheckReentrancy();
         foreach (var item in items)
         {
-            Items.Add(item); // Items = the underlying list, no notification
-            added = true;
+            var index = Items.Count;
+            Items.Add(item);
+            OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Add, item, index));
         }
-        if (added)
-            RaiseReset();
+        RaiseCountChanged();
     }
 
     /// <summary>Clears and fills in one shot, with a single Reset.</summary>
     public void Reset(IEnumerable<T> items)
     {
+        CheckReentrancy();
         Items.Clear();
         foreach (var item in items)
             Items.Add(item);
-        RaiseReset();
+        RaiseCountChanged();
+        OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
     }
 
-    private void RaiseReset()
+    /// <summary>Keeps only the first <paramref name="count"/> items (one Reset).</summary>
+    public void TrimTo(int count)
     {
-        OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs(nameof(Count)));
-        OnPropertyChanged(new System.ComponentModel.PropertyChangedEventArgs("Item[]"));
+        if (count >= Items.Count)
+            return;
+        CheckReentrancy();
+        while (Items.Count > count)
+            Items.RemoveAt(Items.Count - 1);
+        RaiseCountChanged();
         OnCollectionChanged(new NotifyCollectionChangedEventArgs(NotifyCollectionChangedAction.Reset));
+    }
+
+    private void RaiseCountChanged()
+    {
+        OnPropertyChanged(new PropertyChangedEventArgs(nameof(Count)));
+        OnPropertyChanged(new PropertyChangedEventArgs("Item[]"));
     }
 }

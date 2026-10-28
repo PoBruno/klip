@@ -13,7 +13,7 @@ Small fixes (typos, a clear bug, a rough edge) you can just send straight as a P
 
 ## Building
 
-You need the .NET 9 SDK and Windows 11.
+You need the .NET 10 SDK and Windows 11.
 
 ```powershell
 git clone https://github.com/PoBruno/klip.git

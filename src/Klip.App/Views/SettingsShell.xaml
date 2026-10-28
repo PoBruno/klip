@@ -15,10 +15,7 @@
     WindowCornerPreference="Round"
     WindowStartupLocation="CenterScreen">
 
-    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. Display quantiza as
-         metricas por pixel inteiro, o que e bom ate ~16 px; o PageTitle (28 px) volta
-         a Ideal no proprio estilo (RF-S.01).
-         RF-S.03: nenhum Background aqui nem na NavigationView - isso mataria o Mica. -->
+    <!-- layout/rendering alinhados ao pixel grid. Display quantiza as metricas por pixel inteiro, o que e bom ate ~16 px; o PageTitle (28 px) volta a Ideal no proprio estilo. nenhum Background aqui nem na NavigationView - isso mataria o Mica. -->
     <Grid
         TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         UseLayoutRounding="True"
@@ -31,33 +28,7 @@
 
         <ui:TitleBar Grid.Row="0" Title="{DynamicResource Loc.SettingsTitle}" />
 
-        <!-- ADR-S.02: o template do WPF-UI ja entrega o indicador de selecao 3x16
-             raio 2 (ActiveRectangle) e a camada de conteudo com CornerRadius 8,0,0,0 -
-             exatamente o mockup, sem reimplementar nada.
-             OpenPaneLength=210: o PaneGrid do template tem Margin="4,0", entao
-             210 + 8 = os 218 do mockup.
-             Q-S.1: o item de nav fica em 40 px (MinHeight fixo no template do WPF-UI)
-             em vez dos 36 do mockup - o Explorer do Windows tambem usa 40.
-
-             RF-S.03 - ROLAGEM DAS PAGINAS. O NavigationViewContentPresenter do WPF-UI
-             4.3 deriva de System.Windows.Controls.Frame e o estilo default dele troca o
-             template por um que embrulha a pagina num ui:DynamicScrollViewer sempre que
-             IsDynamicScrollViewerEnabled=True (ver o Setter em Styles/Settings.xaml).
-             Ou seja: a rolagem ja existe uma camada ACIMA da pagina, e a pagina e
-             medida com altura infinita. Um ScrollViewer dentro da pagina, como havia
-             ate aqui, crescia ate o tamanho do conteudo (ViewportHeight ==
-             ExtentHeight, ScrollableHeight = 0), nunca mostrava barra e ainda comia a
-             roda do mouse - o ScrollViewer do WPF marca MouseWheelEvent como tratado
-             mesmo sem ter para onde rolar. As paginas nao tem mais ScrollViewer.
-
-             Padding=24,0,24,24 (o `.content { padding: 0 24px 24px }` do mockup): o
-             template liga esse Padding ao Margin do PART_FrameCP, que fica DENTRO do
-             DynamicScrollViewer. Isso e proposital - no template do DynamicScrollViewer
-             o conteudo ocupa as duas colunas do Grid e a DynamicScrollBar (12 px)
-             flutua POR CIMA, encostada na direita. Com o padding por dentro, essa faixa
-             de 24 px e exatamente o vao onde a barra flutua: ela nunca cobre texto. Se
-             o padding fosse por fora, a barra seria empurrada 24 px para dentro e
-             passaria a flutuar em cima do conteudo. -->
+        <!-- o template do WPF-UI ja entrega o indicador de selecao 3x16 raio 2 (ActiveRectangle) e a camada de conteudo com CornerRadius 8,0,0,0 - exatamente o mockup, sem reimplementar nada. OpenPaneLength=210: o PaneGrid do template tem Margin="4,0", entao 210 + 8 = os 218 do mockup. o item de nav fica em 40 px (MinHeight fixo no template do WPF-UI) em vez dos 36 do mockup - o Explorer do Windows tambem usa 40. ROLAGEM DAS PAGINAS. O NavigationViewContentPresenter do WPF-UI 4.3 deriva de System.Windows.Controls.Frame e o estilo default dele troca o template por um que embrulha a pagina num ui:DynamicScrollViewer sempre que IsDynamicScrollViewerEnabled=True (ver o Setter em Styles/Settings.xaml). Ou seja: a rolagem ja existe uma camada ACIMA da pagina, e a pagina e medida com altura infinita. Um ScrollViewer dentro da pagina, como havia ate aqui, crescia ate o tamanho do conteudo (ViewportHeight == ExtentHeight, ScrollableHeight = 0), nunca mostrava barra e ainda comia a roda do mouse - o ScrollViewer do WPF marca MouseWheelEvent como tratado mesmo sem ter para onde rolar. As paginas nao tem mais ScrollViewer. Padding=24,0,24,24 (o `.content { padding: 0 24px 24px }` do mockup): o template liga esse Padding ao Margin do PART_FrameCP, que fica DENTRO do DynamicScrollViewer. Isso e proposital - no template do DynamicScrollViewer o conteudo ocupa as duas colunas do Grid e a DynamicScrollBar (12 px) flutua POR CIMA, encostada na direita. Com o padding por dentro, essa faixa de 24 px e exatamente o vao onde a barra flutua: ela nunca cobre texto. Se o padding fosse por fora, a barra seria empurrada 24 px para dentro e passaria a flutuar em cima do conteudo. -->
         <ui:NavigationView
             x:Name="RootNavigation"
             Grid.Row="1"
@@ -94,6 +65,13 @@
                     TargetPageType="{x:Type pages:CapturePage}">
                     <ui:NavigationViewItem.Icon>
                         <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE722;" />
+                    </ui:NavigationViewItem.Icon>
+                </ui:NavigationViewItem>
+                <ui:NavigationViewItem
+                    Content="{DynamicResource Loc.SectionRecordingPage}"
+                    TargetPageType="{x:Type pages:RecordingPage}">
+                    <ui:NavigationViewItem.Icon>
+                        <ui:FontIcon FontFamily="{StaticResource KlipIconFont}" FontSize="16" Glyph="&#xE714;" />
                     </ui:NavigationViewItem.Icon>
                 </ui:NavigationViewItem>
                 <ui:NavigationViewItem

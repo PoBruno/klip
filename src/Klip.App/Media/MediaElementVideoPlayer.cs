@@ -5,8 +5,8 @@ using System.Windows.Threading;
 namespace Klip.App.Media;
 
 /// <summary>
-/// IVideoPlayer sobre o MediaElement in-box (RF-F5.02).
-/// LIMITACAO v1 (Q-F5.1): o MediaElement nao tem frame stepping nem seek
+/// IVideoPlayer sobre o MediaElement in-box.
+/// LIMITACAO v1: o MediaElement nao tem frame stepping nem seek
 /// frame-accurate; o "step" do editor faz seek de +/- 1/30 s aproximado.
 /// Upgrade futuro: FFME (MS-PL) ou player proprio sobre MF Source Reader -
 /// por isso esta classe fica atras da interface.

@@ -8,19 +8,19 @@ using Klip.Core.Media.Editing;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Controle proprio de timeline do editor de midia (D-F5.2, RF-F5.05..07,
-/// RF-F5.17..19): regua em unidades da timeline EDITADA (segundos no MP4,
+/// Controle proprio de timeline do editor de midia (
+/// ): regua em unidades da timeline EDITADA (segundos no MP4,
 /// frames no GIF), segmentos como blocos POSICIONADOS por TimelineStart /
-/// TimelineFrameStart (timeline livre, RF-F5.17), gaps com fundo mais escuro
+/// TimelineFrameStart (timeline livre), gaps com fundo mais escuro
 /// e hachura diagonal sutil, handles de trim nas bordas e playhead
 /// arrastavel. Arrastar o CORPO do segmento reposiciona-o na timeline
 /// (MoveSegmentTo), com clamp visual nos vizinhos e snapping nas bordas dos
-/// vizinhos e no playhead (RF-F5.19, ~8 px); cruzar vizinhos no drag nao e
-/// suportado - a reordenacao por indice (RF-F5.07) fica no menu de contexto
+/// vizinhos e no playhead (~8 px); cruzar vizinhos no drag nao e
+/// suportado - a reordenacao por indice fica no menu de contexto
 /// da janela (SegmentContextMenuRequested). Renderizacao via OnRender e hit
 /// test manual - controle custom, code-behind pesado e esperado aqui.
 /// Durante trim/move o controle mostra um preview local e so emite o evento
-/// de commit no mouse-up (um snapshot de undo por gesto, RF-F5.10).
+/// de commit no mouse-up (um snapshot de undo por gesto).
 /// Desempenho (correcao do re-render integral a cada tick do playhead): a
 /// parte ESTATICA (regua + segmentos + gaps + thumbnails) fica cacheada num
 /// DrawingGroup invalidado apenas quando projeto/selecao/gesto/tamanho mudam;
@@ -34,7 +34,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     private const double DragThreshold = 4;
     private const double MinVideoTrimSeconds = 0.1;
 
-    /// <summary>Raio de snapping do move em pixels (RF-F5.19).</summary>
+    /// <summary>Raio de snapping do move em pixels.</summary>
     private const double SnapPixels = 8;
 
     private static readonly Typeface RulerTypeface = new("Segoe UI Variable Text");
@@ -59,7 +59,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     private Point _dragStart;
     private double _pendingTrimStartUnits;
     private double _pendingTrimEndUnits;
-    // RF-F5.17: inicio pendente do segmento arrastado na timeline editada
+    // inicio pendente do segmento arrastado na timeline editada
     private double _pendingMoveStartUnits;
     // escala congelada no inicio do gesto: a regua pode reescalar durante o
     // preview e o delta do mouse precisa de uma conversao estavel
@@ -79,13 +79,13 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     public event Action<Guid?>? SegmentSelected;
 
     /// <summary>
-    /// Commit do reposicionamento livre (RF-F5.17): id + novo inicio na
+    /// Commit do reposicionamento livre: id + novo inicio na
     /// timeline EDITADA (segundos no video, frame no GIF). O chamador aplica
     /// MoveSegmentTo/MoveSegmentToFrame (1 snapshot de undo).
     /// </summary>
     public event Action<Guid, double>? SegmentMoveToRequested;
 
-    /// <summary>Commit de trim (RF-F5.06): novos limites em unidades do SOURCE.</summary>
+    /// <summary>Commit de trim: novos limites em unidades do SOURCE.</summary>
     public event Action<Guid, double, double>? SegmentTrimRequested;
 
     /// <summary>Clique direito num segmento: a janela mostra o menu (remover/ripple/reordenar).</summary>
@@ -114,7 +114,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         InvalidateVisual();
     }
 
-    /// <summary>Miniaturas por frame do source para a strip GIF (RF-F5.03).</summary>
+    /// <summary>Miniaturas por frame do source para a strip GIF.</summary>
     public void SetGifThumbnails(IReadOnlyList<BitmapSource> thumbnails)
     {
         _gifThumbnails = thumbnails;
@@ -138,7 +138,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     private bool IsGif => _project?.Kind == MediaKind.Gif;
 
-    /// <summary>Total COMMITADO da timeline editada, gaps incluidos (RF-F5.17).</summary>
+    /// <summary>Total COMMITADO da timeline editada, gaps incluidos.</summary>
     private double TotalUnits => _project is null
         ? 0
         : IsGif ? _project.EditedFrameCount : _project.EditedDuration.TotalSeconds;
@@ -161,7 +161,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     /// <summary>
     /// Spans (inicio, comprimento) dos segmentos na timeline EDITADA
-    /// (RF-F5.17), com o gesto pendente (trim/move) aplicado como preview.
+    /// , com o gesto pendente (trim/move) aplicado como preview.
     /// </summary>
     private (double Start, double Length)[] SegmentSpans()
     {
@@ -192,7 +192,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     /// <summary>
     /// Total da regua durante o render: fim do ultimo span com o gesto
     /// pendente aplicado (nunca menor que o total commitado - arrastar o
-    /// ultimo segmento para a direita ESTENDE a timeline, RF-F5.17).
+    /// ultimo segmento para a direita ESTENDE a timeline).
     /// </summary>
     private double RenderTotalUnits()
     {
@@ -235,7 +235,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
                     BeginTrim(index, DragMode.TrimRight, pos);
                 else
                 {
-                    // corpo do segmento: candidato a MOVE na timeline (RF-F5.17)
+                    // corpo do segmento: candidato a MOVE na timeline
                     _mode = DragMode.MaybeDrag;
                     _dragIndex = index;
                     _dragStart = pos;
@@ -268,7 +268,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
         var id = _project.Segments[index].Id;
         Select(id);
-        SegmentContextMenuRequested?.Invoke(id); // RF-F5.18: remover/ripple no menu
+        SegmentContextMenuRequested?.Invoke(id); // remover/ripple no menu
         e.Handled = true;
     }
 
@@ -355,7 +355,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
                 var id = seg.Id;
                 ResetGesture();
                 if (changed)
-                    SegmentMoveToRequested?.Invoke(id, target); // RF-F5.17
+                    SegmentMoveToRequested?.Invoke(id, target);
                 break;
             }
             case DragMode.TrimLeft or DragMode.TrimRight:
@@ -416,17 +416,17 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     {
         var units = TimelineLayout.XToUnits(x, RenderTotalUnits(), ActualWidth);
         if (IsGif)
-            units = Math.Floor(units); // snapping a frame (RF-F5.06)
+            units = Math.Floor(units); // snapping a frame
         _playheadUnits = units;
         PlayheadScrubbed?.Invoke(units);
         InvalidateVisual();
     }
 
     /// <summary>
-    /// Preview do reposicionamento livre (RF-F5.17): converte o delta do
+    /// Preview do reposicionamento livre: converte o delta do
     /// mouse em unidades com a escala congelada do gesto, aplica snapping nas
     /// bordas dos vizinhos e no playhead (~8 px) e clampa nos vizinhos
-    /// espelhando MoveSegmentTo (RF-F5.19) - cruzar vizinhos nao e suportado.
+    /// espelhando MoveSegmentTo - cruzar vizinhos nao e suportado.
     /// </summary>
     private void UpdateMovePreview(double x)
     {
@@ -462,7 +462,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         if (!double.IsNaN(best))
             target = best;
 
-        // clamp nos vizinhos (RF-F5.19), o mesmo do Core; ultimo segmento e
+        // clamp nos vizinhos, o mesmo do Core; ultimo segmento e
         // livre a direita (estende a timeline)
         var upper = nextStart is { } n ? Math.Max(lower, n - length) : double.MaxValue;
         target = Math.Clamp(target, lower, upper);
@@ -475,7 +475,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     /// <summary>
     /// Trim com clamp aos limites do source, aos vizinhos na timeline
-    /// (RF-F5.19) e snapping (RF-F5.06).
+    ///  e snapping.
     /// </summary>
     private void UpdateTrimPreview(double x)
     {
@@ -493,7 +493,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         {
             var next = srcStart + deltaUnits;
             next = gif ? Math.Round(next) : Math.Round(next, 1); // snap frame / 0,1 s
-            // RF-F5.19: a borda esquerda (que desloca TimelineStart junto com
+            // a borda esquerda (que desloca TimelineStart junto com
             // o source start) nao pode invadir o vizinho anterior
             var prevEnd = _dragIndex > 0 ? SegTimelineEnd(project.Segments[_dragIndex - 1], gif) : 0;
             var lowerBound = Math.Min(Math.Max(0, srcStart + (prevEnd - tlStart)), srcEnd - minLength);
@@ -504,7 +504,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         {
             var next = srcEnd + deltaUnits;
             next = gif ? Math.Round(next) : Math.Round(next, 1);
-            // RF-F5.19: a borda direita nao pode invadir o vizinho seguinte
+            // a borda direita nao pode invadir o vizinho seguinte
             var upperBound = _dragIndex < project.Segments.Count - 1
                 ? Math.Min(SourceTotalUnits, srcStart + (SegTimelineStart(project.Segments[_dragIndex + 1], gif) - tlStart))
                 : SourceTotalUnits;
@@ -622,7 +622,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         var top = RulerHeight + 6;
         var height = Math.Max(10, ActualHeight - top - 6);
 
-        DrawGaps(dc, blocks, top, height); // RF-F5.17: areas de gap
+        DrawGaps(dc, blocks, top, height); // areas de gap
 
         for (var i = 0; i < blocks.Count; i++)
         {
@@ -637,9 +637,9 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     }
 
     /// <summary>
-    /// Gaps da timeline editada (RF-F5.17): trechos da faixa de segmentos nao
+    /// Gaps da timeline editada: trechos da faixa de segmentos nao
     /// cobertos por nenhum bloco recebem fundo mais escuro + hachura diagonal
-    /// sutil (renderizam preto no preview/export, RF-F5.20). Nao existe gap
+    /// sutil (renderizam preto no preview/export). Nao existe gap
     /// depois do ultimo segmento por invariante do Core.
     /// </summary>
     private static void DrawGaps(DrawingContext dc, IReadOnlyList<TimelineLayout.Block> blocks,
@@ -683,7 +683,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         else if (!IsGif)
         {
             // LIMITACAO v1: sem thumbnails de MP4 (MF Source Reader e upgrade
-            // futuro, RF-F5.03) - blocos mostram o intervalo de tempo do source
+            // futuro) - blocos mostram o intervalo de tempo do source
             var gif = IsGif;
             var start = _mode is DragMode.TrimLeft or DragMode.TrimRight && _project!.Segments.IndexOf(seg) == _dragIndex
                 ? _pendingTrimStartUnits : SegSourceStart(seg, gif);
@@ -702,7 +702,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         }
     }
 
-    /// <summary>Strip de miniaturas dentro do bloco (RF-F5.03, frames do cache GIF).</summary>
+    /// <summary>Strip de miniaturas dentro do bloco (frames do cache GIF).</summary>
     private void DrawGifStrip(DrawingContext dc, TimelineSegment seg, Rect rect, IReadOnlyList<BitmapSource> thumbs)
     {
         var sample = thumbs[Math.Min(seg.FrameStart, thumbs.Count - 1)];

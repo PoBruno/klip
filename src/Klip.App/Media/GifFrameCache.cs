@@ -14,14 +14,14 @@ public sealed class GifCachedFrame(byte[] bgra, BitmapSource thumbnail, int dela
     /// </summary>
     public byte[] Bgra { get; } = bgra;
 
-    /// <summary>Miniatura (~60 px de altura) para a strip da timeline (RF-F5.03).</summary>
+    /// <summary>Miniatura (~60 px de altura) para a strip da timeline.</summary>
     public BitmapSource Thumbnail { get; } = thumbnail;
 
     public int DelayMs { get; } = delayMs;
 }
 
 /// <summary>
-/// RF-F5.02: cache de frames do player GIF proprio. Decodifica TODOS os
+/// cache de frames do player GIF proprio. Decodifica TODOS os
 /// frames uma unica vez via GifBitmapDecoder (in-box), compondo os frames
 /// parciais (delta + offset + disposal) em quadros completos BGRA.
 /// Delays vem do metadata "/grctlext/Delay" (centesimos).
@@ -93,13 +93,13 @@ public sealed class GifFrameCache
         target.WritePixels(new Int32Rect(0, 0, Width, Height), frame.Bgra, Width * 4, 0);
     }
 
-    // buffer preto reutilizado pelos gaps do preview (RF-F5.20); lazy porque
+    // buffer preto reutilizado pelos gaps do preview; lazy porque
     // a maioria dos projetos nunca cria gaps
     private byte[]? _blackFrame;
 
     /// <summary>
     /// Preenche o bitmap reutilizado com preto opaco - preview de slots de
-    /// gap da timeline livre (RF-F5.20). O buffer preto e cacheado; nenhuma
+    /// gap da timeline livre. O buffer preto e cacheado; nenhuma
     /// alocacao por frame de playback.
     /// </summary>
     public void CopyBlackTo(WriteableBitmap target)
@@ -221,7 +221,7 @@ public sealed class GifFrameCache
 
 /// <summary>
 /// Leitor STREAMING dos frames compostos do arquivo GIF original, usado pela
-/// exportacao GIF-para-GIF (RF-F5.13). Mantem UM canvas reutilizado em
+/// exportacao GIF-para-GIF. Mantem UM canvas reutilizado em
 /// resolucao cheia e avanca frame a frame decodificando os patches do disco
 /// (BitmapCacheOption.None); pedir um frame anterior reabre o arquivo e
 /// recompoe do zero. Cada chamada devolve uma COPIA do canvas porque o

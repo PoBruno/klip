@@ -6,14 +6,16 @@ using System.Windows.Interop;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Klip.Core.Clipboard;
+using Klip.Core.Settings;
 using Klip.Interop;
+using Klip.Interop.Clipboard;
 
 namespace Klip.App.Services;
 
 /// <summary>
 /// Observa o clipboard com AddClipboardFormatListener + WM_CLIPBOARDUPDATE.
 ///
-/// RF-P2.01 / ADR-P.05: a janela message-only, o timer de debounce e TODA a
+/// a janela message-only, o timer de debounce e TODA a
 /// leitura vivem na <see cref="ClipboardThread"/> (STA dedicada). A UI thread
 /// nunca abre o clipboard - antes ela pagava o retry proprio deste servico
 /// (6 x Thread.Sleep(15)) somado ao do WPF (10 x 100 ms dentro de
@@ -34,7 +36,7 @@ public sealed class ClipboardMonitorService : IDisposable
     private const string CanIncludeHistoryFormat = "CanIncludeInClipboardHistory";
 
     /// <summary>
-    /// RF-P2.01: "Clipboard Viewer Ignore" NAO e documentado pela Microsoft, mas
+    /// "Clipboard Viewer Ignore" NAO e documentado pela Microsoft, mas
     /// e a convencao de facto dos gerenciadores de senha (KeePass, 1Password,
     /// Bitwarden) para pedir que gerenciadores de clipboard ignorem a copia.
     /// Respeitar e obrigatorio: sem isso o Klip guardaria senhas em claro no
@@ -52,10 +54,12 @@ public sealed class ClipboardMonitorService : IDisposable
     private static readonly uint IdExcludeMonitor = NativeMethods.RegisterClipboardFormat(ExcludeMonitorFormat);
     private static readonly uint IdCanIncludeHistory = NativeMethods.RegisterClipboardFormat(CanIncludeHistoryFormat);
     private static readonly uint IdViewerIgnore = NativeMethods.RegisterClipboardFormat(ViewerIgnoreFormat);
+    private static readonly uint IdFileGroupDescriptorA = NativeMethods.RegisterClipboardFormat("FileGroupDescriptor");
 
     private readonly ClipboardIngestService _ingest;
     private readonly ClipboardWriteGuard _writeGuard;
     private readonly ClipboardThread _clipboardThread;
+    private readonly SettingsService _settings;
 
     /// <summary>Cache de nome de exe; so tocado pela thread do clipboard.</summary>
     private readonly SourceAppCache _sourceApps = new();
@@ -70,19 +74,45 @@ public sealed class ClipboardMonitorService : IDisposable
     public bool IsPaused
     {
         get => _paused;
-        set => _paused = value;
+        set
+        {
+            if (_paused == value)
+                return;
+            _paused = value;
+            // paused = no paste as file either; resuming looks at the clipboard again
+            _clipboardThread.BeginInvoke(RefreshImageState);
+        }
     }
+
+    /// <summary>
+    /// Asked once per real copy, on the clipboard thread; true drops that copy.
+    /// </summary>
+    public Func<bool>? SkipCopy { get; set; }
+
+    /// <summary>
+    /// What the clipboard holds as far as "paste image as file" cares. Updated on the
+    /// clipboard thread after every change (and on pause/resume).
+    /// </summary>
+    public ClipboardImageState ImageState { get; private set; } = ClipboardImageState.None;
+
+    /// <summary>Raised on the clipboard thread whenever <see cref="ImageState"/> is recomputed.</summary>
+    public event Action<ClipboardImageState>? ImageStateChanged;
+
+    /// <summary>Recomputes <see cref="ImageState"/> on the clipboard thread (startup, settings change).</summary>
+    public void RequestImageStateRefresh() => _clipboardThread.BeginInvoke(RefreshImageState);
 
     public ClipboardMonitorService(
         ClipboardIngestService ingest,
         ClipboardWriteGuard writeGuard,
-        ClipboardThread clipboardThread)
+        ClipboardThread clipboardThread,
+        SettingsService settings)
     {
         _ingest = ingest;
         _writeGuard = writeGuard;
         _clipboardThread = clipboardThread;
+        _settings = settings;
 
-        // RF-P2.01: janela, hook e timer nascem NA thread do clipboard. Um
+        // janela, hook e timer nascem NA thread do clipboard. Um
         // DispatcherTimer pertence ao dispatcher da thread que o cria, entao
         // criar aqui fora faria o Tick disparar na UI thread de novo.
         clipboardThread.Invoke(() =>
@@ -135,10 +165,20 @@ public sealed class ClipboardMonitorService : IDisposable
             return; // mesmo estado, eco duplicado
         _lastProcessedSequence = sequence;
 
-        // anti-loop: ignora as nossas proprias gravacoes (RF-03.09). Como
+        RefreshImageState();
+
+        // second net for our own image objects, in case the sequence slipped past the guard
+        if (IsAvailable(VirtualFileDataObject.CfKlipMarker))
+            return;
+
+        // anti-loop: ignora as nossas proprias gravacoes. Como
         // gravacao e leitura agora rodam na MESMA thread, o registro do
         // sequence number sempre acontece antes deste teste.
         if (_writeGuard.IsOwnWrite(sequence))
+            return;
+
+        // "ignore the next copy" from the tray or the flyout
+        if (SkipCopy?.Invoke() == true)
             return;
 
         try
@@ -169,7 +209,59 @@ public sealed class ClipboardMonitorService : IDisposable
     }
 
     /// <summary>
-    /// RF-P2.01: o retry externo caiu de 6 tentativas para 2.
+    /// Image without any file format, not opted out, not from an excluded app. Only probes
+    /// with IsClipboardFormatAvailable unless there really is an image there.
+    /// </summary>
+    private void RefreshImageState()
+    {
+        var state = ClipboardImageState.None;
+        try
+        {
+            state = EvaluateImageState();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("ClipboardImageState", ex);
+        }
+        ImageState = state;
+        ImageStateChanged?.Invoke(state);
+    }
+
+    private ClipboardImageState EvaluateImageState()
+    {
+        // the only consumer is Ctrl+V in Explorer; with it off, do not even look
+        if (_paused || !_settings.Current.PasteImageAsFileInExplorer)
+            return ClipboardImageState.None;
+
+        var hasImage = IsAvailable(IdPng) ||
+            NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_DIB) ||
+            NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_DIBV5) ||
+            NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_BITMAP);
+        if (!hasImage)
+            return ClipboardImageState.None;
+
+        var hasFiles = NativeMethods.IsClipboardFormatAvailable(NativeMethods.CF_HDROP) ||
+            IsAvailable(VirtualFileDataObject.CfFileGroupDescriptorW) ||
+            IsAvailable(IdFileGroupDescriptorA);
+        var optedOut = IsAvailable(IdViewerIgnore) || IsAvailable(IdExcludeMonitor);
+        if (!ExplorerPastePolicy.IsCandidate(hasImage, hasFiles, optedOut))
+            return ClipboardImageState.None;
+
+        if (IsAvailable(IdCanIncludeHistory) &&
+            System.Windows.Clipboard.GetDataObject() is { } data &&
+            ReadDwordFormat(data, CanIncludeHistoryFormat) == 0)
+            return ClipboardImageState.None;
+
+        var (app, _) = ResolveSource();
+        if (app is not null && _settings.Current.ExcludedApps.Any(
+                a => string.Equals(a, app, StringComparison.OrdinalIgnoreCase)))
+            return ClipboardImageState.None;
+
+        return new ClipboardImageState(true, app, DateTime.Now, NativeMethods.GetClipboardSequenceNumber());
+    }
+
+    /// <summary>
+    /// o retry externo caiu de 6 tentativas para 2.
     ///
     /// O erro real e CLIPBRD_E_CANT_OPEN durante a janela em que o app de origem
     /// ainda segura o clipboard escrevendo os proprios formatos - alguns
@@ -214,7 +306,7 @@ public sealed class ClipboardMonitorService : IDisposable
     /// <summary>
     /// Le o clipboard. Sempre na thread do clipboard (STA).
     ///
-    /// RF-P2.01: a sondagem com IsClipboardFormatAvailable acontece ANTES de
+    /// a sondagem com IsClipboardFormatAvailable acontece ANTES de
     /// qualquer GetDataObject. Ela le a lista de formatos mantida pelo win32,
     /// sem abrir o clipboard e sem round-trip COM ao processo de origem, entao
     /// so pedimos GetData do que realmente existe. Antes eram ate 16 idas e
@@ -310,7 +402,7 @@ public sealed class ClipboardMonitorService : IDisposable
     }
 
     /// <summary>
-    /// RF-P2.01: o WPF entrega o payload CF_HTML como string, mas o parser
+    /// o WPF entrega o payload CF_HTML como string, mas o parser
     /// trabalha em bytes (os offsets do formato sao posicoes em BYTES). Antes
     /// isso era um Encoding.UTF8.GetBytes do payload inteiro - uma copia nova
     /// no heap por copia, e paginas coladas do navegador passam de centenas de
@@ -395,7 +487,7 @@ public sealed class ClipboardMonitorService : IDisposable
     {
         try
         {
-            // RF-P2.01: o listener PRECISA sair na mesma thread que o registrou -
+            // o listener PRECISA sair na mesma thread que o registrou -
             // a janela message-only pertence a thread do clipboard
             _clipboardThread.Invoke(() =>
             {
@@ -424,7 +516,7 @@ public sealed class ClipboardMonitorService : IDisposable
     }
 
     /// <summary>
-    /// RF-P2.02: nome do exe de origem sem Process.GetProcessById.
+    /// nome do exe de origem sem Process.GetProcessById.
     ///
     /// O caminho antigo criava um objeto Process por copia: abre handle com
     /// direitos amplos (PROCESS_QUERY_INFORMATION | PROCESS_VM_READ) e monta
@@ -492,4 +584,10 @@ public sealed class ClipboardMonitorService : IDisposable
                 _entries.Remove(_insertionOrder.Dequeue());
         }
     }
+}
+
+/// <summary>Clipboard holds an image Explorer cannot paste by itself.</summary>
+public sealed record ClipboardImageState(bool IsCandidate, string? SourceApp, DateTime CopiedAt, uint Sequence)
+{
+    public static readonly ClipboardImageState None = new(false, null, default, 0);
 }

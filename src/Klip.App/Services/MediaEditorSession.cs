@@ -4,8 +4,8 @@ namespace Klip.App.Services;
 
 /// <summary>
 /// Estado de uma sessao de edicao de midia: o projeto imutavel corrente mais
-/// os ajustes de exportacao GIF (FPS alvo e escala, RF-F5.08) com undo/redo
-/// por snapshot (RF-F5.10) - como o projeto e imutavel, cada snapshot e so
+/// os ajustes de exportacao GIF (FPS alvo e escala) com undo/redo
+/// por snapshot - como o projeto e imutavel, cada snapshot e so
 /// uma referencia + dois ints.
 /// </summary>
 public sealed class MediaEditorSession
@@ -17,10 +17,10 @@ public sealed class MediaEditorSession
 
     public MediaEditProject Project { get; private set; }
 
-    /// <summary>FPS alvo da reducao GIF (RF-F5.08); nulo = sem reducao.</summary>
+    /// <summary>FPS alvo da reducao GIF; nulo = sem reducao.</summary>
     public int? GifTargetFps { get; private set; }
 
-    /// <summary>Escala aplicada na exportacao GIF (RF-F5.08); 100 = original.</summary>
+    /// <summary>Escala aplicada na exportacao GIF; 100 = original.</summary>
     public int GifScalePercent { get; private set; } = 100;
 
     public bool CanUndo => _undo.Count > 0;

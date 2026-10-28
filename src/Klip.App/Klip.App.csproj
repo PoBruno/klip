@@ -2,7 +2,7 @@
 
   <PropertyGroup>
     <OutputType>WinExe</OutputType>
-    <TargetFramework>net9.0-windows10.0.26100.0</TargetFramework>
+    <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.17763.0</SupportedOSPlatformVersion>
     <Nullable>enable</Nullable>
     <ImplicitUsings>enable</ImplicitUsings>
@@ -11,8 +11,7 @@
     <RootNamespace>Klip.App</RootNamespace>
     <ApplicationManifest>app.manifest</ApplicationManifest>
     <ApplicationIcon>Assets\Klip.ico</ApplicationIcon>
-    <!-- Hosting 10.x pulls a newer System.Text.Json than the net9 inbox one -->
-    <NoWarn>$(NoWarn)</NoWarn>
+    <StartupObject>Klip.App.Program</StartupObject>
 
     <!-- exe metadata -->
     <Version>1.4.0</Version>
@@ -26,7 +25,7 @@
          not here, so the debug build keeps the default output path (no RID subfolder). -->
     <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
 
-    <!-- RF-P3.02: R2R pre-compila o codigo do Klip + WPF-UI + Mvvm. As libs do framework ja vem R2R.
+    <!-- R2R pre-compila o codigo do Klip + WPF-UI + Mvvm. As libs do framework ja vem R2R.
          Exige RID no publish (os scripts em tools/ e o release.yml sempre passam -r win-x64). -->
     <PublishReadyToRun>true</PublishReadyToRun>
     <!-- Composite so e recomendado para apps que DESLIGAM tiering; aqui pioraria:
@@ -49,15 +48,23 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- R2R on the Windows SDK projection doubles it (26 MB -> 58 MB) and we only call
+         a handful of OCR and capture methods from it, so it ships as plain IL -->
+    <PublishReadyToRunExclude Include="Microsoft.Windows.SDK.NET.dll" />
+  </ItemGroup>
+
+  <ItemGroup>
     <!-- Twemoji PNGs (CC-BY 4.0) + the search index, embedded so it all works offline -->
     <Resource Include="Assets\Emoji\*.png" />
     <Resource Include="Assets\Emoji\emoji-index.json" />
+    <Resource Include="Assets\TrayLight.ico" />
+    <Resource Include="Assets\TrayDark.ico" />
   </ItemGroup>
 
   <ItemGroup>
     <PackageReference Include="CommunityToolkit.Mvvm" Version="8.4.2" />
-    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.3.0" />
-    <PackageReference Include="Microsoft.Extensions.Hosting" Version="9.0.9" />
+    <PackageReference Include="H.NotifyIcon.Wpf" Version="2.4.1" />
+    <PackageReference Include="Microsoft.Extensions.DependencyInjection" Version="10.0.14" />
     <PackageReference Include="WPF-UI" Version="4.3.0" />
   </ItemGroup>
 

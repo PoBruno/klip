@@ -4,7 +4,7 @@ using System.Windows.Controls;
 namespace Klip.App.Controls;
 
 /// <summary>
-/// RF-S.02 / ADR-S.05: o cartao de configuracao da tela de Configuracoes. Substitui
+/// o cartao de configuracao da tela de Configuracoes. Substitui
 /// os 23 <c>Grid</c> escritos a mao que repetiam "titulo + legenda a esquerda,
 /// controle a direita" com margens inconsistentes entre eles.
 /// <para>
@@ -41,7 +41,7 @@ public sealed class SettingsCard : ContentControl
 
     /// <summary>
     /// Terceira linha opcional, em SemiBold: resultado de uma acao do cartao
-    /// (takeover de registro concluido, conflito de atalho). RF-S.06.
+    /// (takeover de registro concluido, conflito de atalho).
     /// </summary>
     public static readonly DependencyProperty StatusProperty =
         DependencyProperty.Register(

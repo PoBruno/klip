@@ -29,7 +29,7 @@
                     <ControlTemplate TargetType="RadioButton">
                         <Border
                             x:Name="Pill"
-                            Padding="10,6"
+                            Padding="8,6"
                             Background="Transparent"
                             CornerRadius="4">
                             <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center" />
@@ -97,9 +97,62 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- Faixa de aviso no topo da lista (coleta, selecao, pausa, alias) -->
+        <Style x:Key="BannerBorder" TargetType="Border">
+            <Setter Property="Margin" Value="4,0,4,8" />
+            <Setter Property="Padding" Value="10,4,4,4" />
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+        </Style>
+        <Style x:Key="BannerText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+        </Style>
+        <Style x:Key="BannerButtonText" TargetType="TextBlock">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+        </Style>
+        <Style x:Key="SnippetItemStyle" TargetType="ListBoxItem">
+            <Setter Property="Margin" Value="0,0,0,4" />
+            <Setter Property="HorizontalContentAlignment" Value="Stretch" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ListBoxItem">
+                        <Grid>
+                            <Border x:Name="Bg" Background="Transparent" CornerRadius="4">
+                                <ContentPresenter />
+                            </Border>
+                            <Rectangle
+                                x:Name="Indicator"
+                                Width="3"
+                                Margin="0,10,0,10"
+                                HorizontalAlignment="Left"
+                                Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                RadiusX="1.5"
+                                RadiusY="1.5"
+                                Visibility="Collapsed" />
+                        </Grid>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsSelected" Value="True">
+                                <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="Bg" Property="Background" Value="{DynamicResource SubtleFillColorTertiaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </ui:FluentWindow.Resources>
 
-    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. O texto do painel vive
+    <!-- layout/rendering alinhados ao pixel grid. O texto do painel vive
          entre 9 e 16 px (cards, metadados, glifos de acao), faixa em que Display e
          mais nitido e mais barato que Ideal. Os dois glifos grandes (32 e 40 px)
          sobrescrevem para Ideal localmente. -->
@@ -135,6 +188,9 @@
                 <RadioButton x:Name="TabFiles" GroupName="Tabs" Style="{StaticResource TabRadioStyle}" ToolTip="{DynamicResource Loc.TabFiles}">
                     <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE7C3;" />
                 </RadioButton>
+                <RadioButton x:Name="TabSnippets" GroupName="Tabs" Style="{StaticResource TabRadioStyle}" ToolTip="{DynamicResource Loc.TabSnippets}">
+                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE943;" />
+                </RadioButton>
                 <RadioButton x:Name="TabEmoji" GroupName="Tabs" Style="{StaticResource TabRadioStyle}" ToolTip="{DynamicResource Loc.TabEmoji}">
                     <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE76E;" />
                 </RadioButton>
@@ -142,9 +198,9 @@
             <Button
                 x:Name="MultiSelectButton"
                 HorizontalAlignment="Right"
-                Margin="0,0,40,0"
+                Margin="0,0,64,0"
                 Style="{StaticResource CardActionButton}"
-                Padding="10,6"
+                Padding="8,6"
                 ToolTip="{DynamicResource Loc.MultiPasteTooltip}">
                 <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE762;" />
                 <Button.ContextMenu>
@@ -154,13 +210,22 @@
             <Button
                 x:Name="DateFilterButton"
                 HorizontalAlignment="Right"
+                Margin="0,0,32,0"
                 Style="{StaticResource CardActionButton}"
-                Padding="10,6"
+                Padding="8,6"
                 ToolTip="{DynamicResource Loc.FilterByDate}">
                 <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE787;" />
                 <Button.ContextMenu>
                     <ContextMenu x:Name="DateFilterMenu" />
                 </Button.ContextMenu>
+            </Button>
+            <Button
+                x:Name="HeaderMenuButton"
+                HorizontalAlignment="Right"
+                Style="{StaticResource CardActionButton}"
+                Padding="8,6"
+                ToolTip="{DynamicResource Loc.HeaderMenuTooltip}">
+                <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE712;" />
             </Button>
         </Grid>
 
@@ -174,40 +239,105 @@
             PlaceholderText="{DynamicResource Loc.SearchPlaceholder}"
             Text="{Binding SearchText, UpdateSourceTrigger=PropertyChanged}" />
 
-        <!-- Chip do filtro de data ativo -->
-        <Border
-            Grid.Row="2"
-            Margin="4,0,4,8"
-            Padding="8,4"
-            HorizontalAlignment="Left"
-            Background="{DynamicResource AccentFillColorDefaultBrush}"
-            CornerRadius="10"
-            Visibility="{Binding HasDateFilter, Converter={StaticResource BoolToVisibility}}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock
-                    FontSize="11"
-                    Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                    Text="{Binding DateFilterLabel}" />
-                <Button
-                    Margin="6,0,0,0"
-                    Padding="2,0"
-                    Background="Transparent"
-                    BorderThickness="0"
-                    Command="{Binding ClearDateFilterCommand}"
-                    Cursor="Hand">
+        <!-- Chip do filtro de data e faixas de aviso -->
+        <StackPanel Grid.Row="2">
+            <Border
+                Margin="4,0,4,8"
+                Padding="8,4"
+                HorizontalAlignment="Left"
+                Background="{DynamicResource AccentFillColorDefaultBrush}"
+                CornerRadius="10"
+                Visibility="{Binding HasDateFilter, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Orientation="Horizontal">
                     <TextBlock
-                        FontFamily="Segoe Fluent Icons"
-                        FontSize="9"
+                        FontSize="11"
                         Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                        Text="&#xE711;" />
-                </Button>
-            </StackPanel>
-        </Border>
+                        Text="{Binding DateFilterLabel}" />
+                    <Button
+                        Margin="6,0,0,0"
+                        Padding="2,0"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Command="{Binding ClearDateFilterCommand}"
+                        Cursor="Hand">
+                        <TextBlock
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="9"
+                            Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                            Text="&#xE711;" />
+                    </Button>
+                </StackPanel>
+            </Border>
+
+            <!-- Alias de snippet digitado na busca -->
+            <Border Style="{StaticResource BannerBorder}" Visibility="{Binding HasAliasHit, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
+                        <TextBlock Margin="0,0,8,0" VerticalAlignment="Center" FontFamily="Segoe Fluent Icons" FontSize="12"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="&#xE943;" />
+                        <TextBlock Style="{StaticResource BannerText}" MaxWidth="170" Text="{Binding AliasHit.Name}" />
+                        <TextBlock Style="{StaticResource BannerText}" Margin="6,0,0,0"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding AliasHit.Alias}" />
+                    </StackPanel>
+                    <Button HorizontalAlignment="Right" Style="{StaticResource CardActionButton}"
+                            Command="{Binding PasteSnippetCommand}" CommandParameter="{Binding AliasHit}">
+                        <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.SnippetPaste}" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Pausa / ignorar proxima copia -->
+            <Border Style="{StaticResource BannerBorder}" Visibility="{Binding HasPauseBanner, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <TextBlock Style="{StaticResource BannerText}" Margin="0,0,80,0" Text="{Binding PauseBannerText}" />
+                    <Button HorizontalAlignment="Right" Style="{StaticResource CardActionButton}" Command="{Binding ResumeHistoryCommand}">
+                        <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.PauseResume}" />
+                    </Button>
+                </Grid>
+            </Border>
+
+            <!-- Modo coleta -->
+            <Border Style="{StaticResource BannerBorder}" Visibility="{Binding IsCollectMode, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <TextBlock Style="{StaticResource BannerText}" HorizontalAlignment="Left" MaxWidth="120" Text="{Binding CollectBannerText}" />
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Style="{StaticResource CardActionButton}" Command="{Binding CollectPasteAllCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CollectPasteAll}" />
+                        </Button>
+                        <Button Style="{StaticResource CardActionButton}" Command="{Binding CollectClearCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CollectClear}" />
+                        </Button>
+                        <Button Style="{StaticResource CardActionButton}" Command="{Binding ExitCollectCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CollectExit}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+
+            <!-- Cards marcados para colar juntos -->
+            <Border Style="{StaticResource BannerBorder}" Visibility="{Binding HasChecks, Converter={StaticResource BoolToVisibility}}">
+                <Grid>
+                    <TextBlock Style="{StaticResource BannerText}" HorizontalAlignment="Left" Text="{Binding CheckedBannerText}" />
+                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                        <Button Style="{StaticResource CardActionButton}" Command="{Binding PasteCheckedCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CheckedPaste}" />
+                        </Button>
+                        <Button Style="{StaticResource CardActionButton}" Command="{Binding ClearChecksCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CheckedClear}" />
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Border>
+        </StackPanel>
 
         <!-- Modo seleção múltipla: só as bolinhas numeradas nos cards indicam a ordem;
              fechar ou Enter confirma, Esc cancela. Sem barra nem botões. -->
 
         <!-- Lista de cards -->
+        <!-- Flat list on purpose: with GroupStyle the WPF-UI ListBox style turns
+             CanContentScroll off and every item gets realized. The "Pinned"/"Recent"
+             labels are drawn by the first card of each section (HeaderText).
+             CanContentScroll is set locally so no style trigger can turn it off. -->
         <ListBox
             x:Name="ItemsList"
             Grid.Row="3"
@@ -215,46 +345,14 @@
             BorderThickness="0"
             FocusVisualStyle="{x:Null}"
             HorizontalContentAlignment="Stretch"
+            ScrollViewer.CanContentScroll="True"
             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
             ScrollViewer.ScrollChanged="OnListScroll"
             VirtualizingPanel.IsVirtualizing="True"
-            VirtualizingPanel.IsVirtualizingWhenGrouping="True"
             VirtualizingPanel.VirtualizationMode="Recycling"
-            VirtualizingPanel.ScrollUnit="Pixel">
-            <ListBox.GroupStyle>
-                <GroupStyle>
-                    <!-- Container do grupo sem borda nem foco/selecao: o template padrao
-                         do tema desenha moldura e torna o cabecalho selecionavel quando
-                         ha item fixado. Aqui e so cabecalho (nao interativo) + itens. -->
-                    <GroupStyle.ContainerStyle>
-                        <Style TargetType="GroupItem">
-                            <Setter Property="Focusable" Value="False" />
-                            <Setter Property="Template">
-                                <Setter.Value>
-                                    <ControlTemplate TargetType="GroupItem">
-                                        <StackPanel>
-                                            <ContentPresenter Focusable="False" IsHitTestVisible="False" />
-                                            <ItemsPresenter />
-                                        </StackPanel>
-                                    </ControlTemplate>
-                                </Setter.Value>
-                            </Setter>
-                        </Style>
-                    </GroupStyle.ContainerStyle>
-                    <GroupStyle.HeaderTemplate>
-                        <DataTemplate>
-                            <TextBlock
-                                Margin="4,8,0,4"
-                                FontSize="12"
-                                FontWeight="SemiBold"
-                                Focusable="False"
-                                IsHitTestVisible="False"
-                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                Text="{Binding Name}" />
-                        </DataTemplate>
-                    </GroupStyle.HeaderTemplate>
-                </GroupStyle>
-            </ListBox.GroupStyle>
+            VirtualizingPanel.ScrollUnit="Pixel"
+            VirtualizingPanel.CacheLength="1,2"
+            VirtualizingPanel.CacheLengthUnit="Page">
             <ListBox.ItemContainerStyle>
                 <!-- Seleção estilo Win11: fill sutil + indicador accent à esquerda
                      (nunca o azul chapado do WPF clássico) -->
@@ -266,6 +364,16 @@
                     <Setter Property="Template">
                         <Setter.Value>
                             <ControlTemplate TargetType="ListBoxItem">
+                                <StackPanel>
+                                <TextBlock
+                                    Margin="4,8,0,4"
+                                    FontSize="12"
+                                    FontWeight="SemiBold"
+                                    Focusable="False"
+                                    IsHitTestVisible="False"
+                                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                    Text="{Binding HeaderText}"
+                                    Visibility="{Binding HasHeader, Converter={StaticResource BoolToVisibility}}" />
                                 <Grid>
                                     <Border
                                         x:Name="Bg"
@@ -283,6 +391,7 @@
                                         RadiusY="1.5"
                                         Visibility="Collapsed" />
                                 </Grid>
+                                </StackPanel>
                                 <ControlTemplate.Triggers>
                                     <Trigger Property="IsSelected" Value="True">
                                         <Setter TargetName="Indicator" Property="Visibility" Value="Visible" />
@@ -303,34 +412,75 @@
                     <Border
                         Padding="12"
                         Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
-                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="4">
+                        <Border.Style>
+                            <Style TargetType="Border">
+                                <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding IsChecked}" Value="True">
+                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </Border.Style>
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
 
-                            <!-- Badge de ordem na fila de colagem -->
-                            <Border
+                            <!-- Badges do canto: atalho (Ctrl/Alt segurado), marca de colar juntos e ordem na fila -->
+                            <StackPanel
                                 Grid.Row="0"
                                 Panel.ZIndex="10"
-                                Width="20" Height="20"
                                 Margin="0,-2,-2,0"
                                 HorizontalAlignment="Right"
                                 VerticalAlignment="Top"
-                                Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                CornerRadius="10"
-                                Visibility="{Binding IsQueued, Converter={StaticResource BoolToVisibility}}">
-                                <TextBlock
-                                    HorizontalAlignment="Center"
-                                    VerticalAlignment="Center"
-                                    FontSize="11"
-                                    FontWeight="Bold"
-                                    Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                    Text="{Binding QueueOrder}" />
-                            </Border>
+                                Orientation="Horizontal">
+                                <Border
+                                    MinWidth="20" Height="20"
+                                    Margin="0,0,4,0"
+                                    Background="{DynamicResource ControlFillColorTertiaryBrush}"
+                                    BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}"
+                                    BorderThickness="1"
+                                    CornerRadius="10"
+                                    Visibility="{Binding HasShortcut, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Text="{Binding ShortcutNumber}" />
+                                </Border>
+                                <Border
+                                    Width="20" Height="20"
+                                    Margin="0,0,4,0"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="10"
+                                    Visibility="{Binding IsChecked, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                        Text="{Binding CheckOrder}" />
+                                </Border>
+                                <Border
+                                    Width="20" Height="20"
+                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    CornerRadius="10"
+                                    Visibility="{Binding IsQueued, Converter={StaticResource BoolToVisibility}}">
+                                    <TextBlock
+                                        HorizontalAlignment="Center"
+                                        VerticalAlignment="Center"
+                                        FontSize="11"
+                                        FontWeight="Bold"
+                                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
+                                        Text="{Binding QueueOrder}" />
+                                </Border>
+                            </StackPanel>
 
                             <!-- Conteúdo -->
                             <Grid Grid.Row="0">
@@ -341,18 +491,18 @@
                                     TextTrimming="None"
                                     TextWrapping="Wrap"
                                     Visibility="{Binding ShowsTextPreview, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
-                                <!-- RF-P4.01: a thumbnail ja e decodificada perto do tamanho
-                                     de exibicao (DecodePixelWidth no conversor), entao o filtro
-                                     de alta qualidade so custa tempo por frame de scroll. -->
+                                <!-- the thumbnail is decoded off the UI thread close to the
+                                     drawn size, so the high quality filter would only cost
+                                     time per scroll frame -->
                                 <Image
                                     MaxHeight="96"
                                     HorizontalAlignment="Left"
                                     RenderOptions.BitmapScalingMode="LowQuality"
-                                    Source="{Binding ThumbSource, Mode=OneTime, Converter={StaticResource PathToThumbnail}}"
+                                    Source="{Binding Thumbnail}"
                                     Stretch="Uniform"
                                     StretchDirection="DownOnly"
                                     Visibility="{Binding IsImage, Converter={StaticResource BoolToVisibility}}" />
-                                <!-- RF-F4.05: GIF mostra o primeiro frame e anima só com o mouse sobre o card -->
+                                <!-- GIF mostra o primeiro frame e anima só com o mouse sobre o card -->
                                 <controls:HoverGifPlayer
                                     MaxHeight="96"
                                     HorizontalAlignment="Left"
@@ -361,7 +511,7 @@
                                     StretchDirection="DownOnly"
                                     Visibility="{Binding IsGifMedia, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
                                 <!-- MP4: glifo de vídeo como placeholder, sem decode de vídeo -->
-                                <!-- RF-P4.01: 40 px esta acima da faixa onde Display ajuda; volta para Ideal -->
+                                <!-- 40 px esta acima da faixa onde Display ajuda; volta para Ideal -->
                                 <TextBlock
                                     HorizontalAlignment="Left"
                                     VerticalAlignment="Center"
@@ -388,6 +538,15 @@
                                         VerticalAlignment="Center"
                                         Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                         Text="{Binding MetaLine, Mode=OneTime}" />
+                                    <TextBlock
+                                        Margin="6,0,0,0"
+                                        FontFamily="Segoe Fluent Icons"
+                                        FontSize="10"
+                                        VerticalAlignment="Center"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        Text="&#xE72E;"
+                                        ToolTip="{DynamicResource Loc.SecretBadge}"
+                                        Visibility="{Binding IsSecret, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
                                     <TextBlock
                                         Margin="6,0,0,0"
                                         FontFamily="Segoe Fluent Icons"
@@ -430,8 +589,8 @@
             Grid.Row="3"
             HorizontalAlignment="Center"
             VerticalAlignment="Center"
-            Visibility="{Binding IsEmpty, Converter={StaticResource BoolToVisibility}}">
-            <!-- RF-P4.01: glifo de 32 px no limite da faixa util de Display; volta para Ideal -->
+            Visibility="{Binding ShowEmptyHistory, Converter={StaticResource BoolToVisibility}}">
+            <!-- glifo de 32 px no limite da faixa util de Display; volta para Ideal -->
             <TextBlock
                 FontFamily="Segoe Fluent Icons"
                 FontSize="32"
@@ -475,13 +634,288 @@
             </Border>
         </Grid>
 
-        <!-- Rodapé -->
+        <!-- Aba de snippets: lista + editor inline -->
+        <Grid x:Name="SnippetsPanel" Grid.Row="3" Visibility="Collapsed">
+            <Grid Visibility="{Binding IsSnippetEditing, Converter={StaticResource InverseBoolToVisibility}}">
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="*" />
+                </Grid.RowDefinitions>
+                <Button
+                    x:Name="NewSnippetButton"
+                    Grid.Row="0"
+                    Margin="4,0,4,8"
+                    HorizontalAlignment="Left"
+                    Padding="8,5"
+                    Style="{StaticResource CardActionButton}"
+                    Command="{Binding NewSnippetCommand}">
+                    <StackPanel Orientation="Horizontal">
+                        <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" FontFamily="Segoe Fluent Icons" FontSize="12"
+                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" Text="&#xE710;" />
+                        <TextBlock FontSize="12" Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                   Text="{DynamicResource Loc.SnippetNew}" />
+                    </StackPanel>
+                </Button>
+                <ListBox
+                    x:Name="SnippetsList"
+                    Grid.Row="1"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    FocusVisualStyle="{x:Null}"
+                    HorizontalContentAlignment="Stretch"
+                    ItemContainerStyle="{StaticResource SnippetItemStyle}"
+                    ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                    VirtualizingPanel.IsVirtualizing="True"
+                    VirtualizingPanel.ScrollUnit="Pixel">
+                    <ListBox.ItemTemplate>
+                        <DataTemplate DataType="{x:Type vm:SnippetViewModel}">
+                            <Border
+                                Padding="12,10"
+                                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                                BorderThickness="1"
+                                CornerRadius="4">
+                                <Grid>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <StackPanel Grid.Row="0" Orientation="Horizontal">
+                                        <TextBlock FontSize="13" FontWeight="SemiBold" MaxWidth="190" TextTrimming="CharacterEllipsis"
+                                                   Text="{Binding Name, Mode=OneTime}" />
+                                        <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" FontSize="11"
+                                                   Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                                   Text="{Binding Alias, Mode=OneTime}"
+                                                   Visibility="{Binding HasAlias, Mode=OneTime, Converter={StaticResource BoolToVisibility}}" />
+                                    </StackPanel>
+                                    <StackPanel Grid.Row="0" HorizontalAlignment="Right" Orientation="Horizontal">
+                                        <Button Click="OnSnippetCopyClick" Style="{StaticResource CardActionButton}" ToolTip="{DynamicResource Loc.SnippetCopyTooltip}">
+                                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="12" Text="&#xE8C8;" />
+                                        </Button>
+                                        <Button Click="OnSnippetEditClick" Style="{StaticResource CardActionButton}" ToolTip="{DynamicResource Loc.SnippetEditTooltip}">
+                                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="12" Text="&#xE70F;" />
+                                        </Button>
+                                        <Button Click="OnSnippetDeleteClick" Style="{StaticResource CardActionButton}" ToolTip="{DynamicResource Loc.MenuDelete}">
+                                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="12" Text="&#xE74D;" />
+                                        </Button>
+                                    </StackPanel>
+                                    <TextBlock
+                                        Grid.Row="1"
+                                        Margin="0,4,0,0"
+                                        MaxHeight="34"
+                                        FontSize="12"
+                                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                        Text="{Binding Preview, Mode=OneTime}"
+                                        TextTrimming="CharacterEllipsis"
+                                        TextWrapping="Wrap" />
+                                </Grid>
+                            </Border>
+                        </DataTemplate>
+                    </ListBox.ItemTemplate>
+                </ListBox>
+                <StackPanel
+                    Grid.Row="1"
+                    HorizontalAlignment="Center"
+                    VerticalAlignment="Center"
+                    Visibility="{Binding IsSnippetsEmpty, Converter={StaticResource BoolToVisibility}}">
+                    <TextBlock
+                        FontFamily="Segoe Fluent Icons"
+                        FontSize="32"
+                        TextOptions.TextFormattingMode="Ideal"
+                        HorizontalAlignment="Center"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="&#xE943;" />
+                    <TextBlock
+                        Margin="0,8,0,0"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="{DynamicResource Loc.SnippetsEmpty}" />
+                </StackPanel>
+            </Grid>
+
+            <!-- Editor inline -->
+            <ScrollViewer
+                VerticalScrollBarVisibility="Auto"
+                Visibility="{Binding IsSnippetEditing, Converter={StaticResource BoolToVisibility}}">
+                <StackPanel Margin="4,0,4,0">
+                    <TextBlock Margin="0,0,0,4" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.SnippetNameLabel}" />
+                    <ui:TextBox x:Name="SnippetNameBox" Text="{Binding SnippetName, UpdateSourceTrigger=PropertyChanged}" MaxLength="200" />
+                    <TextBlock Margin="0,10,0,4" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.SnippetAliasLabel}" />
+                    <ui:TextBox Text="{Binding SnippetAlias, UpdateSourceTrigger=PropertyChanged}" MaxLength="64"
+                                PlaceholderText=";sig" />
+                    <TextBlock Margin="0,10,0,4" FontSize="12" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.SnippetContentLabel}" />
+                    <ui:TextBox
+                        MinHeight="120"
+                        MaxHeight="190"
+                        AcceptsReturn="True"
+                        TextWrapping="Wrap"
+                        VerticalScrollBarVisibility="Auto"
+                        Text="{Binding SnippetContent, UpdateSourceTrigger=PropertyChanged}" />
+                    <TextBlock Margin="0,6,0,0" FontSize="11" TextWrapping="Wrap"
+                               Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                               Text="{DynamicResource Loc.SnippetPlaceholdersHint}" />
+                    <TextBlock Margin="0,6,0,0" FontSize="12" TextWrapping="Wrap"
+                               Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                               Text="{Binding SnippetError}"
+                               Visibility="{Binding HasSnippetError, Converter={StaticResource BoolToVisibility}}" />
+                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                        <ui:Button Appearance="Primary" Padding="14,6" Content="{DynamicResource Loc.SnippetSave}"
+                                   Command="{Binding SaveSnippetCommand}" />
+                        <ui:Button Margin="8,0,0,0" Padding="14,6" Content="{DynamicResource Loc.SnippetCancel}"
+                                   Command="{Binding CancelSnippetEditCommand}" />
+                        <ui:Button Margin="8,0,0,0" Padding="14,6" Content="{DynamicResource Loc.MenuDelete}"
+                                   Command="{Binding DeleteSnippetCommand}"
+                                   Visibility="{Binding CanDeleteSnippet, Converter={StaticResource BoolToVisibility}}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+        </Grid>
+
+        <!-- Preview (Espaco): texto inteiro, imagem 1:1 com zoom, OCR e metadados -->
+        <Grid
+            x:Name="PreviewPanel"
+            Grid.Row="3"
+            Visibility="{Binding IsPreviewOpen, Converter={StaticResource BoolToVisibility}}">
+            <Grid.RowDefinitions>
+                <RowDefinition Height="Auto" />
+                <RowDefinition Height="2" />
+                <RowDefinition Height="*" />
+                <RowDefinition Height="Auto" />
+            </Grid.RowDefinitions>
+
+            <Grid Grid.Row="0" Margin="4,0,4,6">
+                <StackPanel HorizontalAlignment="Left" VerticalAlignment="Center" Margin="0,0,150,0">
+                    <TextBlock FontSize="13" FontWeight="SemiBold" Text="{Binding PreviewTitle}" />
+                    <TextBlock FontSize="11" TextTrimming="CharacterEllipsis"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{Binding PreviewMeta}" ToolTip="{Binding PreviewMeta}" />
+                </StackPanel>
+                <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
+                    <StackPanel Orientation="Horizontal" Visibility="{Binding HasPreviewImage, Converter={StaticResource BoolToVisibility}}">
+                        <Button x:Name="PreviewFitButton" Style="{StaticResource CardActionButton}" Padding="6,4" ToolTip="{DynamicResource Loc.PreviewFit}">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE9A6;" />
+                        </Button>
+                        <Button x:Name="PreviewActualButton" Style="{StaticResource CardActionButton}" Padding="6,4" ToolTip="{DynamicResource Loc.PreviewActual}">
+                            <TextBlock FontSize="12" FontWeight="SemiBold" Text="1:1" />
+                        </Button>
+                        <Button x:Name="PreviewZoomOutButton" Style="{StaticResource CardActionButton}" Padding="6,4" ToolTip="{DynamicResource Loc.PreviewZoomOut}">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE71F;" />
+                        </Button>
+                        <Button x:Name="PreviewZoomInButton" Style="{StaticResource CardActionButton}" Padding="6,4" ToolTip="{DynamicResource Loc.PreviewZoomIn}">
+                            <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE8A3;" />
+                        </Button>
+                    </StackPanel>
+                    <Button x:Name="PreviewCloseButton" Style="{StaticResource CardActionButton}" Padding="6,4" ToolTip="{DynamicResource Loc.PreviewClose}">
+                        <TextBlock FontFamily="Segoe Fluent Icons" FontSize="12" Text="&#xE711;" />
+                    </Button>
+                </StackPanel>
+            </Grid>
+
+            <ProgressBar
+                Grid.Row="1"
+                IsIndeterminate="True"
+                Visibility="{Binding PreviewLoading, Converter={StaticResource BoolToVisibility}}" />
+
+            <Border
+                Grid.Row="2"
+                Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="4">
+                <Grid>
+                    <ScrollViewer
+                        x:Name="PreviewImageScroll"
+                        HorizontalScrollBarVisibility="Auto"
+                        VerticalScrollBarVisibility="Auto"
+                        Visibility="{Binding HasPreviewImage, Converter={StaticResource BoolToVisibility}}">
+                        <Image
+                            x:Name="PreviewImageElement"
+                            HorizontalAlignment="Left"
+                            VerticalAlignment="Top"
+                            RenderOptions.BitmapScalingMode="HighQuality"
+                            Source="{Binding PreviewImage}"
+                            Stretch="None" />
+                    </ScrollViewer>
+                    <TextBox
+                        x:Name="PreviewTextBox"
+                        Padding="8"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        FontSize="13"
+                        IsReadOnly="True"
+                        TextWrapping="Wrap"
+                        HorizontalScrollBarVisibility="Disabled"
+                        VerticalScrollBarVisibility="Auto"
+                        Text="{Binding PreviewBody, Mode=OneWay}"
+                        Visibility="{Binding HasPreviewImage, Converter={StaticResource InverseBoolToVisibility}}" />
+                </Grid>
+            </Border>
+
+            <StackPanel Grid.Row="3" Margin="0,6,0,0">
+                <TextBlock Margin="4,0,4,4" FontSize="11" TextWrapping="Wrap"
+                           Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                           Text="{Binding PreviewNote}"
+                           Visibility="{Binding HasPreviewNote, Converter={StaticResource BoolToVisibility}}" />
+                <Border
+                    Padding="8,6"
+                    Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                    BorderThickness="1"
+                    CornerRadius="4"
+                    Visibility="{Binding HasPreviewOcr, Converter={StaticResource BoolToVisibility}}">
+                    <Grid>
+                        <Grid.RowDefinitions>
+                            <RowDefinition Height="Auto" />
+                            <RowDefinition Height="Auto" />
+                        </Grid.RowDefinitions>
+                        <TextBlock Grid.Row="0" VerticalAlignment="Center" FontSize="11" FontWeight="SemiBold"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Text="{DynamicResource Loc.PreviewOcrTitle}" />
+                        <Button Grid.Row="0" HorizontalAlignment="Right" Style="{StaticResource CardActionButton}"
+                                Command="{Binding CopyPreviewOcrCommand}">
+                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.PreviewOcrCopy}" />
+                        </Button>
+                        <TextBox
+                            Grid.Row="1"
+                            MaxHeight="84"
+                            Background="Transparent"
+                            BorderThickness="0"
+                            FontSize="12"
+                            IsReadOnly="True"
+                            TextWrapping="Wrap"
+                            VerticalScrollBarVisibility="Auto"
+                            Text="{Binding PreviewOcr, Mode=OneWay}" />
+                    </Grid>
+                </Border>
+            </StackPanel>
+        </Grid>
+
+        <!-- Rodape -->
         <Grid Grid.Row="4" Margin="4,6,4,2">
             <TextBlock
                 FontSize="11"
                 VerticalAlignment="Center"
+                Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                Text="{Binding StatusText}" />
+            <TextBlock
+                x:Name="FooterHintsText"
+                FontSize="11"
+                VerticalAlignment="Center"
                 Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                Text="{DynamicResource Loc.FooterHints}" />
+                Text="{DynamicResource Loc.FooterHints}">
+                <TextBlock.Style>
+                    <Style TargetType="TextBlock">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding StatusText}" Value="">
+                                <Setter Property="Visibility" Value="Visible" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </TextBlock.Style>
+            </TextBlock>
             <ui:Button
                 x:Name="ClearAllButton"
                 HorizontalAlignment="Right"

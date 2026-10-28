@@ -49,11 +49,37 @@ public sealed class ScreenCaptureService
     }
 
     /// <summary>Crops a frozen frame (rect in physical pixels of the frame).</summary>
+    /// <remarks>
+    /// Copies the pixels out instead of a CroppedBitmap: that one keeps the whole
+    /// monitor frame alive for as long as the crop lives (editor, clipboard writer).
+    /// </remarks>
     public static BitmapSource Crop(BitmapSource frame, Int32Rect rect)
     {
-        var cropped = new CroppedBitmap(frame, rect);
-        cropped.Freeze();
-        return cropped;
+        var bpp = (frame.Format.BitsPerPixel + 7) / 8;
+        var stride = rect.Width * bpp;
+        var pixels = new byte[stride * rect.Height];
+        frame.CopyPixels(rect, pixels, stride, 0);
+        var copy = BitmapSource.Create(rect.Width, rect.Height, frame.DpiX, frame.DpiY,
+            frame.Format, frame.Palette, pixels, stride);
+        copy.Freeze();
+        return copy;
+    }
+
+    /// <summary>
+    /// Reads one pixel of a 32 bpp frame (BGRX/BGRA) into the caller's 4 byte buffer,
+    /// so a mouse move doesn't allocate.
+    /// </summary>
+    public static bool TryReadPixel(BitmapSource frame, int x, int y, byte[] buffer, out byte r, out byte g, out byte b)
+    {
+        r = g = b = 0;
+        if (frame.Format.BitsPerPixel != 32 || buffer.Length < 4
+            || x < 0 || y < 0 || x >= frame.PixelWidth || y >= frame.PixelHeight)
+            return false;
+        frame.CopyPixels(new Int32Rect(x, y, 1, 1), buffer, 4, 0);
+        b = buffer[0];
+        g = buffer[1];
+        r = buffer[2];
+        return true;
     }
 
     /// <summary>Encodes as PNG.</summary>

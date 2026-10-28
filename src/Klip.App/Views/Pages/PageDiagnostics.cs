@@ -4,7 +4,7 @@ using Klip.App.Services;
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// ADR-S.03: instrumentacao que prova o ciclo de vida das paginas. Com as paginas
+/// instrumentacao que prova o ciclo de vida das paginas. Com as paginas
 /// registradas como <c>AddSingleton</c> e um <c>INavigationViewPageProvider</c>
 /// ligado, cada pagina tem que ser construida UMA unica vez - navegar de ida e
 /// volta nao pode reconstruir nada.

@@ -6,13 +6,13 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- RF-S.03: sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
          DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
          template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
     <StackPanel MaxWidth="680">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionHotkeys}" />
 
-        <!-- RF-S.06: linha de status PROPRIA da pagina. As 10 mensagens de
+        <!-- linha de status PROPRIA da pagina. As 10 mensagens de
              resultado (takeover e captura de atalho) iam para o StatusText
              compartilhado da MainWindow e eram apagadas pelo RefreshStatus() da
              linha seguinte antes de o usuario ler qualquer uma delas. Aqui nada
@@ -86,7 +86,7 @@
             </Button>
         </controls:SettingsCard>
 
-        <!-- RF-F3.05: este atalho so e registrado DURANTE a gravacao, entao
+        <!-- este atalho so e registrado DURANTE a gravacao, entao
              salva-lo nao chama ApplyHotkeys (ver HotkeysPage.xaml.cs). -->
         <controls:SettingsCard
             Title="{DynamicResource Loc.StopRecordingHotkeyTitle}"
@@ -115,10 +115,142 @@
             </Button>
         </controls:SettingsCard>
 
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.HotkeyCaptureTextTitle}"
+            Description="{DynamicResource Loc.HotkeyOptionalHint}"
+            Icon="&#xE8D2;">
+            <StackPanel Orientation="Horizontal">
+                <Button
+                    x:Name="TextHotkeyButton"
+                    MinWidth="140"
+                    Padding="8,6"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    Focusable="True">
+                    <Grid>
+                        <controls:KeyChord x:Name="TextHotkeyChord" HorizontalAlignment="Center" />
+                        <TextBlock
+                            x:Name="TextHotkeyNotSet"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyNotSet}" />
+                        <TextBlock
+                            x:Name="TextHotkeyPrompt"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyPressKeys}"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </Button>
+                <Button
+                    x:Name="TextHotkeyClear"
+                    Margin="6,0,0,0"
+                    Padding="8,6"
+                    ToolTip="{DynamicResource Loc.HotkeyClear}"
+                    Visibility="Collapsed">
+                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.HotkeyRepeatRegionTitle}"
+            Description="{DynamicResource Loc.HotkeyOptionalHint}"
+            Icon="&#xE72C;">
+            <StackPanel Orientation="Horizontal">
+                <Button
+                    x:Name="RepeatHotkeyButton"
+                    MinWidth="140"
+                    Padding="8,6"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    Focusable="True">
+                    <Grid>
+                        <controls:KeyChord x:Name="RepeatHotkeyChord" HorizontalAlignment="Center" />
+                        <TextBlock
+                            x:Name="RepeatHotkeyNotSet"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyNotSet}" />
+                        <TextBlock
+                            x:Name="RepeatHotkeyPrompt"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyPressKeys}"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </Button>
+                <Button
+                    x:Name="RepeatHotkeyClear"
+                    Margin="6,0,0,0"
+                    Padding="8,6"
+                    ToolTip="{DynamicResource Loc.HotkeyClear}"
+                    Visibility="Collapsed">
+                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.HotkeyRecordVideoTitle}"
+            Description="{DynamicResource Loc.HotkeyOptionalHint}"
+            Icon="&#xE714;">
+            <StackPanel Orientation="Horizontal">
+                <Button
+                    x:Name="VideoHotkeyButton"
+                    MinWidth="140"
+                    Padding="8,6"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}"
+                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
+                    BorderThickness="1"
+                    Cursor="Hand"
+                    Focusable="True">
+                    <Grid>
+                        <controls:KeyChord x:Name="VideoHotkeyChord" HorizontalAlignment="Center" />
+                        <TextBlock
+                            x:Name="VideoHotkeyNotSet"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyNotSet}" />
+                        <TextBlock
+                            x:Name="VideoHotkeyPrompt"
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                            Text="{DynamicResource Loc.HotkeyPressKeys}"
+                            Visibility="Collapsed" />
+                    </Grid>
+                </Button>
+                <Button
+                    x:Name="VideoHotkeyClear"
+                    Margin="6,0,0,0"
+                    Padding="8,6"
+                    ToolTip="{DynamicResource Loc.HotkeyClear}"
+                    Visibility="Collapsed">
+                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
+                </Button>
+            </StackPanel>
+        </controls:SettingsCard>
+
         <!-- ============ Atalhos nativos do Windows (registro) ============ -->
         <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionNativeHotkeys}" />
 
-        <!-- RF-S.08: a terceira linha (Status) e preenchida em codigo, depois de
+        <!-- a terceira linha (Status) e preenchida em codigo, depois de
              uma leitura do registro em Task.Run - nunca sincronamente na
              abertura da pagina. Ate a leitura voltar mostra o placeholder. -->
         <controls:SettingsCard
@@ -157,11 +289,7 @@
         </controls:SettingsCard>
 
         <!-- ============ Atalhos do painel (so referencia) ============ -->
-        <!-- Q-S.4: Loc.ShortcutClick/CtrlClick/AltClick/ShiftClick estavam
-             declaradas e sem uso porque a tabela antiga (2 colunas: keycaps |
-             descricao) nao tinha onde por o rotulo. No formato de cartao elas
-             sao exatamente o Title que faltava, com a frase indo para o
-             Description e os keycaps no lugar do controle. -->
+        <!-- Loc.ShortcutClick/CtrlClick/AltClick/ShiftClick estavam declaradas e sem uso porque a tabela antiga (2 colunas: keycaps | descricao) nao tinha onde por o rotulo. No formato de cartao elas sao exatamente o Title que faltava, com a frase indo para o Description e os keycaps no lugar do controle. -->
         <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionFlyoutShortcuts}" />
 
         <controls:SettingsCard

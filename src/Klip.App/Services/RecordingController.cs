@@ -25,13 +25,13 @@ public enum RecordingState
     PreRecord,   // legado: painel de audio do MP4 (hoje as opcoes vem do submenu do overlay)
     Countdown,   // 3 s sobre a regiao
     Recording,
-    Paused,      // so MP4 (RF-F3.13)
-    Finalizing,  // Convertendo (GIF) / Finalizando (MP4, RF-F3.16)
+    Paused,      // so MP4
+    Finalizing,  // Convertendo (GIF) / Finalizando (MP4)
 }
 
 /// <summary>
 /// Orquestra a UX de gravacao: contagem, borda + toolbar (excluidas da
-/// captura), hotkey global de parar (RF-F3.05, so durante a sessao), fluxo
+/// captura), hotkey global de parar (so durante a sessao), fluxo
 /// GIF completo (engine CFR -> GifFramePipeline -> GifFrameBuffer ->
 /// GifEncoder -> arquivo -> historico) e fluxo MP4 via IMp4Recorder. As
 /// opcoes (FPS/escala do GIF; audio/bitrate do MP4) vem de AppSettings,
@@ -49,10 +49,10 @@ public sealed class RecordingController(
     Func<IAudioDeviceEnumerator> audioEnumeratorFactory,
     Func<IMp4Recorder> mp4RecorderFactory)
 {
-    // RF-F4.04: teto de retencao em RAM (~500 MB) antes do spill em disco
+    // teto de retencao em RAM (~500 MB) antes do spill em disco
     private const long GifMaxRamBytes = 500L * 1024 * 1024;
 
-    // RF-F4.04: teto total (RAM + spill); atingiu -> conclui com o gravado
+    // teto total (RAM + spill); atingiu -> conclui com o gravado
     private const long GifMaxTotalBytes = 4L * 1024 * 1024 * 1024;
 
     private RecordingState _state = RecordingState.Idle;
@@ -85,7 +85,7 @@ public sealed class RecordingController(
     // gesto pausar/retomar em curso: ignora novos cliques ate o await concluir
     private bool _pauseBusy;
 
-    // finalizacao em curso (RF-F3.16): permite o shutdown aguardar o StopAsync
+    // finalizacao em curso: permite o shutdown aguardar o StopAsync
     private Task? _stopTask;
 
     // Bug 2a: avisos nao-fatais do Mp4Recorder (diagnostico de drops, falha de
@@ -101,7 +101,7 @@ public sealed class RecordingController(
 
     public bool IsActive => _state != RecordingState.Idle;
 
-    /// <summary>Sessao com conteudo em risco se o app fechar agora (RF-F3.16).</summary>
+    /// <summary>Sessao com conteudo em risco se o app fechar agora.</summary>
     public bool IsBusy => _state is RecordingState.Recording or RecordingState.Paused or RecordingState.Finalizing;
 
     /// <summary>Tempo gravado (exclui pausas no MP4, pelo proprio recorder).</summary>
@@ -111,11 +111,11 @@ public sealed class RecordingController(
 
     /// <summary>
     /// Toast na bandeja: (mensagem, pasta para abrir no clique ou null,
-    /// arquivo para abrir no editor de midia no clique ou null - RF-F5.16).
+    /// arquivo para abrir no editor de midia no clique ou null).
     /// </summary>
     public event Action<string, string?, string?>? RecordingToast;
 
-    /// <summary>Estado/timer mudou - o tray atualiza tooltip (RF-F3.04).</summary>
+    /// <summary>Estado/timer mudou - o tray atualiza tooltip.</summary>
     public event Action? StateChanged;
 
     /// <summary>
@@ -144,7 +144,7 @@ public sealed class RecordingController(
             _ = RunGifAsync(region);
     }
 
-    /// <summary>Pedido de parar vindo do hotkey global (RF-F3.05) ou do tray (RF-F3.04).</summary>
+    /// <summary>Pedido de parar vindo do hotkey global ou do tray.</summary>
     public void RequestStop()
     {
         switch (_state)
@@ -159,10 +159,10 @@ public sealed class RecordingController(
         }
     }
 
-    // ----- MP4 (spec F3) -----
+    // ----- MP4 -----
 
     // Fluxo antigo (fallback): a etapa RecordingSetupWindow (painel de audio
-    // pre-gravacao, RF-F3.02) foi substituida pelo submenu inline do overlay
+    // pre-gravacao) foi substituida pelo submenu inline do overlay
     // (UX submenu de gravacao). A classe RecordingSetupWindow permanece no
     // repo; para reativar o painel, roteie Start() para um ShowSetupAsync que
     // enumere microfones fora da UI thread e chame RunMp4Async no Iniciar.
@@ -194,44 +194,56 @@ public sealed class RecordingController(
                     }
                 });
 
-            if (!await RunCountdownAsync(region))
-                return; // contagem cancelada (RequestStop/saida do app)
-
-            var micIds = await micTask;
-            var systemAudio = settings.Current.Mp4CaptureSystemAudio;
-
             var folder = RecordingPaths.Resolve(settings.Current.RecordingsFolder);
-            Directory.CreateDirectory(folder); // RF-F3.06: criada sob demanda
+            Directory.CreateDirectory(folder); // criada sob demanda
             var path = RecordingPaths.BuildOutputPath(folder, DateTime.Now, "mp4");
+            var systemAudio = settings.Current.Mp4CaptureSystemAudio;
+            var s = settings.Current;
 
             var recorder = mp4RecorderFactory();
             _recorder = recorder;
             _pendingWarnings.Clear(); // aviso de sessao anterior nunca vaza
-            // RF-F3.14/RF-F3.15 + Bug 2a: avisos nao-fatais NAO viram toast
-            // imediato - ficam na fila e saem consolidados no toast final
+            // warnings do recorder NAO viram toast imediato - ficam na fila e saem
+            // consolidados no toast final
             recorder.Warning += message => Post(() => _pendingWarnings.Add(message));
             recorder.Failed += failure => Post(() => OnRecorderFailed(failure));
-            // RF-F3.15: parada espontanea com arquivo valido (ex.: disco cheio)
+            // parada espontanea com arquivo valido (ex.: disco cheio)
             // conclui a sessao como um stop manual - sem prender a maquina de estados
             recorder.AutoStopped += result => Post(() => OnRecorderAutoStopped(result));
 
-            await recorder.StartAsync(new Mp4RecordingOptions
+            // warm up under the countdown: child process, d3d device and encoder come up
+            // while the 3 numbers show, so the first frame does not pay for them
+            var optionsTask = BuildMp4OptionsAsync(micTask, region, path, systemAudio);
+            var prepareTask = PrepareRecorderAsync(recorder, optionsTask);
+
+            if (!await RunCountdownAsync(region))
             {
-                Region = region,
-                OutputPath = path,
-                Fps = 30,
-                BitrateKbps = settings.Current.Mp4BitrateKbps, // 0 = preset automatico (RF-F3.09)
-                FragmentedMp4 = true,                          // RF-F3.10
-                CaptureCursor = true,
-                CaptureSystemAudio = systemAudio,
-                MicrophoneDeviceIds = micIds,
-            });
+                // contagem cancelada (RequestStop/saida do app): derruba o que subiu
+                try
+                {
+                    await prepareTask;
+                }
+                catch (Exception ex)
+                {
+                    StartupLog.WriteVerbose("RecordingPrepareCancelled: " + ex.Message);
+                }
+
+                await DisposeRecorderAsync();
+                return;
+            }
+
+            await prepareTask;
+            var options = await optionsTask;
+            var micIds = options.MicrophoneDeviceIds;
+            await recorder.StartAsync(options);
 
             BeginRecordingUi(region,
                 canPause: true,
                 showMicIndicator: micIds.Count > 0,
-                showSystemIndicator: systemAudio);
+                showSystemIndicator: systemAudio,
+                cursorVisible: s.Mp4ShowCursor);
             SetState(RecordingState.Recording);
+            NotifyEncoderFallback(recorder.ActivePlan);
         }
         catch (Exception ex)
         {
@@ -241,6 +253,53 @@ public sealed class RecordingController(
             await DisposeRecorderAsync();
             TeardownRecordingUi();
             SetState(RecordingState.Idle);
+        }
+    }
+
+    private async Task<Mp4RecordingOptions> BuildMp4OptionsAsync(
+        Task<IReadOnlyList<string>> micTask, RecordingRegion region, string path, bool systemAudio)
+    {
+        var micIds = await micTask;
+        var s = settings.Current;
+        return new Mp4RecordingOptions
+        {
+            Region = region,
+            OutputPath = path,
+            Fps = VideoEncodingMath.NormalizeFps(s.Mp4Fps),
+            Quality = VideoEncodingMath.ParseQuality(s.Mp4Quality),
+            OutputHeight = VideoEncodingMath.ParseTargetHeight(s.Mp4OutputResolution),
+            Codec = VideoEncodingMath.ParseCodec(s.Mp4Codec),
+            BitrateKbps = HiddenBitrateOverride(s.Mp4BitrateKbps),
+            FragmentedMp4 = true,
+            CaptureCursor = s.Mp4ShowCursor,
+            CaptureSystemAudio = systemAudio,
+            MicrophoneDeviceIds = micIds,
+        };
+    }
+
+    private static async Task PrepareRecorderAsync(IMp4Recorder recorder, Task<Mp4RecordingOptions> optionsTask) =>
+        await recorder.PrepareAsync(await optionsTask);
+
+    // the old settings page offered 5/8/16 Mbps; those leftovers would silently beat the
+    // new quality presets, so only a hand edited value still counts as an override
+    private static int HiddenBitrateOverride(int kbps) =>
+        kbps is 5000 or 8000 or 16000 ? 0 : Math.Max(0, kbps);
+
+    /// <summary>Tells right away when the gpu could not take the job (software encoder or codec missing).</summary>
+    private void NotifyEncoderFallback(VideoEncodingPlan? plan)
+    {
+        if (plan is null)
+            return;
+        if (plan.SoftwareEncoder)
+        {
+            RecordingToast?.Invoke(
+                string.Format(Localization.Loc.NotifyRecordingSoftwareEncoder, plan.Fps), null, null);
+        }
+        else if (plan.CodecFellBack)
+        {
+            RecordingToast?.Invoke(
+                string.Format(Localization.Loc.NotifyRecordingCodecFallback, Views.Pages.RecordingPage.CodecName(plan.Codec)),
+                null, null);
         }
     }
 
@@ -258,7 +317,7 @@ public sealed class RecordingController(
 
     /// <summary>
     /// O recorder parou por conta propria com arquivo valido (ex.: guarda-corpo
-    /// de disco, RF-F3.15): mesmo fluxo de conclusao do stop manual (fecha
+    /// de disco): mesmo fluxo de conclusao do stop manual (fecha
     /// borda/toolbar, desregistra hotkey, ingest + toast), sem chamar
     /// StopAsync do recorder de novo. Idempotente com o stop manual: se a
     /// finalizacao ja comecou (Finalizing), nao finaliza duas vezes.
@@ -330,7 +389,7 @@ public sealed class RecordingController(
         }
     }
 
-    // ----- GIF (spec F4) -----
+    // ----- GIF -----
 
     private async Task RunGifAsync(RecordingRegion region)
     {
@@ -340,7 +399,7 @@ public sealed class RecordingController(
                 return; // contagem cancelada (RequestStop/saida do app)
 
             var fps = settings.Current.GifFps is 10 or 15 or 20 ? settings.Current.GifFps : 15;
-            _gifDelayMs = GifRecordingMath.FrameDelayMs(fps); // Q-F4.2: delay fixo, FPS efetivo na UI
+            _gifDelayMs = GifRecordingMath.FrameDelayMs(fps); // delay fixo, FPS efetivo na UI
             _gifScalePercent = settings.Current.GifScalePercent is 50 or 75 ? settings.Current.GifScalePercent : 100;
             _gifLimitHit = false;
 
@@ -349,7 +408,7 @@ public sealed class RecordingController(
 
             // pipeline pooled: o handler do frame so copia/enfileira; o worker
             // faz dedupe/spill e calcula o delay real pelo timestamp CFR -
-            // evita alocacao LOH por frame e pausas de GC no app (RF-F4.04)
+            // evita alocacao LOH por frame e pausas de GC no app
             var pipeline = new GifFramePipeline(_gifBuffer, _gifDelayMs, _gifScalePercent);
             pipeline.FrameRetained += OnGifFrameRetained;
             _gifPipeline = pipeline;
@@ -362,12 +421,12 @@ public sealed class RecordingController(
             _gifAccepting = true;
             await engine.StartAsync(region, new FrameCaptureOptions
             {
-                FixedFps = fps, // D-F4.4: GIF forca CFR
+                FixedFps = fps, // GIF forca CFR
                 CaptureCursor = true,
             });
 
             _gifWatch = System.Diagnostics.Stopwatch.StartNew();
-            BeginRecordingUi(region, canPause: false, showMicIndicator: false, showSystemIndicator: false);
+            BeginRecordingUi(region, canPause: false, showMicIndicator: false, showSystemIndicator: false, cursorVisible: true);
             SetState(RecordingState.Recording);
         }
         catch (Exception ex)
@@ -388,7 +447,7 @@ public sealed class RecordingController(
     /// <summary>
     /// Chega na thread do loop CFR do engine (sequencial). frame.Bgra e
     /// REUTILIZADO pelo engine - so vale durante o handler: o pipeline copia
-    /// (com downscale RF-F4.03) para um buffer pooled ainda aqui e o resto
+    /// (com downscale) para um buffer pooled ainda aqui e o resto
     /// (dedupe, spill, retencao) roda no worker dedicado.
     /// </summary>
     private void OnGifFrame(CpuFrame frame)
@@ -406,7 +465,7 @@ public sealed class RecordingController(
     }
 
     /// <summary>
-    /// Thread do worker do pipeline. RF-F4.04: teto total atingido -> conclui
+    /// Thread do worker do pipeline: teto total atingido -> conclui
     /// automaticamente com o gravado (mesmo padrao do scroll capture: nunca
     /// descartar conteudo).
     /// </summary>
@@ -420,7 +479,7 @@ public sealed class RecordingController(
         }
     }
 
-    /// <summary>RF-F2.08: falha do motor conclui com o que foi retido (nunca descarta).</summary>
+    /// <summary>falha do motor conclui com o que foi retido (nunca descarta).</summary>
     private void OnGifEngineFailed(FrameCaptureError error)
     {
         StartupLog.Write($"Gravacao GIF: engine falhou ({error.Kind}): {error.Message}");
@@ -435,7 +494,7 @@ public sealed class RecordingController(
     // ----- parada e finalizacao -----
 
     /// <summary>
-    /// RF-F3.16: finalizacao graciosa no encerramento do app. Para a sessao
+    /// finalizacao graciosa no encerramento do app. Para a sessao
     /// ativa (ou adota a finalizacao ja em curso) e aguarda: MP4 com teto de
     /// seguranca (o fMP4 preserva o que ja foi fragmentado se estourar), GIF
     /// ate o fim do encode (unico jeito de nao perder o buffer). Chamar na
@@ -476,7 +535,7 @@ public sealed class RecordingController(
             // dentro do try: se o ctor/Show falhar, o finally reseta o estado
             _progress = new RecordingProgressWindow(_kind == RecordingKind.Gif
                 ? Localization.Loc.RecordingConverting
-                : Localization.Loc.RecordingFinalizing); // RF-F3.16
+                : Localization.Loc.RecordingFinalizing);
             _progress.Show();
 
             if (_kind == RecordingKind.Mp4)
@@ -548,10 +607,10 @@ public sealed class RecordingController(
                 return;
 
             var folder = RecordingPaths.Resolve(settings.Current.RecordingsFolder);
-            Directory.CreateDirectory(folder); // RF-F3.06 (vale para GIF tambem)
+            Directory.CreateDirectory(folder); // (vale para GIF tambem)
             var path = RecordingPaths.BuildOutputPath(folder, DateTime.Now, "gif");
 
-            // encode two-pass fora da UI thread (RF-F4.07/08)
+            // encode two-pass fora da UI thread
             await Task.Run(() =>
             {
                 var frames = buffer.Snapshot();
@@ -570,9 +629,9 @@ public sealed class RecordingController(
     }
 
     /// <summary>
-    /// RF-F3.07/RF-F5.15/16: item no historico apontando para o arquivo + toast.
+    /// item no historico apontando para o arquivo + toast.
     /// MP4: o clique no toast abre o editor de midia (em vez da pasta).
-    /// GIF: alem do toast, abre o editor de midia automaticamente (RF-F4.01).
+    /// GIF: alem do toast, abre o editor de midia automaticamente.
     /// Bug 2b/2c: este metodo so roda APOS o StopAsync do recorder retornar
     /// (arquivo finalizado em disco), entao o toast de conclusao - o UNICO
     /// clicavel para abrir no editor - nunca aponta para um fMP4 em
@@ -610,7 +669,7 @@ public sealed class RecordingController(
                 string.Format(Localization.Loc.NotifyRecordingSaved, Path.GetFileName(path)) +
                 ". " + Localization.Loc.NotifyRecordingOpenFolder),
                 Path.GetDirectoryName(path), null);
-            // RF-F4.01: GIF recem-convertido abre direto no editor de midia
+            // GIF recem-convertido abre direto no editor de midia
             MediaEditorGateway.Open(path);
         }
         else
@@ -639,11 +698,11 @@ public sealed class RecordingController(
 
     // ----- UI da sessao (borda, toolbar, hotkey, timer) -----
 
-    private void BeginRecordingUi(RecordingRegion region, bool canPause, bool showMicIndicator, bool showSystemIndicator)
+    private void BeginRecordingUi(RecordingRegion region, bool canPause, bool showMicIndicator, bool showSystemIndicator, bool cursorVisible)
     {
         RegisterStopHotkey();
 
-        // RF-F3.04/RF-T2.08: modo reuniao (so MP4) - nada visivel; tray indica e para
+        // modo reuniao (so MP4) - nada visivel; tray indica e para
         var hidden = _kind == RecordingKind.Mp4 && settings.Current.HideRecordingBorder;
         if (!hidden)
         {
@@ -652,28 +711,27 @@ public sealed class RecordingController(
             _border = new RegionFrameWindow();
             _border.ShowAround(region.Left, region.Top, region.Width, region.Height);
 
-            // RF-T2.05: estado inicial dos toggles = opcoes da sessao (cursor
-            // sempre inicia capturado - CaptureCursor: true nos dois fluxos;
-            // mic/sistema iniciam ativos; borda inicia visivel)
+            // toggles start from the session options: cursor from the settings (mp4)
+            // or on (gif), mic/system on, border visible
             _toolbar = new RecordingToolbarWindow(new RecordingToolbarOptions
             {
                 CanPause = canPause,
                 ShowMicToggle = showMicIndicator,
                 ShowSystemToggle = showSystemIndicator,
-                CursorCaptureEnabled = true,
+                CursorCaptureEnabled = cursorVisible,
                 BorderVisible = true,
             });
             _toolbar.StopRequested += () => Observe(StopAsync());
             _toolbar.PauseToggled += OnPauseToggled;
-            // RF-T2.05: toggles ao vivo - mic/sistema no recorder (ganho no
+            // toggles ao vivo - mic/sistema no recorder (ganho no
             // mixer, captura nunca para); cursor no recorder (MP4) ou no
             // engine CFR da sessao GIF; borda = Hide/Show da moldura (nunca
-            // Close durante a sessao, RF-T2.04)
+            // Close durante a sessao)
             _toolbar.MicMuteToggled += muted => _recorder?.SetMicrophoneMuted(muted);
             _toolbar.SystemMuteToggled += muted => _recorder?.SetSystemAudioMuted(muted);
             _toolbar.CursorToggled += OnCursorToggled;
             _toolbar.BorderToggled += OnBorderToggled;
-            // RF-T2.02: fim do arraste -> persiste px fisicos ("x,y,w,h")
+            // fim do arraste -> persiste px fisicos ("x,y,w,h")
             _toolbar.PositionChanged += rect => settings.Update(s =>
                 s.RecordingToolbarPosition = RecordingToolbarWindow.FormatPosition(rect));
             _toolbar.ShowOutside(region, _monitorBounds, settings.Current.RecordingToolbarPosition);
@@ -685,13 +743,27 @@ public sealed class RecordingController(
         };
         _tick.Tick += (_, _) =>
         {
-            _toolbar?.UpdateElapsed(Elapsed);
+            var elapsed = Elapsed;
+            _toolbar?.UpdateElapsed(elapsed);
+            UpdateDropWarning(elapsed);
             StateChanged?.Invoke(); // tray atualiza o tooltip com o timer
         };
         _tick.Start();
     }
 
-    /// <summary>RF-T2.05/RF-M2.10: cursor ao vivo - MP4 via recorder, GIF via engine da sessao.</summary>
+    // more than 1% of frames lost: amber glyph on the toolbar. The first seconds are
+    // skipped, a single hiccup while the encoder warms up is not a trend
+    private void UpdateDropWarning(TimeSpan elapsed)
+    {
+        if (_toolbar is not { } toolbar || _kind != RecordingKind.Mp4 || _recorder is not { } recorder)
+            return;
+        double ratio = elapsed > TimeSpan.FromSeconds(3) ? recorder.DroppedFrameRatio : 0;
+        toolbar.SetDropWarning(ratio > 0.01
+            ? string.Format(Localization.Loc.RecordingDropsWarning, ratio.ToString("P1"))
+            : null);
+    }
+
+    /// <summary>Cursor ao vivo: MP4 via recorder, GIF via engine da sessao.</summary>
     private void OnCursorToggled(bool visible)
     {
         if (_kind == RecordingKind.Mp4)
@@ -700,7 +772,7 @@ public sealed class RecordingController(
             _gifEngine?.SetCursorCaptureEnabled(visible);
     }
 
-    /// <summary>RF-T2.05: moldura da regiao via Hide/Show - a afinidade WDA persiste no HWND (RF-T2.04).</summary>
+    /// <summary>moldura da regiao via Hide/Show - a afinidade WDA persiste no HWND.</summary>
     private void OnBorderToggled(bool visible)
     {
         if (_border is not { } border)
@@ -722,7 +794,7 @@ public sealed class RecordingController(
         _border = null;
     }
 
-    /// <summary>RF-F3.05: hotkey de parar registrado SO durante a gravacao.</summary>
+    /// <summary>hotkey de parar registrado SO durante a gravacao.</summary>
     private void RegisterStopHotkey()
     {
         if (_stopHotkeyId != 0)

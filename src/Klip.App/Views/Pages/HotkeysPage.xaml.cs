@@ -11,19 +11,19 @@ using InfoBarSeverity = Wpf.Ui.Controls.InfoBarSeverity;
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// RF-S.05 - secao "Atalhos" (absorve <c>SectionAppHotkeys</c>,
-/// <c>SectionNativeHotkeys</c> e <c>SectionFlyoutShortcuts</c>): 3 capturadores de
+/// Secao "Atalhos" (absorve <c>SectionAppHotkeys</c>,
+/// <c>SectionNativeHotkeys</c> e <c>SectionFlyoutShortcuts</c>): 6 capturadores de
 /// atalho, 4 botoes de takeover de registro, 2 linhas de status de registro e a
 /// tabela de atalhos do painel.
 /// <para>
-/// RF-S.06: o resultado do takeover e da captura de atalho vai na linha de status
+/// o resultado do takeover e da captura de atalho vai na linha de status
 /// DESTA pagina (<c>ActionStatus</c>), nunca mais no <c>StatusText</c>
 /// compartilhado - la a mensagem era sobrescrita pela contagem de itens antes de o
 /// usuario conseguir ler.
 /// </para>
 /// <para>
-/// ADR-S.07: o guard de reentrancia fica em <c>try/finally</c>; os eventos sao
-/// assinados no CONSTRUTOR (a pagina e singleton por ADR-S.03, e o <c>Loaded</c>
+/// o guard de reentrancia fica em <c>try/finally</c>; os eventos sao
+/// assinados no CONSTRUTOR (a pagina e singleton, e o <c>Loaded</c>
 /// dispara a cada re-entrada na arvore visual, o que duplicaria as assinaturas).
 /// </para>
 /// </summary>
@@ -40,7 +40,7 @@ public partial class HotkeysPage : ISettingsPage
     private const string ResultUacCancelled = "uac-cancelado";
 
     /// <summary>
-    /// RF-S.08: placeholder da terceira linha enquanto a leitura do registro nao
+    /// placeholder da terceira linha enquanto a leitura do registro nao
     /// volta. Reticencia (U+2026) e neutra de idioma - nao existe chave em
     /// <c>Loc</c> para "verificando..." e esta pagina nao mexe no <c>Loc.cs</c>.
     /// </summary>
@@ -50,7 +50,7 @@ public partial class HotkeysPage : ISettingsPage
     private readonly SystemHotkeyService _systemHotkeys;
     private readonly ITakeoverGateway _takeover;
 
-    /// <summary>ADR-S.07: guard de reentrancia do <see cref="RefreshState"/>.</summary>
+    /// <summary>guard de reentrancia do <see cref="RefreshState"/>.</summary>
     private bool _loading;
 
     /// <summary>Um fluxo de takeover esta em andamento (registro + restart do Explorer).</summary>
@@ -72,7 +72,7 @@ public partial class HotkeysPage : ISettingsPage
     /// </summary>
     private Func<string>? _statusMessage;
 
-    /// <summary>Construtor usado pelo container (RF-S.04: <c>AddSingleton</c>).</summary>
+    /// <summary>Construtor usado pelo container (<c>AddSingleton</c>).</summary>
     public HotkeysPage(SettingsService settings, SystemHotkeyService systemHotkeys)
         : this(settings, systemHotkeys, new ApplicationTakeoverGateway())
     {
@@ -100,7 +100,7 @@ public partial class HotkeysPage : ISettingsPage
     }
 
     /// <summary>
-    /// RF-S.05: assinaturas no CONSTRUTOR, nunca no <c>Loaded</c> - com pagina
+    /// assinaturas no CONSTRUTOR, nunca no <c>Loaded</c> - com pagina
     /// singleton o <c>Loaded</c> dispara a cada re-entrada na arvore visual.
     /// </summary>
     private void WireControls()
@@ -118,6 +118,9 @@ public partial class HotkeysPage : ISettingsPage
             button.Click += (_, _) => BeginCapture(slot);
             button.PreviewKeyDown += (_, e) => CaptureHotkey(e, slot);
             button.LostKeyboardFocus += (_, _) => EndCapture(slot);
+
+            if (ClearOf(slot) is { } clear)
+                clear.Click += (_, _) => ClearHotkey(slot);
         }
 
         // as duas linhas de status do registro e a linha de status da pagina sao
@@ -127,12 +130,12 @@ public partial class HotkeysPage : ISettingsPage
     }
 
     /// <summary>
-    /// RF-S.05: recarrega tudo que vem de <c>AppSettings</c> e dispara a releitura
-    /// do registro. NAO toca na linha de status da pagina (RF-S.06).
+    /// recarrega tudo que vem de <c>AppSettings</c> e dispara a releitura
+    /// do registro. NAO toca na linha de status da pagina.
     /// </summary>
     public void RefreshState()
     {
-        // ADR-S.07: em try/finally. No original o _loading da MainWindow ficava
+        // em try/finally. No original o _loading da MainWindow ficava
         // solto: uma excecao no meio do refresh deixava a tela somente-leitura ate
         // reiniciar o app.
         if (_loading)
@@ -145,6 +148,11 @@ public partial class HotkeysPage : ISettingsPage
             HistoryHotkeyChord.Chord = s.HotkeyHistory;
             CaptureHotkeyChord.Chord = s.HotkeyCapture;
             StopRecHotkeyChord.Chord = s.StopRecordingHotkey;
+            TextHotkeyChord.Chord = s.HotkeyCaptureText;
+            RepeatHotkeyChord.Chord = s.HotkeyRepeatRegion;
+            VideoHotkeyChord.Chord = s.HotkeyRecordVideo;
+            foreach (var slot in AllSlots)
+                RefreshOptionalSlot(slot);
         }
         finally
         {
@@ -163,10 +171,10 @@ public partial class HotkeysPage : ISettingsPage
             ActionStatus.Message = message();
     }
 
-    // ===================== Estado do registro (RF-S.08) =====================
+    // ===================== Estado do registro =====================
 
     /// <summary>
-    /// RF-S.08: o <c>GetState()</c> abre 4 subchaves do registro. No original isso
+    /// o <c>GetState()</c> abre 4 subchaves do registro. No original isso
     /// rodava sincronamente na UI thread antes de a janela aparecer; aqui vai para
     /// um <c>Task.Run</c> e volta pelo dispatcher (o <c>await</c> retoma no
     /// <c>SynchronizationContext</c> da UI), com placeholder nas duas linhas
@@ -241,7 +249,7 @@ public partial class HotkeysPage : ISettingsPage
     /// <c>TakeWinVButton</c>, e quem ganhava dependia da ordem das chamadas.
     /// Nenhum dos 4 depende do estado lido do registro - so do fluxo em andamento
     /// e (no caso do Win+V) do atalho ja salvo -, entao a leitura assincrona da
-    /// RF-S.08 nao pisca os botoes.
+    /// nao pisca os botoes.
     /// </summary>
     private void UpdateTakeoverButtons()
     {
@@ -386,10 +394,10 @@ public partial class HotkeysPage : ISettingsPage
         return answer == MessageBoxResult.Yes;
     }
 
-    // ===================== Linha de status (RF-S.06) =====================
+    // ===================== Linha de status =====================
 
     /// <summary>
-    /// RF-S.06: unico ponto que escreve na linha de status. O texto fica na tela
+    /// unico ponto que escreve na linha de status. O texto fica na tela
     /// ate a proxima acao (ou ate o usuario fechar o <c>InfoBar</c>); nenhum
     /// caminho de refresh de estado passa por aqui.
     /// </summary>
@@ -405,17 +413,54 @@ public partial class HotkeysPage : ISettingsPage
 
     /// <summary>
     /// Slots do editor de atalhos (o de parar gravacao so e registrado durante a
-    /// sessao de gravacao, RF-F3.05).
+    /// sessao de gravacao).
     /// </summary>
     private enum HotkeySlot
     {
         History,
         Capture,
         StopRecording,
+        CaptureText,
+        RepeatRegion,
+        RecordVideo,
     }
 
     private static readonly HotkeySlot[] AllSlots =
-        [HotkeySlot.History, HotkeySlot.Capture, HotkeySlot.StopRecording];
+    [
+        HotkeySlot.History, HotkeySlot.Capture, HotkeySlot.StopRecording,
+        HotkeySlot.CaptureText, HotkeySlot.RepeatRegion, HotkeySlot.RecordVideo,
+    ];
+
+    // empty by default: these three can be cleared and show "None" when unset
+    private static bool IsOptional(HotkeySlot slot) =>
+        slot is HotkeySlot.CaptureText or HotkeySlot.RepeatRegion or HotkeySlot.RecordVideo;
+
+    private TextBlock? NotSetOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.CaptureText => TextHotkeyNotSet,
+        HotkeySlot.RepeatRegion => RepeatHotkeyNotSet,
+        HotkeySlot.RecordVideo => VideoHotkeyNotSet,
+        _ => null,
+    };
+
+    private Button? ClearOf(HotkeySlot slot) => slot switch
+    {
+        HotkeySlot.CaptureText => TextHotkeyClear,
+        HotkeySlot.RepeatRegion => RepeatHotkeyClear,
+        HotkeySlot.RecordVideo => VideoHotkeyClear,
+        _ => null,
+    };
+
+    /// <summary>Shows "None" or the clear button for an optional slot, depending on whether it has a gesture.</summary>
+    private void RefreshOptionalSlot(HotkeySlot slot)
+    {
+        if (NotSetOf(slot) is not { } notSet || ClearOf(slot) is not { } clear)
+            return;
+        var has = !string.IsNullOrWhiteSpace(SavedGestureOf(slot));
+        var capturing = _capturingSlot == slot;
+        notSet.Visibility = !has && !capturing ? Visibility.Visible : Visibility.Collapsed;
+        clear.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
+    }
 
     /// <summary>
     /// Slot em captura, ou <c>null</c>. No original isto era um unico <c>bool</c>
@@ -433,6 +478,9 @@ public partial class HotkeysPage : ISettingsPage
         HotkeySlot.History => HistoryHotkeyChord,
         HotkeySlot.Capture => CaptureHotkeyChord,
         HotkeySlot.StopRecording => StopRecHotkeyChord,
+        HotkeySlot.CaptureText => TextHotkeyChord,
+        HotkeySlot.RepeatRegion => RepeatHotkeyChord,
+        HotkeySlot.RecordVideo => VideoHotkeyChord,
         _ => throw UnknownSlot(slot),
     };
 
@@ -441,6 +489,9 @@ public partial class HotkeysPage : ISettingsPage
         HotkeySlot.History => HistoryHotkeyPrompt,
         HotkeySlot.Capture => CaptureHotkeyPrompt,
         HotkeySlot.StopRecording => StopRecHotkeyPrompt,
+        HotkeySlot.CaptureText => TextHotkeyPrompt,
+        HotkeySlot.RepeatRegion => RepeatHotkeyPrompt,
+        HotkeySlot.RecordVideo => VideoHotkeyPrompt,
         _ => throw UnknownSlot(slot),
     };
 
@@ -449,6 +500,9 @@ public partial class HotkeysPage : ISettingsPage
         HotkeySlot.History => HistoryHotkeyButton,
         HotkeySlot.Capture => CaptureHotkeyButton,
         HotkeySlot.StopRecording => StopRecHotkeyButton,
+        HotkeySlot.CaptureText => TextHotkeyButton,
+        HotkeySlot.RepeatRegion => RepeatHotkeyButton,
+        HotkeySlot.RecordVideo => VideoHotkeyButton,
         _ => throw UnknownSlot(slot),
     };
 
@@ -457,6 +511,9 @@ public partial class HotkeysPage : ISettingsPage
         HotkeySlot.History => _settings.Current.HotkeyHistory,
         HotkeySlot.Capture => _settings.Current.HotkeyCapture,
         HotkeySlot.StopRecording => _settings.Current.StopRecordingHotkey,
+        HotkeySlot.CaptureText => _settings.Current.HotkeyCaptureText,
+        HotkeySlot.RepeatRegion => _settings.Current.HotkeyRepeatRegion,
+        HotkeySlot.RecordVideo => _settings.Current.HotkeyRecordVideo,
         _ => throw UnknownSlot(slot),
     };
 
@@ -473,6 +530,7 @@ public partial class HotkeysPage : ISettingsPage
         _capturingSlot = slot;
         ChordOf(slot).Visibility = Visibility.Collapsed;
         PromptOf(slot).Visibility = Visibility.Visible;
+        RefreshOptionalSlot(slot);
         ButtonOf(slot).Focus();
     }
 
@@ -486,6 +544,22 @@ public partial class HotkeysPage : ISettingsPage
         chord.Chord = SavedGestureOf(slot);
         chord.Visibility = Visibility.Visible;
         PromptOf(slot).Visibility = Visibility.Collapsed;
+        RefreshOptionalSlot(slot);
+    }
+
+    private void ClearHotkey(HotkeySlot slot)
+    {
+        Action<AppSettings> clear = slot switch
+        {
+            HotkeySlot.CaptureText => s => s.HotkeyCaptureText = "",
+            HotkeySlot.RepeatRegion => s => s.HotkeyRepeatRegion = "",
+            HotkeySlot.RecordVideo => s => s.HotkeyRecordVideo = "",
+            _ => throw UnknownSlot(slot),
+        };
+        _settings.Update(clear);
+        _takeover.ApplyHotkeys(_settings);
+        EndCapture(slot);
+        ShowStatus(() => Loc.HotkeyCleared, InfoBarSeverity.Success);
     }
 
     private void CaptureHotkey(KeyEventArgs e, HotkeySlot slot)
@@ -520,7 +594,7 @@ public partial class HotkeysPage : ISettingsPage
             return;
         }
 
-        // RF-S.06: os dois casos abaixo eram "return" mudo no original - a tecla nao
+        // os dois casos abaixo eram "return" mudo no original - a tecla nao
         // entrava no atalho e absolutamente nada mudava na tela.
         if (!TryGetKeyName(key, out var keyName))
         {
@@ -544,11 +618,14 @@ public partial class HotkeysPage : ISettingsPage
             HotkeySlot.History => s => s.HotkeyHistory = gesture,
             HotkeySlot.Capture => s => s.HotkeyCapture = gesture,
             HotkeySlot.StopRecording => s => s.StopRecordingHotkey = gesture,
+            HotkeySlot.CaptureText => s => s.HotkeyCaptureText = gesture,
+            HotkeySlot.RepeatRegion => s => s.HotkeyRepeatRegion = gesture,
+            HotkeySlot.RecordVideo => s => s.HotkeyRecordVideo = gesture,
             _ => throw UnknownSlot(slot),
         };
         _settings.Update(assign);
 
-        // RF-F3.05: o atalho de parar gravacao so e registrado DURANTE a gravacao -
+        // o atalho de parar gravacao so e registrado DURANTE a gravacao -
         // conflito aparece la, nao aqui. Por isso, de proposito, ele nao passa pelo
         // ApplyHotkeys (comportamento preservado do original).
         var ok = slot == HotkeySlot.StopRecording || _takeover.ApplyHotkeys(_settings);
@@ -571,7 +648,7 @@ public partial class HotkeysPage : ISettingsPage
             or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
 
     /// <summary>
-    /// RF-S.06: recusa a combinacao e deixa a recusa VISIVEL. O slot continua em
+    /// recusa a combinacao e deixa a recusa VISIVEL. O slot continua em
     /// captura: a pre-visualizacao ao vivo volta para o convite "pressione as
     /// teclas" (reacao imediata no proprio botao) e a linha de status da pagina diz
     /// o que se espera. Antes disso os dois casos eram um <c>return</c> mudo.

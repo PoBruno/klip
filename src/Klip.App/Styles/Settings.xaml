@@ -7,17 +7,9 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     mc:Ignorable="po">
 
-    <!-- =====================================================================
-         RF-S.01 - design system da tela de configuracoes.
-         ADR-S.04: nenhuma cor literal. As variaveis CSS do mockup SAO os brushes
-         do tema do WPF-UI, entao usar as chaves faz o tema claro sair de graca.
-         Registrado em App.xaml DEPOIS de ThemesDictionary/ControlsDictionary -
-         senao o override de brush abaixo nao vence.
-         ===================================================================== -->
+    <!-- ===================================================================== design system da tela de configuracoes. nenhuma cor literal. As variaveis CSS do mockup SAO os brushes do tema do WPF-UI, entao usar as chaves faz o tema claro sair de graca. Registrado em App.xaml DEPOIS de ThemesDictionary/ControlsDictionary - senao o override de brush abaixo nao vence. ===================================================================== -->
 
-    <!-- RF-S.10: WPF nao suporta o eixo optico (opsz) das fontes variaveis - isso e
-         recurso do WinUI. A familia por faixa de tamanho e escolhida na mao: Text ate
-         ~18 px, Display acima disso. O default do WPF-UI e "Segoe UI" puro. -->
+    <!-- WPF nao suporta o eixo optico (opsz) das fontes variaveis - isso e recurso do WinUI. A familia por faixa de tamanho e escolhida na mao: Text ate ~18 px, Display acima disso. O default do WPF-UI e "Segoe UI" puro. -->
     <FontFamily x:Key="KlipUiFont">Segoe UI Variable Text, Segoe UI Variable, Segoe UI, Segoe UI Emoji</FontFamily>
     <FontFamily x:Key="KlipDisplayFont">Segoe UI Variable Display, Segoe UI Variable Text, Segoe UI</FontFamily>
     <!-- Segoe Fluent Icons e o unico jogo de icones do projeto (AGENTS.md). O
@@ -25,42 +17,20 @@
          reflexao), entao a familia precisa ser dita explicitamente. -->
     <FontFamily x:Key="KlipIconFont">Segoe Fluent Icons, Segoe MDL2 Assets</FontFamily>
 
-    <!-- RF-S.01: o WPF-UI usa o mesmo #0FFFFFFF para hover e para selecionado, o que
-         apaga a diferenca entre "onde o mouse esta" e "onde eu estou". O mockup
-         diferencia: hover mais fraco (#0A) que selecionado (#0F). -->
+    <!-- o WPF-UI usa o mesmo #0FFFFFFF para hover e para selecionado, o que apaga a diferenca entre "onde o mouse esta" e "onde eu estou". O mockup diferencia: hover mais fraco (#0A) que selecionado (#0F). -->
     <SolidColorBrush x:Key="NavigationViewItemBackgroundPointerOver" Color="#0AFFFFFF" po:Freeze="True" />
 
     <!-- ===================== Tipografia ===================== -->
 
-    <!-- RF-S.01 / RF-S.10: raiz de toda pagina de configuracoes.
-         O System.Windows.Controls.Page reinicia Foreground em
-         SystemColors.ControlTextBrush (PRETO) e FontFamily no default do sistema,
-         cortando a heranca de TextElement.Foreground vinda do Grid raiz do shell -
-         sem isto, titulo de pagina e titulo de cartao saem pretos sobre fundo escuro.
-         O DefaultPageStyle do WPF-UI 4.3 existe, mas so como estilo COM CHAVE: o
-         estilo implicito e casado pelo tipo EXATO do elemento, e as paginas aqui
-         derivam de Page. Sem Background de proposito: isso mataria o Mica. -->
+    <!-- raiz de toda pagina de configuracoes. O System.Windows.Controls.Page reinicia Foreground em SystemColors.ControlTextBrush (PRETO) e FontFamily no default do sistema, cortando a heranca de TextElement.Foreground vinda do Grid raiz do shell - sem isto, titulo de pagina e titulo de cartao saem pretos sobre fundo escuro. O DefaultPageStyle do WPF-UI 4.3 existe, mas so como estilo COM CHAVE: o estilo implicito e casado pelo tipo EXATO do elemento, e as paginas aqui derivam de Page. Sem Background de proposito: isso mataria o Mica. -->
     <Style x:Key="SettingsPage" TargetType="{x:Type Page}">
         <Setter Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
         <Setter Property="FontFamily" Value="{StaticResource KlipUiFont}" />
-        <!-- RF-S.03: quem rola a pagina e o ui:DynamicScrollViewer que o
-             NavigationViewContentPresenter (um System.Windows.Controls.Frame) coloca no
-             proprio template. O gatilho e a propriedade IsDynamicScrollViewerEnabled, e
-             o presenter a define em OnNavigated copiando ScrollViewer.CanContentScroll
-             da pagina navegada. O valor default ja seria True - o static ctor do
-             presenter faz OverrideMetadata(typeof(Page), true) -, mas so SE a metadata
-             de Page ainda estiver intocada; se qualquer outra biblioteca chegar antes,
-             o override e pulado em silencio, o presenter vem sem scroller nenhum e as
-             7 paginas voltam a ficar cortadas. Declarar aqui torna o contrato explicito
-             e independente dessa corrida. Nao tem efeito de layout: CanContentScroll so
-             muda comportamento no ScrollViewer que a le do proprio template, nunca no
-             filho. -->
+        <!-- quem rola a pagina e o ui:DynamicScrollViewer que o NavigationViewContentPresenter (um System.Windows.Controls.Frame) coloca no proprio template. O gatilho e a propriedade IsDynamicScrollViewerEnabled, e o presenter a define em OnNavigated copiando ScrollViewer.CanContentScroll da pagina navegada. O valor default ja seria True - o static ctor do presenter faz OverrideMetadata(typeof(Page), true) -, mas so SE a metadata de Page ainda estiver intocada; se qualquer outra biblioteca chegar antes, o override e pulado em silencio, o presenter vem sem scroller nenhum e as 7 paginas voltam a ficar cortadas. Declarar aqui torna o contrato explicito e independente dessa corrida. Nao tem efeito de layout: CanContentScroll so muda comportamento no ScrollViewer que a le do proprio template, nunca no filho. -->
         <Setter Property="ScrollViewer.CanContentScroll" Value="True" />
     </Style>
 
-    <!-- RF-S.01 / RF-P4.01: o Grid raiz do shell herda TextFormattingMode=Display, que
-         quantiza as metricas por pixel inteiro. Isso e bom ate ~16 px e ruim em 28 px
-         (espacamento visivelmente irregular), entao o titulo de pagina volta a Ideal. -->
+    <!-- o Grid raiz do shell herda TextFormattingMode=Display, que quantiza as metricas por pixel inteiro. Isso e bom ate ~16 px e ruim em 28 px (espacamento visivelmente irregular), entao o titulo de pagina volta a Ideal. -->
     <Style x:Key="PageTitle" TargetType="TextBlock" BasedOn="{StaticResource TitleTextBlockStyle}">
         <Setter Property="FontFamily" Value="{StaticResource KlipDisplayFont}" />
         <Setter Property="TextOptions.TextFormattingMode" Value="Ideal" />
@@ -90,14 +60,7 @@
 
     <!-- ===================== Controles ===================== -->
 
-    <!-- RF-S.01: as alturas default do WPF-UI 4.3 divergem do mockup, que pede 32 nos
-         tres. Medido nesta versao: ComboBox 37 (Padding 10,8,10,8), ui:TextBox 36
-         (Padding 10,8,10,7) e ui:NumberBox 36 (Padding 10,8,10,7) - os tres com
-         MinHeight 24, ou seja, quem manda na altura e o Padding. E o Padding que
-         corrige (Height fixa quebraria o crescimento do texto em DPI alto); o
-         MinHeight=32 entra so como piso exato: com TextFormattingMode=Display a
-         linha mede 31,62 e o ui:NumberBox tem chao proprio em 31 px (os dois botoes
-         de incremento empilhados), abaixo do qual nenhum Padding faz descer. -->
+    <!-- as alturas default do WPF-UI 4.3 divergem do mockup, que pede 32 nos tres. Medido nesta versao: ComboBox 37 (Padding 10,8,10,8), ui:TextBox 36 (Padding 10,8,10,7) e ui:NumberBox 36 (Padding 10,8,10,7) - os tres com MinHeight 24, ou seja, quem manda na altura e o Padding. E o Padding que corrige (Height fixa quebraria o crescimento do texto em DPI alto); o MinHeight=32 entra so como piso exato: com TextFormattingMode=Display a linha mede 31,62 e o ui:NumberBox tem chao proprio em 31 px (os dois botoes de incremento empilhados), abaixo do qual nenhum Padding faz descer. -->
     <Style x:Key="SettingsComboBox" TargetType="{x:Type ComboBox}" BasedOn="{StaticResource {x:Type ComboBox}}">
         <Setter Property="VerticalAlignment" Value="Center" />
         <Setter Property="MinHeight" Value="32" />
@@ -118,7 +81,7 @@
         <Setter Property="Padding" Value="10,3,10,4" />
     </Style>
 
-    <!-- ===================== SettingsCard (RF-S.02 / ADR-S.05) ===================== -->
+    <!-- ===================== SettingsCard ===================== -->
 
     <!-- Estilo implicito: as paginas so escrevem <controls:SettingsCard ... />.
          9 elementos visuais no template; os opcionais colapsam por Trigger sobre a

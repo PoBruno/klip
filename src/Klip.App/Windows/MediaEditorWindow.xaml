@@ -73,8 +73,7 @@
         </Style>
     </ui:FluentWindow.Resources>
 
-    <!-- RF-P4.01: layout/rendering alinhados ao pixel grid. Todo texto da janela
-         fica em 11-16 px, faixa em que Display e mais nitido que Ideal. -->
+    <!-- layout/rendering alinhados ao pixel grid. Todo texto da janela fica em 11-16 px, faixa em que Display e mais nitido que Ideal. -->
     <Grid
         TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
         UseLayoutRounding="True"
@@ -92,7 +91,7 @@
 
         <ui:TitleBar Grid.Row="0" Title="{DynamicResource Loc.MediaEditorTitle}" />
 
-        <!-- Barra superior: ferramentas GIF, undo/redo, exportacao (RF-F5.01/02) -->
+        <!-- Barra superior: ferramentas GIF, undo/redo, exportacao -->
         <Grid Grid.Row="1" Margin="12,4,12,8">
             <Grid.ColumnDefinitions>
                 <ColumnDefinition Width="*" />
@@ -100,7 +99,7 @@
             </Grid.ColumnDefinitions>
 
             <StackPanel Grid.Column="0" Orientation="Horizontal">
-                <!-- RF-F5.08: ferramentas so de GIF -->
+                <!-- ferramentas so de GIF -->
                 <Button x:Name="ReduceFpsButton" Style="{StaticResource ActionButton}"
                         Content="{DynamicResource Loc.MediaReduceFps}" FontSize="12" />
                 <Button x:Name="ResizeButton" Style="{StaticResource ActionButton}"
@@ -127,12 +126,12 @@
                 Background="{DynamicResource ControlFillColorInputActiveBrush}">
             <Grid>
                 <ContentControl x:Name="PreviewHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
-                <!-- RF-F5.20: overlay preto exibido enquanto o playhead esta num gap (MP4) -->
+                <!-- overlay preto exibido enquanto o playhead esta num gap (MP4) -->
                 <Border x:Name="GapOverlay" Background="Black" CornerRadius="6" Visibility="Collapsed" />
             </Grid>
         </Border>
 
-        <!-- Painel de audio (so MP4 com audio, RF-F5.09) -->
+        <!-- Painel de audio (so MP4 com audio,) -->
         <Border x:Name="AudioPanel" Grid.Row="3" Margin="12,0,12,8" Padding="10,6"
                 CornerRadius="6" Visibility="Collapsed"
                 Background="{DynamicResource ControlFillColorDefaultBrush}">
@@ -175,7 +174,7 @@
             </StackPanel>
         </Grid>
 
-        <!-- Timeline (RF-F5.05..07) -->
+        <!-- Timeline -->
         <local:MediaEditorTimelineControl x:Name="Timeline" Grid.Row="5" Height="96" Margin="12,0,12,4" />
 
         <!-- Status -->

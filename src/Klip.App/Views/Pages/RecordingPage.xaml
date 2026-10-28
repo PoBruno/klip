@@ -1,0 +1,172 @@
+<Page
+    x:Class="Klip.App.Views.Pages.RecordingPage"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Style="{StaticResource SettingsPage}">
+
+    <!-- no Background (it would kill the Mica) and no ScrollViewer: the
+         NavigationView content presenter already scrolls, see SettingsShell.xaml -->
+    <StackPanel MaxWidth="680">
+
+        <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionRecordingPage}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RecordingsFolderTitle}"
+            Description="{DynamicResource Loc.RecordingsFolderCaption}"
+            Icon="&#xE8B7;">
+            <controls:SettingsCard.Footer>
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <ui:TextBox
+                        x:Name="RecordingsFolderBox"
+                        IsReadOnly="True"
+                        Style="{StaticResource SettingsTextBox}" />
+                    <ui:Button
+                        x:Name="ChooseRecordingsFolderButton"
+                        Grid.Column="1"
+                        Margin="8,0,0,0"
+                        Content="{DynamicResource Loc.ChooseFolder}" />
+                </Grid>
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+
+        <!-- ================= MP4 ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.RecordingVideoHeader}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.Mp4FpsTitle}"
+            Description="{DynamicResource Loc.Mp4FpsCaption}"
+            Icon="&#xE916;">
+            <ComboBox
+                x:Name="Mp4FpsCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.Mp4QualityTitle}"
+            Description="{DynamicResource Loc.Mp4QualityCaption}"
+            Icon="&#xE9E9;">
+            <ComboBox
+                x:Name="Mp4QualityCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.Mp4ResolutionTitle}"
+            Description="{DynamicResource Loc.Mp4ResolutionCaption}"
+            Icon="&#xE740;">
+            <ComboBox
+                x:Name="Mp4ResolutionCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.Mp4ShowCursorTitle}"
+            Description="{DynamicResource Loc.Mp4ShowCursorCaption}"
+            Icon="&#xE7C9;">
+            <ui:ToggleSwitch x:Name="ShowCursorToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RecordingSystemAudio}"
+            Description="{DynamicResource Loc.Mp4SystemAudioCaption}"
+            Icon="&#xE767;">
+            <ui:ToggleSwitch x:Name="SystemAudioToggle" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RecordingMicrophones}"
+            Description="{DynamicResource Loc.Mp4MicrophonesCaption}"
+            Icon="&#xE720;">
+            <controls:SettingsCard.Footer>
+                <StackPanel x:Name="MicrophonesHost" />
+            </controls:SettingsCard.Footer>
+        </controls:SettingsCard>
+
+
+        <Expander Margin="0,4,0,0" HorizontalAlignment="Stretch">
+            <Expander.Header>
+                <StackPanel Margin="4,2,0,2">
+                    <TextBlock FontWeight="SemiBold" Text="{DynamicResource Loc.RecordingAdvancedTitle}" />
+                    <TextBlock
+                        FontSize="12"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="{DynamicResource Loc.RecordingAdvancedCaption}" />
+                </StackPanel>
+            </Expander.Header>
+            <StackPanel>
+                <controls:SettingsCard
+                    x:Name="CodecCard"
+                    Title="{DynamicResource Loc.Mp4CodecTitle}"
+                    Description="{DynamicResource Loc.Mp4CodecCaption}"
+                    Icon="&#xE8B2;">
+                    <ComboBox
+                        x:Name="Mp4CodecCombo"
+                        Width="180"
+                        Style="{StaticResource SettingsComboBox}" />
+                </controls:SettingsCard>
+
+                <controls:SettingsCard
+                    Title="{DynamicResource Loc.FfmpegPathTitle}"
+                    Description="{DynamicResource Loc.FfmpegPathCaption}"
+                    Icon="&#xE7C3;">
+                    <controls:SettingsCard.Footer>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox
+                                x:Name="FfmpegPathBox"
+                                IsReadOnly="True"
+                                Style="{StaticResource SettingsTextBox}" />
+                            <ui:Button
+                                x:Name="ChooseFfmpegButton"
+                                Grid.Column="1"
+                                Margin="8,0,0,0"
+                                Content="{DynamicResource Loc.FfmpegChoose}" />
+                        </Grid>
+                    </controls:SettingsCard.Footer>
+                </controls:SettingsCard>
+            </StackPanel>
+        </Expander>
+
+        <!-- ================= GIF ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.RecordingGifHeader}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.GifFpsTitle}"
+            Description="{DynamicResource Loc.GifFpsCaption}"
+            Icon="&#xF4A9;">
+            <ComboBox
+                x:Name="GifFpsCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.GifScaleTitle}"
+            Description="{DynamicResource Loc.GifScaleCaption}"
+            Icon="&#xE740;">
+            <ComboBox
+                x:Name="GifScaleCombo"
+                Width="180"
+                Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.HideRecordingBorderTitle}"
+            Description="{DynamicResource Loc.HideRecordingBorderCaption}"
+            Icon="&#xE7FB;">
+            <ui:ToggleSwitch x:Name="HideRecordingBorderToggle" />
+        </controls:SettingsCard>
+    </StackPanel>
+</Page>

@@ -8,7 +8,7 @@ using Klip.App.Localization;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// RF-F5.14 (parcial): sem ffmpeg.exe o export MP4/MP4-para-GIF abre este
+///  (parcial): sem ffmpeg.exe o export MP4/MP4-para-GIF abre este
 /// dialogo com a explicacao, um botao para escolher o executavel manualmente
 /// e o link da build recomendada (BtbN). O download automatico com hash e
 /// tela de progresso fica como pendencia da proxima entrega.

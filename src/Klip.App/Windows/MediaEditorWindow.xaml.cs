@@ -16,20 +16,20 @@ namespace Klip.App.Windows;
 
 /// <summary>
 /// Editor de midia com timeline (spec F5): abre uma gravacao GIF ou MP4,
-/// permite cortes multiplos, reposicionamento livre com gaps (RF-F5.17..19),
+/// permite cortes multiplos, reposicionamento livre com gaps,
 /// trim, audio (MP4) e exporta. GIF usa player proprio sobre o cache de
-/// frames (RF-F5.02); MP4 usa MediaElement atras de IVideoPlayer (limitacao
-/// v1 documentada em Q-F5.1). O playback percorre a timeline EDITADA via
+/// frames; MP4 usa MediaElement atras de IVideoPlayer (limitacao
+/// v1 documentada em). O playback percorre a timeline EDITADA via
 /// TryMapToSource/TryMapFrameToSource: dentro de segmentos o relogio deriva
 /// da posicao do player; dentro de gaps um relogio proprio (Stopwatch)
-/// avanca o playhead com o preview preto (RF-F5.20).
+/// avanca o playhead com o preview preto.
 /// </summary>
 public partial class MediaEditorWindow
 {
-    private const double VideoStepSeconds = 1.0 / 30; // step aproximado (Q-F5.1)
+    private const double VideoStepSeconds = 1.0 / 30; // step aproximado
 
     /// <summary>
-    /// FPS do filler preto dos gaps no export MP4 (RF-F5.20). O gravador do
+    /// FPS do filler preto dos gaps no export MP4. O gravador do
     /// Klip grava MP4 a 30 fps fixo (RecordingController); para arquivos
     /// externos e um fallback documentado - o MediaElement nao expoe o fps do
     /// stream e o concat do ffmpeg tolera fps distinto entre itens (parse via
@@ -59,17 +59,17 @@ public partial class MediaEditorWindow
     private readonly DispatcherTimer _mp4Timer;
     private int _mp4SegmentIndex;
     private bool _mediaReady;
-    // dimensoes reais do source (MediaOpened) - filler preto dos gaps (RF-F5.20)
+    // dimensoes reais do source (MediaOpened) - filler preto dos gaps
     private int _videoNaturalWidth;
     private int _videoNaturalHeight;
 
-    // RF-F5.20: dentro de um gap o player fica pausado atras do overlay preto
+    // dentro de um gap o player fica pausado atras do overlay preto
     // e o playhead avanca por um relogio proprio da timeline EDITADA
     private bool _mp4InGap;
     private double _mp4GapStartUnits;
     private readonly System.Diagnostics.Stopwatch _mp4GapWatch = new();
 
-    // RF-F5.09: estado de audio fora da pilha de undo (aplicado so no export);
+    // estado de audio fora da pilha de undo (aplicado so no export);
     // o preview aproxima com MediaElement.Volume (0..1)
     private int _audioVolumePercent = 100;
     private bool _audioMuted;
@@ -82,10 +82,10 @@ public partial class MediaEditorWindow
     // IVideoPlayer.RequestSeek; o mouse-up faz um seek imediato final
     private bool _isScrubbing;
 
-    /// <summary>Exportacao concluida; o App mostra o toast (RF-F5.15).</summary>
+    /// <summary>Exportacao concluida; o App mostra o toast.</summary>
     public event Action<string>? ExportCompleted;
 
-    /// <summary>Arquivo aberto/trocado (drag-and-drop, RF-F5.16); o App atualiza o mapa.</summary>
+    /// <summary>Arquivo aberto/trocado (drag-and-drop); o App atualiza o mapa.</summary>
     public event Action<MediaEditorWindow, string>? FileOpened;
 
     public string? FilePath => _filePath;
@@ -116,7 +116,7 @@ public partial class MediaEditorWindow
         UpdateUndoButtons();
     }
 
-    // ----- abertura (RF-F5.16) -----
+    // ----- abertura -----
 
     /// <summary>
     /// Abre um .gif ou .mp4. Extensao nao suportada mostra uma mensagem
@@ -156,7 +156,7 @@ public partial class MediaEditorWindow
     {
         try
         {
-            // decodifica TODOS os frames uma vez, fora da UI thread (RF-F5.02)
+            // decodifica TODOS os frames uma vez, fora da UI thread
             var cache = await Task.Run(() => Media.GifFrameCache.Load(path));
             if (_filePath != path)
                 return; // outro arquivo foi aberto enquanto decodificava
@@ -201,13 +201,13 @@ public partial class MediaEditorWindow
             if (duration <= TimeSpan.Zero)
                 duration = TimeSpan.FromSeconds(1);
 
-            // RF-F5.20: dimensoes REAIS do source para o filler preto dos
+            // dimensoes REAIS do source para o filler preto dos
             // gaps (o default 1920x1080 quebraria o concat se nao batesse)
             _videoNaturalWidth = player.NaturalVideoWidth;
             _videoNaturalHeight = player.NaturalVideoHeight;
 
             // v1: enumeracao de trilhas limitada ao MediaElement.HasAudio -
-            // uma trilha "Audio" quando presente (RF-F5.09)
+            // uma trilha "Audio" quando presente
             var project = MediaEditProject.CreateVideo(path, duration, player.HasAudio ? 1 : 0);
             AttachSession(new MediaEditorSession(project));
             ConfigureUiForKind(MediaKind.Video, player.HasAudio);
@@ -274,7 +274,7 @@ public partial class MediaEditorWindow
         Timeline.SetPlayhead(_playheadUnits);
 
         // pausado: re-resolve o preview no playhead - o slot pode ter virado
-        // gap (ou deixado de ser) apos remove/move/undo (RF-F5.18/20)
+        // gap (ou deixado de ser) apos remove/move/undo
         if (!_isPlaying)
             SeekEdited(_playheadUnits);
 
@@ -298,8 +298,8 @@ public partial class MediaEditorWindow
         Timeline.SegmentSelected += _ => UpdateUndoButtons();
         Timeline.SegmentMoveToRequested += (id, units) =>
         {
-            // RF-F5.17: reposicionamento livre na timeline editada (o Core
-            // clampa nos vizinhos, RF-F5.19); 1 snapshot de undo por gesto
+            // reposicionamento livre na timeline editada (o Core
+            // clampa nos vizinhos); 1 snapshot de undo por gesto
             if (_session is { } session)
                 session.Apply(IsGif
                     ? session.Project.MoveSegmentToFrame(id, (int)Math.Round(units))
@@ -324,8 +324,8 @@ public partial class MediaEditorWindow
     }
 
     /// <summary>
-    /// Menu de contexto do segmento: excluir deixando gap (RF-F5.18), excluir
-    /// e fechar (ripple) e a reordenacao por indice (RF-F5.07) que saiu do
+    /// Menu de contexto do segmento: excluir deixando gap, excluir
+    /// e fechar (ripple) e a reordenacao por indice que saiu do
     /// drag - MoveSegment re-empacota a timeline contigua (gaps descartados,
     /// semantica documentada no Core).
     /// </summary>
@@ -402,11 +402,11 @@ public partial class MediaEditorWindow
                 e.Handled = true;
                 break;
             case Key.S when !ctrl:
-                SplitAtPlayhead(); // RF-F5.06
+                SplitAtPlayhead();
                 e.Handled = true;
                 break;
             case Key.Delete:
-                // RF-F5.18: Del deixa gap; Shift+Del fecha o espaco (ripple)
+                // Del deixa gap; Shift+Del fecha o espaco (ripple)
                 RemoveSelectedSegment(ripple: Keyboard.Modifiers.HasFlag(ModifierKeys.Shift));
                 e.Handled = true;
                 break;
@@ -419,7 +419,7 @@ public partial class MediaEditorWindow
                 e.Handled = true;
                 break;
             case Key.Z when ctrl:
-                _session.Undo(); // RF-F5.10
+                _session.Undo();
                 e.Handled = true;
                 break;
             case Key.Y when ctrl:
@@ -429,7 +429,7 @@ public partial class MediaEditorWindow
         }
     }
 
-    // ----- operacoes de edicao (RF-F5.06) -----
+    // ----- operacoes de edicao -----
 
     private void SplitAtPlayhead()
     {
@@ -441,7 +441,7 @@ public partial class MediaEditorWindow
     }
 
     /// <summary>
-    /// RF-F5.18: por padrao remover DEIXA UM GAP no lugar; ripple = "excluir
+    /// por padrao remover DEIXA UM GAP no lugar; ripple = "excluir
     /// e fechar espaco" (comporta como a v1). Ambas viram 1 snapshot de undo.
     /// </summary>
     private void RemoveSelectedSegment(bool ripple = false)
@@ -461,7 +461,7 @@ public partial class MediaEditorWindow
             : session.Project.RemoveSegment(id));
     }
 
-    // ----- RF-F5.08: reducao de FPS e redimensionamento (GIF) -----
+    // ----- reducao de FPS e redimensionamento (GIF) -----
 
     private void ShowReduceFpsMenu()
     {
@@ -549,7 +549,7 @@ public partial class MediaEditorWindow
             _mp4SegmentIndex = index;
             if (inGap)
             {
-                // RF-F5.20: comecar dentro de um gap - relogio proprio + preto
+                // comecar dentro de um gap - relogio proprio + preto
                 EnterGap(_playheadUnits);
             }
             else
@@ -652,7 +652,7 @@ public partial class MediaEditorWindow
             _mp4SegmentIndex = index;
             if (inGap)
             {
-                // RF-F5.20: gap = preto; pausa o player atras do overlay (se
+                // gap = preto; pausa o player atras do overlay (se
                 // estiver tocando, o relogio do gap assume no proximo tick)
                 EnterGap(_playheadUnits);
             }
@@ -677,7 +677,7 @@ public partial class MediaEditorWindow
         }
     }
 
-    // ----- player GIF (RF-F5.02) -----
+    // ----- player GIF -----
 
     private IReadOnlyList<GifSequenceBuilder.Entry> GetGifSequence()
     {
@@ -685,7 +685,7 @@ public partial class MediaEditorWindow
             return cached;
         if (_session is not { } session || _gifCache is not { } cache)
             return [];
-        // preview e export compartilham a MESMA sequencia (CA-F5.4)
+        // preview e export compartilham a MESMA sequencia
         _gifSequence = GifSequenceBuilder.Build(session.Project, cache.Delays, session.GifTargetFps);
         return _gifSequence;
     }
@@ -729,7 +729,7 @@ public partial class MediaEditorWindow
         if (_gifCache is not { } cache || _gifPreviewBitmap is not { } bitmap)
             return;
         if (entry.IsGap)
-            cache.CopyBlackTo(bitmap); // RF-F5.20: slot de gap = frame preto
+            cache.CopyBlackTo(bitmap); // slot de gap = frame preto
         else
             cache.CopyFrameTo(bitmap, entry.SourceFrame); // WritePixels, sem alocacao
         _playheadUnits = entry.EditedFrame;
@@ -741,7 +741,7 @@ public partial class MediaEditorWindow
     {
         if (_session is not { } session || _gifCache is not { } cache || _gifPreviewBitmap is not { } bitmap)
             return;
-        // RF-F5.20: TryMapFrameToSource devolve false em gaps - pinta preto
+        // TryMapFrameToSource devolve false em gaps - pinta preto
         if (session.Project.TryMapFrameToSource((int)_playheadUnits, out var source))
             cache.CopyFrameTo(bitmap, source);
         else
@@ -749,7 +749,7 @@ public partial class MediaEditorWindow
         UpdatePositionLabel();
     }
 
-    // ----- player MP4 (timeline editada com gaps, RF-F5.17/20) -----
+    // ----- player MP4 (timeline editada com gaps) -----
 
     /// <summary>
     /// Localiza uma posicao da timeline EDITADA: indice do segmento + tempo
@@ -773,7 +773,7 @@ public partial class MediaEditorWindow
     }
 
     /// <summary>
-    /// RF-F5.20: entra num gap - pausa o player, mostra o overlay preto e
+    /// entra num gap - pausa o player, mostra o overlay preto e
     /// ancora o relogio proprio da timeline editada no ponto de entrada. O
     /// relogio (Stopwatch) SO corre durante o playback real: pausado ou
     /// arrastando o playhead ele fica zerado (parte da correcao do seek
@@ -804,7 +804,7 @@ public partial class MediaEditorWindow
             return;
         var project = session.Project;
 
-        // RF-F5.20: dentro de um gap o relogio e o da TIMELINE EDITADA
+        // dentro de um gap o relogio e o da TIMELINE EDITADA
         // (Stopwatch ancorado na entrada), nao o do source - o player fica
         // pausado atras do overlay preto e o playback atravessa o gap
         // respeitando a duracao dele
@@ -839,7 +839,7 @@ public partial class MediaEditorWindow
         var seg = project.Segments[_mp4SegmentIndex];
         var pos = player.Position;
 
-        // cruzou a borda do segmento: proximo contiguo ou gap (RF-F5.17)
+        // cruzou a borda do segmento: proximo contiguo ou gap
         if (pos >= seg.SourceEnd - TimeSpan.FromMilliseconds(30))
         {
             if (_mp4SegmentIndex + 1 < project.Segments.Count)
@@ -870,7 +870,7 @@ public partial class MediaEditorWindow
         }
 
         // relogio dentro do segmento: posicao explicita na timeline editada
-        // (TimelineStart + offset no source, RF-F5.17)
+        // (TimelineStart + offset no source)
         var within = pos - seg.SourceStart;
         if (within < TimeSpan.Zero)
             within = TimeSpan.Zero;
@@ -899,7 +899,7 @@ public partial class MediaEditorWindow
             : time.ToString(@"m\:ss\.f");
     }
 
-    // ----- audio (RF-F5.09) -----
+    // ----- audio -----
 
     private void WireAudioPanel()
     {
@@ -929,7 +929,7 @@ public partial class MediaEditorWindow
         return project;
     }
 
-    // ----- exportacao (RF-F5.11..15) -----
+    // ----- exportacao -----
 
     private async Task ExportGifAsync()
     {
@@ -938,7 +938,7 @@ public partial class MediaEditorWindow
         StopPlayback();
 
         if (!IsGif && !EnsureFfmpeg())
-            return; // MP4->GIF precisa do ffmpeg (D-F5.4)
+            return; // MP4->GIF precisa do ffmpeg
 
         var output = AskSavePath(Loc.MediaGifFilter, "gif");
         if (output is null)
@@ -946,7 +946,7 @@ public partial class MediaEditorWindow
 
         if (IsGif)
         {
-            // fonte GIF: encoder proprio, sem FFmpeg (D-F5.4 / CA-F5.6)
+            // fonte GIF: encoder proprio, sem FFmpeg
             var buildFrames = BuildGifExportFrames();
             if (buildFrames is null)
                 return;
@@ -965,7 +965,7 @@ public partial class MediaEditorWindow
         else
         {
             var project = _session.Project; // GIF nao leva audio
-            // RF-F5.20: dimensoes REAIS do source para o filler preto dos gaps
+            // dimensoes REAIS do source para o filler preto dos gaps
             var (width, height) = SourceVideoDimensions();
             var gifSettings = new GifFromVideoSettings { Fps = 15, Width = width, Height = height };
             await RunExportWithDialogAsync(
@@ -988,7 +988,7 @@ public partial class MediaEditorWindow
             return;
 
         var project = ProjectForExport();
-        // RF-F5.20: filler preto dos gaps com as dimensoes REAIS do source e
+        // filler preto dos gaps com as dimensoes REAIS do source e
         // fps documentado (constante GapFillerFallbackFps)
         var (width, height) = SourceVideoDimensions();
         var exportSettings = new VideoExportSettings
@@ -1006,7 +1006,7 @@ public partial class MediaEditorWindow
     /// Dimensoes reais do video aberto (NaturalVideoWidth/Height capturados
     /// no MediaOpened), arredondadas para PAR - o encoder H.264 exige
     /// dimensoes pares e o filler dos gaps precisa casar com o source
-    /// (RF-F5.20). Fallback 1920x1080 se o MediaElement nao reportou.
+    /// Fallback 1920x1080 se o MediaElement nao reportou.
     /// </summary>
     private (int Width, int Height) SourceVideoDimensions()
     {
@@ -1019,10 +1019,10 @@ public partial class MediaEditorWindow
 
     /// <summary>
     /// Prepara a materializacao lazy da sequencia GIF editada com ReduceFps e
-    /// escala aplicados (RF-F5.08): os loaders redecodificam o ARQUIVO
+    /// escala aplicados: os loaders redecodificam o ARQUIVO
     /// original via <see cref="Media.GifFileFrameReader"/> (streaming, buffer
     /// reutilizado) e observam o CancellationToken (cancelar aborta o encoder
-    /// na proxima leitura). Slots de gap (Entry.IsGap, RF-F5.20) viram frames
+    /// na proxima leitura). Slots de gap (Entry.IsGap) viram frames
     /// PRETOS materializados de um unico buffer reutilizado (o encoder so le
     /// os buffers de entrada). Progresso best-effort: o encoder proprio nao
     /// expoe progresso, entao reportamos pelas leituras dos loaders - o
@@ -1046,7 +1046,7 @@ public partial class MediaEditorWindow
         var dstHeight = Math.Max(1, height * scale / 100);
         var totalReads = sequence.Count * 2L; // 2 passadas do encoder
         var reads = 0L;
-        // RF-F5.20: um unico buffer preto compartilhado por todos os gaps
+        // um unico buffer preto compartilhado por todos os gaps
         // (lazy; o encoder e single-thread e nao muta as entradas)
         byte[]? blackFrame = null;
 
@@ -1071,7 +1071,7 @@ public partial class MediaEditorWindow
             .ToList();
     }
 
-    /// <summary>Buffer BGRA32 preto opaco (filler de gaps do export GIF, RF-F5.20).</summary>
+    /// <summary>Buffer BGRA32 preto opaco (filler de gaps do export GIF).</summary>
     private static byte[] CreateBlackBgra(int width, int height)
     {
         var bgra = new byte[width * height * 4];
@@ -1080,7 +1080,7 @@ public partial class MediaEditorWindow
         return bgra;
     }
 
-    /// <summary>RF-F5.14 (parcial): sem ffmpeg, dialogo com escolha manual + link.</summary>
+    /// <summary> (parcial): sem ffmpeg, dialogo com escolha manual + link.</summary>
     private bool EnsureFfmpeg()
     {
         if (_export.LocateFfmpeg() is not null)
@@ -1123,7 +1123,7 @@ public partial class MediaEditorWindow
         }
         catch (OperationCanceledException)
         {
-            return; // CA-F5.7: temp ja apagado pelo servico
+            return; // temp ja apagado pelo servico
         }
         catch (Exception ex)
         {
@@ -1135,7 +1135,7 @@ public partial class MediaEditorWindow
         OnExportSucceeded(outputPath);
     }
 
-    /// <summary>RF-F5.15: novo item no historico + toast via App.</summary>
+    /// <summary>novo item no historico + toast via App.</summary>
     private void OnExportSucceeded(string outputPath)
     {
         try
@@ -1158,7 +1158,7 @@ public partial class MediaEditorWindow
         ExportCompleted?.Invoke(message);
     }
 
-    // ----- drag-and-drop (RF-F5.16) -----
+    // ----- drag-and-drop -----
 
     private void OnFileDragOver(object sender, DragEventArgs e)
     {

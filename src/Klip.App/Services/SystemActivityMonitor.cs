@@ -4,15 +4,19 @@ using Klip.Interop.Input;
 namespace Klip.App.Services;
 
 /// <summary>
-/// ADR-P.07: rede de seguranca contra interferencia com jogos. O Windows NAO
+/// Rede de seguranca contra interferencia com jogos. O Windows NAO
 /// notifica entrada/saida de app em tela cheia (doc oficial de
 /// SHQueryUserNotificationState), entao e obrigatorio fazer polling.
 /// <para>
-/// RF-P1.06: ao entrar em tela cheia os hooks de baixo nivel sao REMOVIDOS do
+/// Ao entrar em tela cheia os hooks de baixo nivel sao REMOVIDOS do
 /// sistema e o processo desce para EcoQoS + prioridade de memoria baixa. Um hook
 /// instalado continua sendo chamado pela Raw Input Thread a cada tecla e a cada
 /// movimento de mouse mesmo que o callback so retorne - por isso desativar nao
 /// basta, tem que desinstalar.
+/// </para>
+/// <para>
+/// So faz polling enquanto existe escopo de hook vivo (o App liga e desliga nas
+/// transicoes). Em repouso nao ha hook para proteger, entao nao ha timer.
 /// </para>
 /// </summary>
 public sealed class SystemActivityMonitor : IDisposable
@@ -45,7 +49,7 @@ public sealed class SystemActivityMonitor : IDisposable
     /// <summary>
     /// Sobe o polling. Idempotente.
     /// <para>
-    /// RF-P1.06: <see cref="System.Threading.Timer"/>, NUNCA DispatcherTimer - um
+    /// <see cref="System.Threading.Timer"/>, NUNCA DispatcherTimer - um
     /// DispatcherTimer acordaria a UI thread a cada 3 s pelo resto da sessao num
     /// app que passa horas ocioso no tray.
     /// </para>
@@ -153,7 +157,7 @@ public sealed class SystemActivityMonitor : IDisposable
     }
 
     /// <summary>
-    /// ADR-P.08: a avaliacao periodica e trabalho de manutencao, vai para os E-cores.
+    /// A avaliacao periodica e trabalho de manutencao, vai para os E-cores.
     /// <para>
     /// Marcado UMA vez (o flag): a syscall por tick seria desperdicio. O callback do
     /// timer roda numa thread do pool, entao a marca fica numa thread compartilhada
@@ -198,13 +202,13 @@ public sealed class SystemActivityMonitor : IDisposable
     {
         if (state == SystemActivityState.Suspended)
         {
-            // RF-P1.06: o item mais importante da suspensao. Remove FISICAMENTE os
+            // o item mais importante da suspensao. Remove FISICAMENTE os
             // hooks LL - um hook instalado e chamado pela Raw Input Thread a cada
             // evento do sistema inteiro, e e isso que derruba o frame time do jogo.
             // (SuspendAll preserva escopo vivo: nao arranca o hook de um flyout aberto.)
             LowLevelHookHost.Shared.SuspendAll();
 
-            // ADR-P.08: enquanto o jogo tem a maquina, o Klip vai para frequencia
+            // enquanto o jogo tem a maquina, o Klip vai para frequencia
             // eficiente/E-cores e diz ao gerenciador de memoria "apare as minhas
             // paginas antes das dos outros".
             //
@@ -232,7 +236,7 @@ public sealed class SystemActivityMonitor : IDisposable
 
         LowLevelHookHost.Shared.ResumeAll();
 
-        // ADR-P.08: NAO chamar EnterProcessHighQos() aqui. Sair da tela cheia
+        // NAO chamar EnterProcessHighQos() aqui. Sair da tela cheia
         // devolve o app ao tray, ocioso - subir para HighQoS agora manteria o
         // processo fora do EcoQoS pelo resto da sessao a troco de nada. Quem sobe
         // para HighQoS e a abertura de janela (flyout, captura, editor), no ponto
@@ -244,7 +248,7 @@ public sealed class SystemActivityMonitor : IDisposable
     }
 
     /// <summary>
-    /// Motivo da suspensao para o log (RF-P1.06). Segunda leitura, best effort: a
+    /// Motivo da suspensao para o log. Segunda leitura, best effort: a
     /// decisao e sempre de <see cref="SystemFullscreenDetector.Evaluate"/> - aqui so
     /// se pergunta qual sinal a explica. Quando o estado de notificacao nao justifica
     /// a suspensao, o que restou foi a heuristica geometrica (borderless fullscreen).
