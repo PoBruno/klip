@@ -515,5 +515,7 @@ internal static class Ko
         ["DiagDbOnDisk"] = "디스크의 데이터베이스",
         ["DiagNone"] = "없음",
         ["DiagYes"] = "예",
+        ["MenuTypeText"] = "키 입력으로 입력 (Alt+Enter)",
+        ["TypingStoppedToast"] = "입력이 중단되었습니다.",
     };
 }

@@ -135,6 +135,8 @@ public partial class HistoryFlyoutWindow
 
         AddMenuItem(menu, Loc.MenuPaste, "", () => _viewModel.PasteCommand.Execute(item));
         AddMenuItem(menu, Loc.MenuPastePlain, "", () => _viewModel.PastePlainCommand.Execute(item));
+        if (item.Item.Type is ClipboardItemType.Text or ClipboardItemType.Html)
+            AddMenuItem(menu, Loc.MenuTypeText, "", () => _viewModel.TypeTextCommand.Execute(item));
         AddMenuItem(menu, Loc.MenuCopy, "", () => _viewModel.CopyOnlyCommand.Execute(item));
         AddMenuItem(menu, Loc.MenuPreview, "", () => _ = _viewModel.OpenPreviewAsync(item));
         AddMenuItem(menu, item.IsChecked ? Loc.MenuUnselect : Loc.MenuSelect, "", () => _viewModel.ToggleCheck(item));

@@ -629,6 +629,16 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         _pasteService.PasteItem(item.Item, asPlainText: true);
     }
 
+    /// <summary>Alt+Enter: type as keystrokes, for fields that block paste.</summary>
+    [RelayCommand]
+    private void TypeText(HistoryItemViewModel? item)
+    {
+        if (item is null || item.IsImage)
+            return;
+        CloseRequested?.Invoke(false); // the type flow handles focus itself
+        _pasteService.TypeItem(item.Item);
+    }
+
     /// <summary>Ctrl+click / Ctrl+Enter: copy only, don't paste.</summary>
     [RelayCommand]
     private void CopyOnly(HistoryItemViewModel? item)

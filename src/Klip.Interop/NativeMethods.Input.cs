@@ -86,6 +86,86 @@ public static partial class NativeMethods
         };
     }
 
+    public const uint KEYEVENTF_UNICODE = 0x0004;
+    public const ushort VK_RETURN = 0x0D;
+    public const ushort VK_TAB = 0x09;
+
+    /// <summary>
+    /// Types the text as keystrokes (KEYEVENTF_UNICODE) instead of going through the
+    /// clipboard. Works in fields that block paste (password boxes, sites with onpaste
+    /// blocked) and in remote sessions like TeamViewer or RDP that do not forward a
+    /// synthetic Ctrl+V. Newlines become Enter, tabs become Tab. Sent two characters at a
+    /// time at about a hundred and thirty a second: it reads like typing instead of
+    /// stuttering bursts, and an app can keep up. Much faster and its input queue piles
+    /// up and it freezes, and stopping late does not help because what is already
+    /// queued still arrives.
+    /// <para>
+    /// <paramref name="cancel"/> is asked before every chunk; when it says yes the rest
+    /// is dropped and this returns false. True means everything was typed.
+    /// </para>
+    /// </summary>
+    public static bool SendUnicodeText(string text, Func<bool>? cancel = null, int chunkSize = 2, int chunkDelayMs = 15)
+    {
+        var inputs = new List<INPUT>(Math.Min(text.Length, chunkSize) * 2);
+        var size = Marshal.SizeOf<INPUT>();
+        var charsInChunk = 0;
+
+        bool Flush()
+        {
+            if (inputs.Count == 0)
+                return true;
+            if (cancel?.Invoke() == true)
+                return false;
+            SendInput((uint)inputs.Count, [.. inputs], size);
+            inputs.Clear();
+            charsInChunk = 0;
+            Thread.Sleep(chunkDelayMs);
+            return true;
+        }
+
+        for (var i = 0; i < text.Length; i++)
+        {
+            var c = text[i];
+            if (c == '\r' || c == '\n')
+            {
+                // \r\n is one Enter
+                if (c == '\r' && i + 1 < text.Length && text[i + 1] == '\n')
+                    i++;
+                inputs.Add(KeyInput(VK_RETURN, up: false));
+                inputs.Add(KeyInput(VK_RETURN, up: true));
+            }
+            else if (c == '\t')
+            {
+                inputs.Add(KeyInput(VK_TAB, up: false));
+                inputs.Add(KeyInput(VK_TAB, up: true));
+            }
+            else
+            {
+                // surrogate pairs go out as two UTF-16 units, which is what the API expects
+                inputs.Add(UnicodeInput(c, up: false));
+                inputs.Add(UnicodeInput(c, up: true));
+            }
+
+            if (++charsInChunk >= chunkSize && !Flush())
+                return false;
+        }
+        return Flush();
+    }
+
+    private static INPUT UnicodeInput(char c, bool up) => new()
+    {
+        type = INPUT_KEYBOARD,
+        U = new InputUnion
+        {
+            ki = new KEYBDINPUT
+            {
+                wVk = 0,
+                wScan = c,
+                dwFlags = KEYEVENTF_UNICODE | (up ? KEYEVENTF_KEYUP : 0),
+            },
+        },
+    };
+
     /// <summary>Releases modifiers that are physically held down before we synthesize input.</summary>
     public static void ReleasePressedModifiers()
     {

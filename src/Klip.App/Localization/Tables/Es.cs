@@ -515,5 +515,7 @@ internal static class Es
         ["DiagDbOnDisk"] = "Base de datos en disco",
         ["DiagNone"] = "ninguno",
         ["DiagYes"] = "sí",
+        ["MenuTypeText"] = "Escribir como pulsaciones (Alt+Enter)",
+        ["TypingStoppedToast"] = "Escritura detenida.",
     };
 }

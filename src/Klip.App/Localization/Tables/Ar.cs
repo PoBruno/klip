@@ -515,5 +515,7 @@ internal static class Ar
         ["DiagDbOnDisk"] = "قاعدة البيانات على القرص",
         ["DiagNone"] = "لا شيء",
         ["DiagYes"] = "نعم",
+        ["MenuTypeText"] = "اكتب كضغطات مفاتيح (Alt+Enter)",
+        ["TypingStoppedToast"] = "تم إيقاف الكتابة.",
     };
 }

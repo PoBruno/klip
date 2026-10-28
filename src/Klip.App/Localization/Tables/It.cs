@@ -515,5 +515,7 @@ internal static class It
         ["DiagDbOnDisk"] = "Database su disco",
         ["DiagNone"] = "nessuno",
         ["DiagYes"] = "sì",
+        ["MenuTypeText"] = "Digita come tasti (Alt+Enter)",
+        ["TypingStoppedToast"] = "Digitazione interrotta.",
     };
 }

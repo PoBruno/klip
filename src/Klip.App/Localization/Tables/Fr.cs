@@ -515,5 +515,7 @@ internal static class Fr
         ["DiagDbOnDisk"] = "Base de données sur le disque",
         ["DiagNone"] = "aucun",
         ["DiagYes"] = "oui",
+        ["MenuTypeText"] = "Saisir au clavier (Alt+Enter)",
+        ["TypingStoppedToast"] = "Saisie interrompue.",
     };
 }

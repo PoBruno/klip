@@ -36,6 +36,11 @@ public sealed class PasteService(
     /// <summary>Dispara quando a colagem falha, para mostrarmos um toast de fallback.</summary>
     public event Action? PasteFailed;
 
+    /// <summary>Typing as keystrokes ended early: Esc, or the target app lost the front.</summary>
+    public event Action? TypingStopped;
+
+    private const int VK_ESCAPE = 0x1B;
+
     /// <summary>
     /// Salva o app que esta com o foco, para colarmos de volta nele. Se o
     /// foreground for uma janela nossa (reabertura rapida em que o foco ainda
@@ -106,10 +111,9 @@ public sealed class PasteService(
                         writeGuard.WriteItem(full, plainTextOnly: plain);
                 });
 
-                if (target != nint.Zero && !NativeMethods.ForceForeground(target))
+                if (!BringTargetBack(target))
                     ok = false;
 
-                WaitForForeground(target);
                 NativeMethods.ReleasePressedModifiers();
                 Thread.Sleep(20);
                 NativeMethods.SendCtrlV();
@@ -172,6 +176,88 @@ public sealed class PasteService(
         {
             NativeMethods.CloseHandle(handle);
         }
+    }
+
+    /// <summary>
+    /// Time for the target app to hand focus back to its own field after being
+    /// reactivated. Browsers and TeamViewer do that asynchronously; a Ctrl+V that
+    /// arrives earlier lands on a window with no focused field and just vanishes.
+    /// </summary>
+    private const int FocusSettleMs = 120;
+
+    /// <summary>
+    /// Brings the target back to the front. Only waits for focus to settle when the
+    /// target really lost activation (a click on the search box, a menu); in the normal
+    /// path the panel opens without activating and the target never stopped being the
+    /// foreground window.
+    /// </summary>
+    private static bool BringTargetBack(nint target)
+    {
+        if (target == nint.Zero)
+        {
+            Thread.Sleep(40);
+            return true;
+        }
+
+        var wasForeground = NativeMethods.GetForegroundWindow() == target;
+        var ok = wasForeground || NativeMethods.ForceForeground(target);
+        WaitForForeground(target);
+        if (!wasForeground)
+            Thread.Sleep(FocusSettleMs);
+        return ok;
+    }
+
+    /// <summary>
+    /// Types the item's text as keystrokes instead of pasting it. For fields that refuse
+    /// Ctrl+V (password boxes, TeamViewer ID and password, remote sessions). Leaves the
+    /// clipboard alone.
+    /// </summary>
+    public void TypeItem(ClipboardItem item)
+    {
+        if (item.Type is not (ClipboardItemType.Text or ClipboardItemType.Html))
+            return;
+        var target = SavedTargetWindow;
+
+        _ = Task.Run(() =>
+        {
+            var finished = false;
+            try
+            {
+                // the list hands us a slim row, so the full text is read here, off the UI thread
+                var text = repository.LoadFull(item).TextContent;
+                if (string.IsNullOrEmpty(text))
+                    return;
+
+                // never type into a window that is not the one the user picked
+                if (BringTargetBack(target))
+                {
+                    NativeMethods.ReleasePressedModifiers();
+                    Thread.Sleep(20);
+
+                    // Esc is the panic button. It only counts as a fresh press, so an Esc that
+                    // was already down does not stop us at once. Typing into the wrong window
+                    // is worse than stopping, so the target losing the front stops it too
+                    var escWasDown = NativeMethods.IsKeyDown(VK_ESCAPE);
+                    bool Cancel()
+                    {
+                        var esc = NativeMethods.IsKeyDown(VK_ESCAPE);
+                        var freshPress = esc && !escWasDown;
+                        escWasDown = esc;
+                        return freshPress
+                            || (target != nint.Zero && NativeMethods.GetForegroundWindow() != target);
+                    }
+
+                    finished = NativeMethods.SendUnicodeText(text, Cancel);
+                }
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("TypeItem", ex);
+            }
+
+            if (!finished)
+                _uiDispatcher.BeginInvoke(() => TypingStopped?.Invoke());
+        });
     }
 
     /// <summary>
@@ -296,9 +382,7 @@ public sealed class PasteService(
 
                 writeGuard.WriteText(text);
 
-                if (target != nint.Zero)
-                    NativeMethods.ForceForeground(target);
-                WaitForForeground(target);
+                BringTargetBack(target);
                 NativeMethods.ReleasePressedModifiers();
                 Thread.Sleep(20);
                 NativeMethods.SendCtrlV();

@@ -27,6 +27,8 @@ public static partial class Loc
     public static string MenuUnselect => Get(nameof(MenuUnselect));
     public static string MenuPinOnScreen => Get(nameof(MenuPinOnScreen));
     public static string MenuCopyImageText => Get(nameof(MenuCopyImageText));
+    public static string MenuTypeText => Get(nameof(MenuTypeText));
+    public static string TypingStoppedToast => Get(nameof(TypingStoppedToast));
     public static string MenuSaveAsSnippet => Get(nameof(MenuSaveAsSnippet));
     public static string SecretBadge => Get(nameof(SecretBadge));
     public static string CopiedItemN => Get(nameof(CopiedItemN));
@@ -92,6 +94,8 @@ public static partial class Loc
         ["MenuUnselect"] = "Tirar da seleção",
         ["MenuPinOnScreen"] = "Fixar na tela",
         ["MenuCopyImageText"] = "Copiar texto da imagem",
+        ["MenuTypeText"] = "Digitar como teclas (Alt+Enter)",
+        ["TypingStoppedToast"] = "Digitação interrompida.",
         ["MenuSaveAsSnippet"] = "Salvar como snippet",
         ["SecretBadge"] = "Segredo mantido por pouco tempo",
         ["CopiedItemN"] = "Item {0} copiado",
@@ -159,6 +163,8 @@ public static partial class Loc
         ["MenuUnselect"] = "Remove from selection",
         ["MenuPinOnScreen"] = "Pin on screen",
         ["MenuCopyImageText"] = "Copy text from image",
+        ["MenuTypeText"] = "Type as keystrokes (Alt+Enter)",
+        ["TypingStoppedToast"] = "Typing stopped.",
         ["MenuSaveAsSnippet"] = "Save as snippet",
         ["SecretBadge"] = "Secret kept for a short time",
         ["CopiedItemN"] = "Item {0} copied",

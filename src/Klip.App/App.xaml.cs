@@ -233,6 +233,8 @@ public partial class App : Application
         // warn when paste fails (item stays copied at least)
         _pasteService.PasteFailed += () =>
             _tray?.ShowNotification("Klip", Loc.PasteFailedToast);
+        _pasteService.TypingStopped += () =>
+            _tray?.ShowNotification("Klip", Loc.TypingStoppedToast);
         _flyout = _services.GetRequiredService<HistoryFlyoutWindow>();
         // o flyout fecha por varios caminhos (Esc, clique fora, colar,
         // hotkey). Ao inves de espalhar EnterProcessEcoQos por todos eles, reage a

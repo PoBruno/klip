@@ -515,5 +515,7 @@ internal static class Nl
         ["DiagDbOnDisk"] = "Database op schijf",
         ["DiagNone"] = "geen",
         ["DiagYes"] = "ja",
+        ["MenuTypeText"] = "Typen als toetsaanslagen (Alt+Enter)",
+        ["TypingStoppedToast"] = "Typen gestopt.",
     };
 }

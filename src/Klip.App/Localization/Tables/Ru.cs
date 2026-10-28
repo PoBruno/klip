@@ -515,5 +515,7 @@ internal static class Ru
         ["DiagDbOnDisk"] = "База данных на диске",
         ["DiagNone"] = "нет",
         ["DiagYes"] = "да",
+        ["MenuTypeText"] = "Ввести как нажатия клавиш (Alt+Enter)",
+        ["TypingStoppedToast"] = "Ввод остановлен.",
     };
 }
