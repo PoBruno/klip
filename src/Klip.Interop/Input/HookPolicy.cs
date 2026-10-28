@@ -7,7 +7,7 @@ namespace Klip.Interop.Input;
 /// Estado consultado dentro do callback do hook LL. Toda leitura precisa ser O(1)
 /// e sem alocacao: o callback roda no caminho critico de input do sistema inteiro.
 /// <para>
-/// ADR-P.04: nada aqui pode tomar lock, alocar ou chamar COM. Os conjuntos de teclas
+/// nada aqui pode tomar lock, alocar ou chamar COM. Os conjuntos de teclas
 /// sao bitmaps de 256 bits (<see cref="VirtualKeyMask"/>) e os flags sao inteiros lidos
 /// com <see cref="Volatile"/>. O custo total de uma consulta e um punhado de leituras.
 /// </para>
@@ -51,10 +51,14 @@ public static class HookPolicy
     /// <summary>Teclas engolidas apenas com Ctrl pressionado.</summary>
     public static void SetSwallowKeysWithCtrl(ReadOnlySpan<int> virtualKeys) => SwallowKeysWithCtrl.Set(virtualKeys);
 
+    /// <summary>Keys swallowed only while Alt is held (Alt+1..9 in the flyout).</summary>
+    public static void SetSwallowKeysWithAlt(ReadOnlySpan<int> virtualKeys) => SwallowKeysWithAlt.Set(virtualKeys);
+
     public static void ClearSwallowKeys()
     {
         SwallowKeys.Clear();
         SwallowKeysWithCtrl.Clear();
+        SwallowKeysWithAlt.Clear();
     }
 
     /// <summary>Fila de colagem armada: Ctrl+V vira evento KlipInputMessages.CtrlV.</summary>
@@ -86,6 +90,9 @@ public static class HookPolicy
 
     /// <summary>Conjunto condicionado a Ctrl, consultado direto pelo callback.</summary>
     internal static VirtualKeyMask SwallowKeysWithCtrl { get; } = new();
+
+    /// <summary>Same, gated on Alt (read from the hook flags, no syscall).</summary>
+    internal static VirtualKeyMask SwallowKeysWithAlt { get; } = new();
 
     /// <summary>
     /// Tenta marcar uma colagem como em voo. Retorna true apenas para o primeiro

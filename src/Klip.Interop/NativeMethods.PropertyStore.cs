@@ -4,13 +4,13 @@ namespace Klip.Interop;
 
 /// <summary>
 /// P/Invoke do IPropertyStore em memoria (propsys.dll) usado pelo
-/// MF_SINK_WRITER_ENCODER_CONFIG do encoder H.264 (RF-M2.06): as propriedades
+/// MF_SINK_WRITER_ENCODER_CONFIG do encoder H.264: as propriedades
 /// CODECAPI_* viram pares PROPERTYKEY/PROPVARIANT aplicados em lote na criacao
 /// do SinkWriter.
 /// </summary>
 public static partial class NativeMethods
 {
-    /// <summary>PROPERTYKEY do shell/propsys: fmtid + pid. Para CODECAPI_*, pid = 0 (RF-M2.06).</summary>
+    /// <summary>PROPERTYKEY do shell/propsys: fmtid + pid. Para CODECAPI_*, pid = 0.</summary>
     [StructLayout(LayoutKind.Sequential)]
     public struct PROPERTYKEY
     {
@@ -50,7 +50,7 @@ public static partial class NativeMethods
     }
 
     /// <summary>
-    /// Cria um property store em memoria (RF-M2.06). PreserveSig false: HRESULT
+    /// Cria um property store em memoria. PreserveSig false: HRESULT
     /// de falha vira excecao (tratada pelo chamador - o ENCODER_CONFIG e
     /// tolerante a falhas e nunca impede o start da gravacao).
     /// </summary>

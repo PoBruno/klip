@@ -11,15 +11,15 @@ namespace Klip.Interop.Recording;
 /// buffer circular com contabilidade de samples entregues vs esperados pelo
 /// relogio. Atraso de ENTREGA dentro da tolerancia e resolvido por buffering
 /// (o mixer espera o dado; ver <see cref="EnsureProgress"/>); silencio so e
-/// inserido em gap real da fonte (loopback sem pacotes, RF-F3.12) ou fonte
-/// morta (RF-F3.14), e deriva de clock para frente e contida por descarte.
+/// inserido em gap real da fonte (loopback sem pacotes) ou fonte
+/// morta, e deriva de clock para frente e contida por descarte.
 /// </summary>
 internal sealed class AudioCaptureSource : IDisposable
 {
-    /// <summary>Taxa alvo do pipeline de audio (RF-F3.11).</summary>
+    /// <summary>Taxa alvo do pipeline de audio.</summary>
     public const int TargetSampleRate = 48000;
 
-    /// <summary>Canais do pipeline (downmix/upmix para estereo, RF-F3.11).</summary>
+    /// <summary>Canais do pipeline (downmix/upmix para estereo).</summary>
     public const int TargetChannels = 2;
 
     // ~1 s de teto no buffer: cobre stalls do pump de centenas de ms (o dado
@@ -27,7 +27,7 @@ internal sealed class AudioCaptureSource : IDisposable
     // o pump ficar preso por mais de 1 s (falha real, nao jitter).
     private const int MaxBufferedFrames = TargetSampleRate;
 
-    // RF-F3.12: fonte viva sem pacotes ha mais que isto = gap REAL (loopback
+    // fonte viva sem pacotes ha mais que isto = gap REAL (loopback
     // nao entrega pacotes quando o sistema esta em silencio) -> inserir
     // silencio. Tolerancia GENEROSA de proposito: atraso de entrega ate aqui
     // e resolvido por buffering (o mixer espera; ver EnsureProgress) - o
@@ -52,7 +52,7 @@ internal sealed class AudioCaptureSource : IDisposable
     // antes do descarte duro. 150 ms: o WASAPI event-driven entrega em rajadas
     // (pacotes de 10 ms podem chegar agrupados), entao o excesso instantaneo
     // oscila dezenas de ms acima do relogio; os 40 ms originais da spec
-    // (RF-F3.12) disparavam descarte de audio VALIDO em blocos -> pops.
+    //  disparavam descarte de audio VALIDO em blocos -> pops.
     // Deriva real de clock leva horas para acumular 150 ms; o descarte e
     // feito de uma vez so (nunca repetidamente) e contabilizado.
     private const int ForwardDriftFrames = TargetSampleRate * 150 / 1000;
@@ -152,7 +152,7 @@ internal sealed class AudioCaptureSource : IDisposable
     public string DisplayName { get; }
 
     /// <summary>
-    /// RF-M2.09: true para o loopback do sistema, false para microfones -
+    /// true para o loopback do sistema, false para microfones -
     /// define qual rampa de ganho do <see cref="AudioMixer"/> se aplica.
     /// </summary>
     public bool IsSystemAudio { get; }
@@ -197,8 +197,8 @@ internal sealed class AudioCaptureSource : IDisposable
 
     /// <summary>
     /// Chamado a cada tick do pump ANTES da leitura. Insere silencio apenas em
-    /// falha/gap REAL da fonte: dispositivo morto (RF-F3.14) ou fonte viva sem
-    /// pacotes alem da tolerancia generosa (loopback silencioso, RF-F3.12) -
+    /// falha/gap REAL da fonte: dispositivo morto ou fonte viva sem
+    /// pacotes alem da tolerancia generosa (loopback silencioso) -
     /// nesses casos o silencio e continuo, sem alternancia. Atraso de entrega
     /// DENTRO da tolerancia nao gera zeros: o mixer limita o due ao minimo
     /// retornado aqui e espera o dado (zeros+descarte nesse caso era o que
@@ -278,7 +278,7 @@ internal sealed class AudioCaptureSource : IDisposable
 
     /// <summary>
     /// Soma ate <paramref name="frames"/> frames desta fonte em <paramref name="mix"/>,
-    /// aplicando o ganho POR FRAME de <paramref name="gain"/> (RF-M2.09: rampa de
+    /// aplicando o ganho POR FRAME de <paramref name="gain"/> (rampa de
     /// mute calculada pelo mixer; mesmo fator nos dois canais do frame).
     /// O mixer limita o pedido ao minimo reportado por <see cref="EnsureProgress"/>,
     /// entao o ring cobre tudo em operacao normal; um furo residual sai como
@@ -306,7 +306,7 @@ internal sealed class AudioCaptureSource : IDisposable
     }
 
     /// <summary>
-    /// RF-F3.13: descarta o acumulado da pausa e realinha a contagem ao total
+    /// descarta o acumulado da pausa e realinha a contagem ao total
     /// ja emitido pelo mixer. Realinhar ao relogio (como antes) declarava o
     /// jitter buffer como "entregue" com o ring VAZIO - o ReadInto mixava
     /// zeros por underflow logo apos cada resume.
@@ -402,7 +402,7 @@ internal sealed class AudioCaptureSource : IDisposable
         if (!intentional && !_warned)
         {
             _warned = true;
-            // RF-F3.14: dispositivo removido -> silencio (via EnsureProgress) + aviso
+            // dispositivo removido -> silencio (via EnsureProgress) + aviso
             _onWarning($"A fonte de audio \"{DisplayName}\" parou de responder; o restante da gravacao usara silencio nessa fonte.");
         }
     }

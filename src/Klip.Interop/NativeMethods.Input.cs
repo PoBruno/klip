@@ -98,6 +98,17 @@ public static partial class NativeMethods
             SendInput((uint)toRelease.Length, toRelease, Marshal.SizeOf<INPUT>());
     }
 
+    /// <summary>
+    /// Taps an unassigned key (0xE8). Sent while the user holds Alt after we swallowed
+    /// Alt+digit: without it the app below sees a lone Alt press and opens its menu bar.
+    /// </summary>
+    public static void SendMaskKey()
+    {
+        const ushort VK_MASK = 0xE8;
+        INPUT[] inputs = [KeyInput(VK_MASK, up: false), KeyInput(VK_MASK, up: true)];
+        SendInput((uint)inputs.Length, inputs, Marshal.SizeOf<INPUT>());
+    }
+
     /// <summary>Synthesizes Ctrl+V.</summary>
     public static void SendCtrlV()
     {

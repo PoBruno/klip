@@ -6,7 +6,7 @@ namespace Klip.Interop.Recording;
 /// <summary>
 /// Enumera microfones ativos via WASAPI (<see cref="MMDeviceEnumerator"/>,
 /// eCapture + DEVICE_STATE_ACTIVE) para o seletor de fontes de audio do
-/// painel pre-gravacao (RF-F3.02).
+/// painel pre-gravacao.
 /// </summary>
 public sealed class AudioDeviceEnumerator : IAudioDeviceEnumerator
 {

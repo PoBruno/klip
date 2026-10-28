@@ -7,17 +7,17 @@ namespace Klip.Interop.Recording;
 
 /// <summary>
 /// Mixa as fontes WASAPI (loopback + N microfones) numa unica timeline PCM
-/// 16-bit 48 kHz estereo (RF-F3.11). O relogio-mestre e o tempo ativo da
+/// 16-bit 48 kHz estereo. O relogio-mestre e o tempo ativo da
 /// gravacao (ancorado no 1o frame de video, excluindo pausas); os timestamps
 /// dos blocos emitidos sao derivados da CONTAGEM de samples ja emitidos -
-/// monotonicos por construcao (RF-F3.12/13).
+/// monotonicos por construcao.
 /// </summary>
 internal sealed class AudioMixer : IDisposable
 {
     private const int TickMilliseconds = 10;
 
     // jitter buffer: o pump emite ate (relogio - 100 ms), absorvendo a cadencia
-    // de entrega do WASAPI sem furar blocos (RF-F3.12). Atrasos de 10-30 ms
+    // de entrega do WASAPI sem furar blocos. Atrasos de 10-30 ms
     // sao NORMAIS no WASAPI event-driven; alem disso o due e limitado ao que
     // as fontes REALMENTE entregaram (ver PumpLoopAsync) - atraso maior vira
     // espera, nunca zeros. 100 ms de latencia e irrelevante em gravacao para
@@ -36,7 +36,7 @@ internal sealed class AudioMixer : IDisposable
     // precisa ficar folgada sob o GapToleranceFrames da fonte (400 ms).
     private const int CaptureBufferMilliseconds = 250;
 
-    // RF-M2.09 (D-M2.5): rampa linear de ~8 ms ao alternar mute 0<->1 - a
+    // rampa linear de ~8 ms ao alternar mute 0<->1 - a
     // captura nunca para, so o ganho muda, sem click nem descontinuidade
     private const int MuteRampFrames = AudioCaptureSource.TargetSampleRate * 8 / 1000;
 
@@ -47,7 +47,7 @@ internal sealed class AudioMixer : IDisposable
     private readonly Stopwatch _pauseClock = new();
     private readonly float[] _mix = new float[MaxBurstFrames * AudioCaptureSource.TargetChannels];
 
-    // RF-M2.09: ganho POR FONTE (loopback vs mics) com rampa; targets sao
+    // ganho POR FONTE (loopback vs mics) com rampa; targets sao
     // escritos de qualquer thread (Set*Muted), current/blocos so pelo pump
     private readonly float[] _systemGainBlock = new float[MaxBurstFrames];
     private readonly float[] _microphoneGainBlock = new float[MaxBurstFrames];
@@ -74,7 +74,7 @@ internal sealed class AudioMixer : IDisposable
         _emitBlock = emitBlock;
         _onWarning = onWarning;
 
-        // RF-M2.11: estado inicial dos toggles - sem rampa (nada foi emitido)
+        // estado inicial dos toggles - sem rampa (nada foi emitido)
         _microphoneGainTarget = microphoneMuted ? 0f : 1f;
         _systemGainTarget = systemAudioMuted ? 0f : 1f;
         _microphoneGainCurrent = _microphoneGainTarget;
@@ -153,12 +153,12 @@ internal sealed class AudioMixer : IDisposable
     }
 
     /// <summary>
-    /// RF-M2.09: muta/desmuta os microfones via alvo de ganho (rampa aplicada
+    /// muta/desmuta os microfones via alvo de ganho (rampa aplicada
     /// pelo pump). Thread-safe; chamavel a qualquer momento da sessao.
     /// </summary>
     public void SetMicrophoneMuted(bool muted) => _microphoneGainTarget = muted ? 0f : 1f;
 
-    /// <summary>RF-M2.09: muta/desmuta o som do sistema (loopback) via alvo de ganho.</summary>
+    /// <summary>muta/desmuta o som do sistema (loopback) via alvo de ganho.</summary>
     public void SetSystemAudioMuted(bool muted) => _systemGainTarget = muted ? 0f : 1f;
 
     /// <summary>Inicia as capturas e a task de mixagem (aguardando o relogio).</summary>
@@ -211,7 +211,7 @@ internal sealed class AudioMixer : IDisposable
         _pausedTotal += _pauseClock.Elapsed;
         _pauseClock.Reset();
 
-        // RF-F3.13: audio chegado durante a pausa e descartado e a contagem de
+        // audio chegado durante a pausa e descartado e a contagem de
         // cada fonte realinha ao total ja emitido (ring vazio = nada entregue
         // alem do lido; realinhar ao relogio criava underflow pos-resume)
         foreach (var source in _sources)
@@ -287,7 +287,7 @@ internal sealed class AudioMixer : IDisposable
         catch (Exception ex)
         {
             // audio nunca derruba a gravacao: o video segue e as fontes
-            // silenciam (mesmo espirito do RF-F3.14)
+            // silenciam (mesmo espirito do)
             _onWarning($"O pipeline de audio falhou; o restante da gravacao pode ficar sem som. ({ex.Message})");
         }
     }
@@ -309,8 +309,8 @@ internal sealed class AudioMixer : IDisposable
             long clockFrames = ClockFrames();
 
             // fontes vivas apenas reportam o quanto ja entregaram; fontes
-            // mortas (RF-F3.14) ou em gap real (sem pacotes alem da tolerancia,
-            // RF-F3.12) ganham silencio continuo dentro do EnsureProgress e
+            // mortas ou em gap real (sem pacotes alem da tolerancia,
+            // ) ganham silencio continuo dentro do EnsureProgress e
             // nunca seguram o pump
             long minDelivered = long.MaxValue;
             foreach (var source in _sources)
@@ -331,7 +331,7 @@ internal sealed class AudioMixer : IDisposable
             int sampleCount = due * AudioCaptureSource.TargetChannels;
             Array.Clear(_mix, 0, sampleCount);
 
-            // RF-M2.09: rampa de ganho POR GRUPO calculada uma vez por bloco -
+            // rampa de ganho POR GRUPO calculada uma vez por bloco -
             // todas as fontes do grupo compartilham a mesma trajetoria; o
             // estado avanca exatamente `due` frames por tick
             FillGainBlock(_systemGainBlock, ref _systemGainCurrent, _systemGainTarget, due);
@@ -339,7 +339,7 @@ internal sealed class AudioMixer : IDisposable
             foreach (var source in _sources)
                 source.ReadInto(_mix, due, source.IsSystemAudio ? _systemGainBlock : _microphoneGainBlock);
 
-            // soma com clamp [-1,1] -> PCM 16-bit little-endian (RF-F3.11)
+            // soma com clamp [-1,1] -> PCM 16-bit little-endian
             byte[] pcm = new byte[sampleCount * sizeof(short)];
             for (int i = 0; i < sampleCount; i++)
             {
@@ -349,7 +349,7 @@ internal sealed class AudioMixer : IDisposable
                 pcm[2 * i + 1] = (byte)((ushort)sample >> 8);
             }
 
-            // RF-F3.12: timestamp por contagem de samples emitidos (monotonico)
+            // timestamp por contagem de samples emitidos (monotonico)
             long timestampTicks = _emittedFrames * TimeSpan.TicksPerSecond / AudioCaptureSource.TargetSampleRate;
             long durationTicks = (long)due * TimeSpan.TicksPerSecond / AudioCaptureSource.TargetSampleRate;
             _emittedFrames += due;
@@ -359,7 +359,7 @@ internal sealed class AudioMixer : IDisposable
     }
 
     /// <summary>
-    /// Preenche <paramref name="gain"/> com a rampa linear de ~8 ms (D-M2.5) do
+    /// Preenche <paramref name="gain"/> com a rampa linear de ~8 ms do
     /// ganho corrente em direcao ao alvo, um fator por frame. Sem transicao
     /// pendente o preenchimento e constante (caminho comum).
     /// </summary>

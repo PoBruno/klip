@@ -3,7 +3,7 @@ using System.Runtime.InteropServices;
 namespace Klip.Interop.Input;
 
 /// <summary>
-/// ADR-P.01 / RF-P1.05: alternativa barata ao <c>WH_MOUSE_LL</c> para detectar "clique
+/// Alternativa barata ao <c>WH_MOUSE_LL</c> para detectar "clique
 /// fora" quando a janela nao pode receber foco (<c>WS_EX_NOACTIVATE</c>). Em vez de
 /// interceptar todo evento de mouse do sistema, observa apenas a troca de janela em
 /// primeiro plano.
@@ -30,27 +30,29 @@ namespace Klip.Interop.Input;
 /// </summary>
 public sealed unsafe class ForegroundWatcher : IDisposable
 {
-    // O proc e [UnmanagedCallersOnly], logo estatico: nao ha instancia para alcancar sem
-    // um handle pinado. O destino fica num campo estatico, publicado com Volatile.
-    private static Action<nint>? s_handler;
+    // The proc is [UnmanagedCallersOnly], so static: each hook handle maps to its own
+    // handler, which lets more than one feature watch the foreground at the same time.
+    private static readonly System.Collections.Concurrent.ConcurrentDictionary<nint, Action<nint>> s_handlers = new();
 
-    private Action<nint>? _handler;
     private nint _hook;
+
+    public bool IsRunning => _hook != nint.Zero;
 
     /// <summary>
     /// Registra o WinEvent de troca de foreground. Idempotente por instancia.
     /// <paramref name="onForegroundChanged"/> recebe o HWND que virou primeiro plano e roda
-    /// na thread que chamou <c>Start</c>.
+    /// na thread que chamou <c>Start</c>. With <paramref name="skipOwnProcess"/> false the
+    /// Klip windows are reported too.
     /// </summary>
-    public void Start(Action<nint> onForegroundChanged)
+    public void Start(Action<nint> onForegroundChanged, bool skipOwnProcess = true)
     {
         ArgumentNullException.ThrowIfNull(onForegroundChanged);
 
         if (_hook != nint.Zero)
             return;
 
-        _handler = onForegroundChanged;
-        Volatile.Write(ref s_handler, onForegroundChanged);
+        var flags = NativeMethods.WINEVENT_OUTOFCONTEXT |
+                    (skipOwnProcess ? NativeMethods.WINEVENT_SKIPOWNPROCESS : 0);
 
         nint hook = NativeMethods.SetWinEventHook(
             NativeMethods.EVENT_SYSTEM_FOREGROUND,
@@ -59,35 +61,25 @@ public sealed unsafe class ForegroundWatcher : IDisposable
             (nint)(delegate* unmanaged<nint, uint, nint, int, int, uint, uint, void>)&WinEventProc,
             0, // todos os processos
             0, // todas as threads
-            NativeMethods.WINEVENT_OUTOFCONTEXT | NativeMethods.WINEVENT_SKIPOWNPROCESS);
+            flags);
 
         if (hook == nint.Zero)
-        {
-            // Falhou: nao deixa um handler orfao respondendo por um hook que nao existe.
-            Interlocked.CompareExchange(ref s_handler, null, onForegroundChanged);
-            _handler = null;
             return;
-        }
 
+        // out of context events are queued to this thread, so nothing can arrive before
+        // the handler is in the map (we are still running on it)
+        s_handlers[hook] = onForegroundChanged;
         _hook = hook;
     }
 
     /// <summary>Remove o WinEvent. Deve rodar na mesma thread que chamou <c>Start</c>.</summary>
     public void Stop()
     {
-        if (_hook != nint.Zero)
-        {
-            NativeMethods.UnhookWinEvent(_hook);
-            _hook = nint.Zero;
-        }
-
-        var handler = _handler;
-        if (handler is not null)
-        {
-            // So limpa se o destino ainda for o nosso: outra instancia pode ter assumido.
-            Interlocked.CompareExchange(ref s_handler, null, handler);
-            _handler = null;
-        }
+        if (_hook == nint.Zero)
+            return;
+        NativeMethods.UnhookWinEvent(_hook);
+        s_handlers.TryRemove(_hook, out _);
+        _hook = nint.Zero;
     }
 
     public void Dispose() => Stop();
@@ -111,7 +103,8 @@ public sealed unsafe class ForegroundWatcher : IDisposable
             if (idObject != 0 || idChild != 0)
                 return;
 
-            Volatile.Read(ref s_handler)?.Invoke(hwnd);
+            if (s_handlers.TryGetValue(hWinEventHook, out var handler))
+                handler(hwnd);
         }
         catch
         {

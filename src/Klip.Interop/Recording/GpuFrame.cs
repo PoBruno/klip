@@ -3,11 +3,11 @@ using Vortice.Direct3D11;
 namespace Klip.Interop.Recording;
 
 /// <summary>
-/// Frame na GPU para o caminho MP4 (D-F2.3): textura BGRA propria do engine,
-/// ja recortada para a regiao (dimensoes PARES, RF-F2.03), criada no
+/// Frame na GPU para o caminho MP4: textura BGRA propria do engine,
+/// ja recortada para a regiao (dimensoes PARES), criada no
 /// <see cref="FrameCaptureEngine.Device"/> compartilhado com o encoder.
 /// A POSSE e do consumidor: chamar <see cref="Dispose"/> devolve a textura ao
-/// pool do engine (RF-F2.04). Nao chamar Dispose = novos frames sao descartados.
+/// pool do engine. Nao chamar Dispose = novos frames sao descartados.
 /// NAO descartar a textura diretamente.
 /// </summary>
 public sealed class GpuFrame : IDisposable
@@ -25,9 +25,9 @@ public sealed class GpuFrame : IDisposable
     public ID3D11Texture2D Texture { get; }
 
     /// <summary>
-    /// VFR: SystemRelativeTime do frame (QPC, RF-F2.01).
+    /// VFR: SystemRelativeTime do frame (QPC).
     /// CFR: timestamp na grade n * (1/FPS), ancorado no relogio real desde o
-    /// primeiro tick da sessao (RF-F2.05). Indices atrasados sao preenchidos
+    /// primeiro tick da sessao. Indices atrasados sao preenchidos
     /// com frames duplicados (catch-up, com teto); sob atraso extremo slots
     /// podem ser perdidos. O timestamp nunca sai da grade.
     /// </summary>

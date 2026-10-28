@@ -2,7 +2,7 @@ namespace Klip.Interop.Recording;
 
 /// <summary>
 /// Exclui janelas do proprio app (borda de gravacao, toolbar) do conteudo
-/// capturado via SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE) (RF-F2.10).
+/// capturado via SetWindowDisplayAffinity(WDA_EXCLUDEFROMCAPTURE).
 /// So funciona em janelas top-level do proprio processo, builds 19041+.
 /// </summary>
 public static class WindowCaptureExclusion

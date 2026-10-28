@@ -12,7 +12,7 @@ public enum SystemActivityState
 }
 
 /// <summary>
-/// Deteccao de tela cheia para auto-suspensao (RF-P1.06): combina o estado de
+/// Deteccao de tela cheia para auto-suspensao: combina o estado de
 /// notificacao do shell com uma heuristica geometrica que pega o borderless.
 /// <para>
 /// O Windows NAO envia notificacao ao entrar/sair de tela cheia, entao o consumidor

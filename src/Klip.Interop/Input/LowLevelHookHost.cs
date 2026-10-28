@@ -14,18 +14,18 @@ public enum LowLevelHookKind
 }
 
 /// <summary>
-/// ADR-P.01: unico dono de hooks de baixo nivel do Klip. Os hooks vivem numa thread
+/// unico dono de hooks de baixo nivel do Klip. Os hooks vivem numa thread
 /// dedicada (<c>Klip.LowLevelHookPump</c>) com message loop proprio, NUNCA na UI thread
 /// do WPF - um callback preso na fila do Dispatcher congela o input do Windows inteiro
 /// e derruba o frame time de jogos em tela cheia.
 /// <para>
-/// ADR-P.02: os hooks sao instalados sob demanda por escopo contado
+/// os hooks sao instalados sob demanda por escopo contado
 /// (<see cref="Acquire"/>) e REMOVIDOS do sistema quando o ultimo escopo morre. Um flag
 /// "Active" nao substitui isso: um hook instalado continua sendo chamado pela Raw Input
 /// Thread a cada tecla e a cada movimento de mouse, mesmo que o callback so retorne.
 /// </para>
 /// <para>
-/// ADR-P.04: o callback e O(1). Le o struct por ponteiro (<see cref="Unsafe.AsRef{T}(void*)"/>),
+/// o callback e O(1). Le o struct por ponteiro (<see cref="Unsafe.AsRef{T}(void*)"/>),
 /// decide com bitmap de 256 bits, publica num ring SPSC pre-alocado e retorna. Todo o
 /// trabalho de verdade acontece na thread worker. Orcamento: p99 abaixo de 50 us. O
 /// disjuntor do sistema (<c>LowLevelHooksTimeout</c>, 300 ms por padrao) REMOVE o hook em
@@ -42,6 +42,9 @@ public sealed unsafe class LowLevelHookHost : IDisposable
 
     private const int VK_V = 0x56;
 
+    // KBDLLHOOKSTRUCT.flags: Alt is held for this key
+    private const uint LLKHF_ALTDOWN = 0x20;
+
     /// <summary>Teto da espera por install/uninstall. Nunca deve ser atingido: o pump so bombeia mensagens.</summary>
     private const int CommandTimeoutMilliseconds = 250;
 
@@ -55,7 +58,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     private const int WorkerWaitMilliseconds = 250;
 
     // 1024 entradas: um mouse gamer a 8000 Hz enche 512 numa rajada de 64 ms se o worker
-    // for preemptado. Cheio, a fila DESCARTA (RF-P1.02) - perder um clique e infinitamente
+    // for preemptado. Cheio, a fila DESCARTA - perder um clique e infinitamente
     // melhor do que segurar a Raw Input Thread.
     private static readonly InputEventRing Ring = new(1024);
 
@@ -147,7 +150,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     /// Instala o hook enquanto o escopo viver (contado por referencia).
     /// Descartar o ultimo escopo REMOVE o hook do sistema (nao apenas desativa).
     ///
-    /// RF-P1.06: instala MESMO com o host suspenso. Todo Acquire e disparado por acao
+    /// instala MESMO com o host suspenso. Todo Acquire e disparado por acao
     /// explicita do usuario (abrir o flyout, armar a fila de colagem), e a suspensao
     /// existe para cortar custo em REPOUSO, nao para bloquear o que o usuario pediu.
     /// Recusar o install aqui deixaria o flyout aberto sem navegacao por teclado sempre
@@ -158,14 +161,18 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     {
         Start();
 
+        bool becameActive;
         lock (_sync)
         {
             int index = (int)kind;
+            becameActive = _refCounts[0] + _refCounts[1] == 0;
             _refCounts[index]++;
             if (_refCounts[index] == 1)
                 PostCommand(WM_KLIP_INSTALL, kind);
         }
 
+        if (becameActive)
+            RaiseScopeActiveChanged(true);
         return new HookScope(this, kind);
     }
 
@@ -177,7 +184,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     /// Auto-suspensao (jogo em tela cheia): remove TODOS os hooks agora.
     /// Escopos vivos continuam validos e sao reinstalados por <see cref="ResumeAll"/>.
     ///
-    /// Com ADR-P.02 em vigor, em repouso nao existe hook nenhum instalado - entao na
+    /// Com em vigor, em repouso nao existe hook nenhum instalado - entao na
     /// pratica isto e uma rede de seguranca contra escopo vazado, e nao o mecanismo
     /// principal de economia.
     /// </summary>
@@ -189,10 +196,10 @@ public sealed unsafe class LowLevelHookHost : IDisposable
                 return;
             Volatile.Write(ref _suspended, 1);
 
-            // RF-P1.06: nao arrancar o hook debaixo de um escopo VIVO. Um refCount > 0
+            // nao arrancar o hook debaixo de um escopo VIVO. Um refCount > 0
             // significa que o usuario esta com o flyout aberto ou com a fila de colagem
             // armada agora; remover o hook ai quebraria a navegacao por teclado sem
-            // nenhum aviso. Escopos vivos sao curtos por construcao (ADR-P.02) e serao
+            // nenhum aviso. Escopos vivos sao curtos por construcao e serao
             // removidos sozinhos ao fechar.
             if (_refCounts[(int)LowLevelHookKind.Keyboard] == 0)
                 PostCommand(WM_KLIP_UNINSTALL, LowLevelHookKind.Keyboard);
@@ -219,7 +226,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
 
     public bool IsSuspended => Volatile.Read(ref _suspended) != 0;
 
-    /// <summary>RF-P1.04: amostra e zera o pior caso da janela. Chamar de um timer de background.</summary>
+    /// <summary>amostra e zera o pior caso da janela. Chamar de um timer de background.</summary>
     public HookSample SampleMetrics() => HookPolicy.Metrics.Sample();
 
     public void Dispose()
@@ -261,10 +268,11 @@ public sealed unsafe class LowLevelHookHost : IDisposable
         _commandSignal.Dispose();
     }
 
-    // ================= Escopo contado por referencia (ADR-P.02) =================
+    // ================= Escopo contado por referencia =================
 
     private void Release(LowLevelHookKind kind)
     {
+        bool becameIdle;
         lock (_sync)
         {
             int index = (int)kind;
@@ -272,12 +280,45 @@ public sealed unsafe class LowLevelHookHost : IDisposable
                 return;
 
             _refCounts[index]--;
-            // RF-P1.06: desinstala SEMPRE, inclusive com o host suspenso. A condicao
+            // desinstala SEMPRE, inclusive com o host suspenso. A condicao
             // anterior (so desinstalar fora da suspensao) vazava exatamente o cenario
             // que este trabalho existe para eliminar: fechar o flyout durante um jogo
             // em tela cheia deixava o hook LL vivo no sistema indefinidamente.
             if (_refCounts[index] == 0)
                 PostCommand(WM_KLIP_UNINSTALL, kind);
+            becameIdle = _refCounts[0] + _refCounts[1] == 0;
+        }
+
+        if (becameIdle)
+            RaiseScopeActiveChanged(false);
+    }
+
+    /// <summary>
+    /// True when the first scope opens, false when the last one closes. Raised on the
+    /// caller thread, outside the lock. The app uses it to run its watchdogs only while
+    /// a hook is live, so the idle process has no periodic timer at all.
+    /// </summary>
+    public event Action<bool>? ScopeActiveChanged;
+
+    /// <summary>True while any scope (keyboard or mouse) is alive.</summary>
+    public bool HasLiveScope
+    {
+        get
+        {
+            lock (_sync)
+                return _refCounts[0] + _refCounts[1] > 0;
+        }
+    }
+
+    private void RaiseScopeActiveChanged(bool active)
+    {
+        try
+        {
+            ScopeActiveChanged?.Invoke(active);
+        }
+        catch
+        {
+            // a bad subscriber can't break Acquire/Dispose of the scope
         }
     }
 
@@ -380,7 +421,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     }
 
     /// <summary>
-    /// RF-P1.02: pre-JIT do caminho quente. Sem isso o PRIMEIRO evento depois de instalar
+    /// pre-JIT do caminho quente. Sem isso o PRIMEIRO evento depois de instalar
     /// o hook paga 1 a 5 ms de compilacao - dentro do orcamento de 300 ms, mas visivel como
     /// engasgo na primeira tecla.
     /// <para>
@@ -410,6 +451,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
         _ = HookPolicy.MouseActive;
         _ = HookPolicy.SwallowKeys.Contains(0);
         _ = HookPolicy.SwallowKeysWithCtrl.Contains(0);
+        _ = HookPolicy.SwallowKeysWithAlt.Contains(0);
         _ = IsCtrlDown();
 
         // Roda com a fila desarmada (Start acontece antes de qualquer arme), entao o
@@ -527,9 +569,23 @@ public sealed unsafe class LowLevelHookHost : IDisposable
 
             uint message = (uint)wParam;
             if (message != NativeMethods.WM_KEYDOWN && message != NativeMethods.WM_SYSKEYDOWN)
+            {
+                // key-ups only matter for Ctrl/Alt while the flyout is open (the number
+                // badges go away on release), and they are never swallowed
+                if (HookPolicy.KeyboardActive &&
+                    (message == NativeMethods.WM_KEYUP || message == NativeMethods.WM_SYSKEYUP))
+                {
+                    ref readonly var up = ref Unsafe.AsRef<NativeMethods.KBDLLHOOKSTRUCT>((void*)lParam);
+                    if (up.vkCode is >= 0xA2 and <= 0xA5)
+                    {
+                        if (!Ring.TryEnqueue(message, (int)up.vkCode, (int)up.scanCode, up.time))
+                            HookPolicy.Metrics.RecordDrop();
+                    }
+                }
                 return NativeMethods.CallNextHookEx(nint.Zero, nCode, wParam, lParam);
+            }
 
-            // ADR-P.04: leitura por ponteiro. Marshal.PtrToStructure aloca e passa pelo
+            // leitura por ponteiro. Marshal.PtrToStructure aloca e passa pelo
             // marshaller generico A CADA TECLA do sistema inteiro - proibido aqui.
             ref readonly var data = ref Unsafe.AsRef<NativeMethods.KBDLLHOOKSTRUCT>((void*)lParam);
             int vk = (int)data.vkCode;
@@ -553,7 +609,8 @@ public sealed unsafe class LowLevelHookHost : IDisposable
             if (HookPolicy.KeyboardActive)
             {
                 bool swallow = HookPolicy.SwallowKeys.Contains(vk)
-                    || (HookPolicy.SwallowKeysWithCtrl.Contains(vk) && IsCtrlDown());
+                    || (HookPolicy.SwallowKeysWithCtrl.Contains(vk) && IsCtrlDown())
+                    || (HookPolicy.SwallowKeysWithAlt.Contains(vk) && (data.flags & LLKHF_ALTDOWN) != 0);
 
                 if (!Ring.TryEnqueue(message, vk, scan, time))
                     HookPolicy.Metrics.RecordDrop();

@@ -1,8 +1,8 @@
 namespace Klip.Interop.Recording;
 
 /// <summary>
-/// Frame na CPU para o caminho GIF (D-F2.3). Emitido apenas em modo CFR
-/// (FixedFps != null, RF-F2.05). O evento e invocado sincronamente e o buffer
+/// Frame na CPU para o caminho GIF. Emitido apenas em modo CFR
+/// (FixedFps != null). O evento e invocado sincronamente e o buffer
 /// <see cref="Bgra"/> e REUTILIZADO pelo engine entre frames: copie dentro do
 /// handler tudo o que precisar reter.
 /// </summary>
@@ -25,15 +25,15 @@ public sealed class CpuFrame
     /// </summary>
     public byte[] Bgra { get; }
 
-    /// <summary>Largura em px fisicos (sempre PAR, RF-F2.03).</summary>
+    /// <summary>Largura em px fisicos (sempre PAR).</summary>
     public int Width { get; }
 
-    /// <summary>Altura em px fisicos (sempre PAR, RF-F2.03).</summary>
+    /// <summary>Altura em px fisicos (sempre PAR).</summary>
     public int Height { get; }
 
     /// <summary>
     /// Timestamp CFR na grade n * (1/FPS), ancorado no relogio real desde o
-    /// primeiro tick da sessao (RF-F2.05). Indices da grade podem ser pulados
+    /// primeiro tick da sessao. Indices da grade podem ser pulados
     /// sob carga; o timestamp nunca sai da grade.
     /// </summary>
     public TimeSpan Timestamp { get; }

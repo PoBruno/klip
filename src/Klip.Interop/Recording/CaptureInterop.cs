@@ -8,7 +8,7 @@ using WinRT;
 namespace Klip.Interop.Recording;
 
 /// <summary>
-/// COM interop para criar GraphicsCaptureItem sem picker (app Win32, spec F2).
+/// COM interop para criar GraphicsCaptureItem sem picker (app Win32).
 /// Padrao canonico de robmikh/Win32CaptureSample (MIT).
 /// </summary>
 [ComImport]
@@ -35,7 +35,7 @@ internal static class CaptureInterop
     private static Guid _graphicsCaptureItemIid = new("79C3F95B-31F7-4EC2-A464-632EF5D30760");
     private static Guid _d3d11Texture2DIid = new("6F15AAF2-D208-4E89-9AB4-489535D34F9C");
 
-    /// <summary>Cria o item de captura para um HMONITOR, sem picker (RF-F2.01).</summary>
+    /// <summary>Cria o item de captura para um HMONITOR, sem picker.</summary>
     public static GraphicsCaptureItem CreateItemForMonitor(nint hMonitor)
     {
         var interop = GraphicsCaptureItem.As<IGraphicsCaptureItemInterop>();
