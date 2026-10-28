@@ -10,13 +10,21 @@ namespace Klip.App.Services;
 /// The frozen frames live in native WIC memory that only comes back when a finalizer
 /// runs, and an idle tray app never allocates, so without this the memory stays
 /// stuck until the next activity. Never periodic: one shot per heavy session.
+/// <para>
+/// The working set trim runs on its own, much longer clock than the GC. Trimming right
+/// after the 2s GC debounce used to mean the very next Win+V or Win+Shift+S (often
+/// seconds later) paid the pages back one fault at a time - the 2-3s freeze people
+/// noticed was this, not the hotkey or the window itself.
+/// </para>
 /// </summary>
 public sealed class MemorySettler
 {
-    private static readonly TimeSpan Delay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan GcDelay = TimeSpan.FromSeconds(2);
+    private static readonly TimeSpan TrimDelay = TimeSpan.FromMinutes(3);
 
     private readonly Dispatcher _dispatcher;
-    private DispatcherTimer? _pending;
+    private DispatcherTimer? _pendingGc;
+    private DispatcherTimer? _pendingTrim;
 
     public MemorySettler(Dispatcher dispatcher)
     {
@@ -33,18 +41,29 @@ public sealed class MemorySettler
         }
 
         // restart the countdown: closing the editor right after the overlay = one GC
-        _pending?.Stop();
-        _pending = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher) { Interval = Delay };
-        _pending.Tick += (_, _) =>
+        _pendingGc?.Stop();
+        _pendingGc = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher) { Interval = GcDelay };
+        _pendingGc.Tick += (_, _) =>
         {
-            _pending?.Stop();
-            _pending = null;
-            Settle();
+            _pendingGc?.Stop();
+            _pendingGc = null;
+            RunGc();
         };
-        _pending.Start();
+        _pendingGc.Start();
+
+        // a new heavy session pushes the trim back out: only truly idle stretches pay it
+        _pendingTrim?.Stop();
+        _pendingTrim = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher) { Interval = TrimDelay };
+        _pendingTrim.Tick += (_, _) =>
+        {
+            _pendingTrim?.Stop();
+            _pendingTrim = null;
+            RunTrim();
+        };
+        _pendingTrim.Start();
     }
 
-    private static void Settle()
+    private static void RunGc()
     {
         try
         {
@@ -55,10 +74,22 @@ public sealed class MemorySettler
             // second pass picks up what the finalizers just released (InteropBitmap etc)
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
-            // trim only with nothing on screen, otherwise the next frame pays soft faults
-            var trimmed = !AnyWindowVisible() && NativeMethods.TrimWorkingSet();
             StartupLog.WriteVerbose(
-                $"Memoria: settle {before / 1024 / 1024} -> {GC.GetTotalMemory(false) / 1024 / 1024} MB gerenciado, trim={(trimmed ? "sim" : "nao")}");
+                $"Memoria: settle {before / 1024 / 1024} -> {GC.GetTotalMemory(false) / 1024 / 1024} MB gerenciado");
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("MemorySettler", ex);
+        }
+    }
+
+    private static void RunTrim()
+    {
+        try
+        {
+            // still nothing on screen 3 min later: this is real idle, not "stepped away a sec"
+            var trimmed = !AnyWindowVisible() && NativeMethods.TrimWorkingSet();
+            StartupLog.WriteVerbose($"Memoria: trim do working set={(trimmed ? "sim" : "nao")}");
         }
         catch (Exception ex)
         {
