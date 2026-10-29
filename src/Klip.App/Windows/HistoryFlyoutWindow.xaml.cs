@@ -538,19 +538,20 @@ public partial class HistoryFlyoutWindow
         var onSnippets = _viewModel.SelectedTab == HistoryTab.Snippets;
         if (onSnippets && _viewModel.SnippetsStale)
             _ = _viewModel.ReloadSnippetsAsync();
-        if (!onEmoji && !onSnippets && _viewModel.IsStale)
+
+        // Used to call LoadFirstPage() right here, synchronously: fine when the sqlite
+        // page cache is warm (~1 ms), but after the app sits untouched for a while the
+        // os can have let that cache go cold, and the same query turns into real disk
+        // io on the UI thread a frame before the panel even appears - that is the
+        // "freeze if I don't touch it for a bit" people kept seeing after the memory
+        // settle fix. Whatever is already on screen (even stale) shows immediately;
+        // the reload runs off-thread and swaps the list in when it lands.
+        var reloading = !onEmoji && !onSnippets && _viewModel.IsStale;
+        if (reloading)
         {
             var anchor = remember ? _hiddenAnchor : null;
             _suppressReloadReset = remember;
-            try
-            {
-                _viewModel.LoadFirstPage();
-            }
-            finally
-            {
-                _suppressReloadReset = false;
-            }
-            _pendingAnchor = anchor;
+            _ = ReloadThenRestore(anchor, remember);
         }
         UpdatePanels();
         SyncTabButtons(); // keep the tab strip in sync with the active tab
@@ -574,24 +575,16 @@ public partial class HistoryFlyoutWindow
         System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
         Show();
 
-        // the layout of a rebuilt list only settles after Show; finish the job once it has
+        // the layout of whatever is on screen right now only settles after Show; a
+        // stale reload (if any) redoes this same settling itself once it lands
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
         {
             if (!IsVisible)
                 return;
-            if (_pendingAnchor is { } a)
-            {
-                _pendingAnchor = null;
-                RestoreScrollAnchor(a);
-            }
-            else if (!remember)
-            {
+            if (!remember)
                 ResetListToTop();
-            }
             else
-            {
                 SelectFirstVisibleIfSelectionOffscreen();
-            }
         });
 
         // the hooks go in AFTER Show() on purpose: Acquire waits for the pump to confirm
@@ -607,10 +600,36 @@ public partial class HistoryFlyoutWindow
         Diagnostics.StartupLogHookTrace.Trace("flyout aberto");
     }
 
+    /// <summary>
+    /// Runs the reload the panel skipped at Show() time and settles the scroll position
+    /// once it lands. The generic Loaded-priority block right after Show() already ran
+    /// against whatever was on screen before this finishes; this redoes the same
+    /// settling against the fresh list, which is what actually matters.
+    /// </summary>
+    private async Task ReloadThenRestore(ScrollAnchor? anchor, bool remember)
+    {
+        try
+        {
+            await _viewModel.ReloadAsync();
+        }
+        finally
+        {
+            _suppressReloadReset = false;
+        }
+
+        if (!IsVisible)
+            return;
+        if (anchor is { } a)
+            RestoreScrollAnchor(a);
+        else if (!remember)
+            ResetListToTop();
+        else
+            SelectFirstVisibleIfSelectionOffscreen();
+    }
+
     // ----- Scroll position -----
 
     private ScrollViewer? _listScroll;
-    private ScrollAnchor? _pendingAnchor;
 
     // taken right before hiding: a hidden window has no visible containers to measure
     private ScrollAnchor? _hiddenAnchor;
