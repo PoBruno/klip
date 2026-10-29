@@ -31,6 +31,14 @@ public sealed class MemorySettler
         _dispatcher = dispatcher;
     }
 
+    /// <summary>
+    /// Raised right after a trim actually ran. A trim quietly undoes whatever the
+    /// startup warm-ups paid for (capture overlay JIT/brushes, flyout layout+query),
+    /// and nothing else repays that - without a listener the next real hotkey eats
+    /// the cost live. Fired on the dispatcher thread.
+    /// </summary>
+    public event Action? Trimmed;
+
     /// <summary>Asks for a settle; several calls in a row collapse into one.</summary>
     public void Schedule()
     {
@@ -83,13 +91,15 @@ public sealed class MemorySettler
         }
     }
 
-    private static void RunTrim()
+    private void RunTrim()
     {
         try
         {
             // still nothing on screen 3 min later: this is real idle, not "stepped away a sec"
             var trimmed = !AnyWindowVisible() && NativeMethods.TrimWorkingSet();
             StartupLog.WriteVerbose($"Memoria: trim do working set={(trimmed ? "sim" : "nao")}");
+            if (trimmed)
+                Trimmed?.Invoke();
         }
         catch (Exception ex)
         {

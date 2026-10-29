@@ -45,6 +45,7 @@ public sealed class CaptureController(
             return;
         _sessionActive = true;
 
+        var sw = StartupLog.VerboseEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
         try
         {
             var frames = screenCapture.FreezeAllMonitors();
@@ -83,6 +84,9 @@ public sealed class CaptureController(
 
             foreach (var overlay in _overlays)
                 overlay.ShowOverlay();
+
+            if (sw is not null)
+                StartupLog.WriteVerbose($"Captura: overlay visivel em {sw.ElapsedMilliseconds} ms");
         }
         catch (Exception ex)
         {

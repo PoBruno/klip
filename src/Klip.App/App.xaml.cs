@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using Klip.App.Diagnostics;
 using Klip.App.Localization;
 using Klip.App.Services;
@@ -204,6 +205,13 @@ public partial class App : Application
             _uiWatchdog.Start();
         LowLevelHookHost.Shared.ScopeActiveChanged += OnHookScopeActiveChanged;
         _memory = _services.GetRequiredService<MemorySettler>();
+        // a trim gives the warm-ups' pages back to the OS; repay that quietly instead
+        // of letting the next real hotkey pay it live
+        _memory.Trimmed += RewarmSoon;
+        // modern standby/sleep can do the same thing overnight even without a trim of
+        // ours ever firing - the machine freezes the whole process, and whatever the
+        // page cache had warm is anyone's guess by the time it thaws
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         var settings = _services.GetRequiredService<SettingsService>();
 
@@ -1070,6 +1078,49 @@ public partial class App : Application
     }
 
     /// <summary>
+    /// Resume from sleep/modern standby: the whole process was frozen, and whatever
+    /// the warm-ups paid for is gone or uncertain by the time it thaws. A small delay
+    /// before re-warming because the display/GPU driver is often still settling right
+    /// at the resume event itself.
+    /// </summary>
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode != PowerModes.Resume)
+            return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            StartupLog.WriteVerbose("Energia: resume detectado");
+            RewarmSoon();
+        });
+    }
+
+    /// <summary>
+    /// Re-pays the flyout and capture warm-ups a few seconds after something that may
+    /// have undone them (a working set trim, or a sleep/resume cycle). Skipped if a
+    /// window is already open - there's nothing to warm and showing one would be a
+    /// visible glitch.
+    /// </summary>
+    private void RewarmSoon()
+    {
+        if (IsExiting)
+            return;
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.ApplicationIdle, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (IsExiting)
+                return;
+            _flyout?.Rewarm();
+            _captureController?.WarmUp();
+        };
+        timer.Start();
+    }
+
+    /// <summary>
     /// First hook scope opened / last one closed. The watchdog and the fullscreen
     /// poller only make sense while a hook is installed; at idle both are stopped.
     /// </summary>
@@ -1241,6 +1292,7 @@ public partial class App : Application
         _tray?.Dispose();
 
         // stop the timers before the container goes away
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
         LowLevelHookHost.Shared.ScopeActiveChanged -= OnHookScopeActiveChanged;
         _retentionTimer?.Dispose();
         _activityMonitor?.Dispose();

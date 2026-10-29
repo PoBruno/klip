@@ -523,6 +523,8 @@ public partial class HistoryFlyoutWindow
     /// </summary>
     public void ShowFlyout()
     {
+        var sw = Services.StartupLog.VerboseEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
+
         // if the idle warm-up didn't get to run yet (user hit Win+V right after
         // launch), pay it now so the very first open still comes up prepared
         // instead of flashing an empty dark window
@@ -574,6 +576,8 @@ public partial class HistoryFlyoutWindow
 
         System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
         Show();
+        if (sw is not null)
+            Services.StartupLog.WriteVerbose($"Flyout: visivel em {sw.ElapsedMilliseconds} ms");
 
         // the layout of whatever is on screen right now only settles after Show; a
         // stale reload (if any) redoes this same settling itself once it lands
@@ -921,6 +925,30 @@ public partial class HistoryFlyoutWindow
         // only pays off once; a second call (idle timer after a manual open) is a no-op
         if (_warmedUp)
             return;
+        PayWarmUpCost();
+        _warmedUp = true;
+    }
+
+    /// <summary>
+    /// Pays the same cost as <see cref="WarmUp"/> again after a working set trim (see
+    /// <see cref="Services.MemorySettler"/>): the startup warm-up only runs once, but a
+    /// trim hours later quietly undoes it by handing those pages back to the OS, and
+    /// nothing else repaid them since. Without this the next real Win+V after a long
+    /// stretch of real inactivity pays to fault that layout and the first query back
+    /// in live - which is exactly the "still slow if I don't touch it for a while"
+    /// people kept reporting even after the sync query on Show() was removed. Skipped
+    /// while the panel is actually open: there is nothing to warm, and showing it
+    /// again would steal the view from whatever is on screen.
+    /// </summary>
+    public void Rewarm()
+    {
+        if (!_warmedUp || IsVisible)
+            return;
+        PayWarmUpCost();
+    }
+
+    private void PayWarmUpCost()
+    {
         try
         {
             _warmingUp = true;
@@ -945,7 +973,6 @@ public partial class HistoryFlyoutWindow
         finally
         {
             _warmingUp = false;
-            _warmedUp = true;
         }
     }
 
