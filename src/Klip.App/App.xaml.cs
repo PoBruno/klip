@@ -115,6 +115,14 @@ public partial class App : Application
         // e nao destrutiva ao EmptyWorkingSet.
         PowerEfficiency.SetProcessMemoryPriorityLow();
         PowerEfficiency.EnterProcessEcoQos();
+        // Prioridade baixa deixa o Windows aparar nossas paginas antes das de outros
+        // processos - bom pro sistema no geral, mas sob pressao externa forte e
+        // sustentada (jogo em tela cheia por horas) isso pode evictar ate os caminhos
+        // quentes do hotkey/flyout, e o primeiro Win+V paga o fault storm de volta.
+        // Pisa um piso pequeno que o trimmer nao derruba; escala com a RAM da maquina
+        // e fica em zero em PCs fracos (ver NativeMethods.PinWorkingSetFloor).
+        if (NativeMethods.PinWorkingSetFloor())
+            StartupLog.WriteVerbose("Memoria: piso de working set travado");
         // Defesa contra dependencia que chame timeBeginPeriod: no Win11 o efeito e por
         // processo e some quando estamos ocultos, mas o custo de troca de contexto fica.
         PowerEfficiency.IgnoreTimerResolutionRequests(true);
@@ -1104,8 +1112,12 @@ public partial class App : Application
     {
         if (IsExiting)
             return;
+        // Background, not ApplicationIdle: the latter only runs once the dispatcher
+        // queue is truly empty, and a fullscreen game (or just normal clipboard/hook
+        // traffic) can keep that from ever happening for hours - which is exactly how
+        // this recovery step itself went silent for 9+ hours in one real session.
         var timer = new System.Windows.Threading.DispatcherTimer(
-            System.Windows.Threading.DispatcherPriority.ApplicationIdle, Dispatcher)
+            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
         {
             Interval = TimeSpan.FromSeconds(3),
         };
@@ -1297,6 +1309,7 @@ public partial class App : Application
         _retentionTimer?.Dispose();
         _activityMonitor?.Dispose();
         _uiWatchdog?.Dispose();
+        _memory?.Dispose();
 
         _clipboardMonitor?.Dispose();
         PurgePendingSecrets();

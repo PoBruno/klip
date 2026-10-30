@@ -17,7 +17,7 @@ namespace Klip.App.Services;
 /// noticed was this, not the hotkey or the window itself.
 /// </para>
 /// </summary>
-public sealed class MemorySettler
+public sealed class MemorySettler : IDisposable
 {
     private static readonly TimeSpan GcDelay = TimeSpan.FromSeconds(2);
     private static readonly TimeSpan TrimDelay = TimeSpan.FromMinutes(3);
@@ -48,9 +48,14 @@ public sealed class MemorySettler
             return;
         }
 
-        // restart the countdown: closing the editor right after the overlay = one GC
+        // Background, not ApplicationIdle: the latter only fires once the dispatcher
+        // queue is truly empty, which a fullscreen game (or just normal clipboard/hook
+        // traffic) can keep from happening for hours. Background still runs on the UI
+        // thread, same as before - a blocking compacting GC needs to run there, not on
+        // a raw pool thread, or its finalizer pass can step on native WIC/GDI cleanup
+        // in ways that are not safe off the thread that owns those objects.
         _pendingGc?.Stop();
-        _pendingGc = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher) { Interval = GcDelay };
+        _pendingGc = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = GcDelay };
         _pendingGc.Tick += (_, _) =>
         {
             _pendingGc?.Stop();
@@ -59,9 +64,8 @@ public sealed class MemorySettler
         };
         _pendingGc.Start();
 
-        // a new heavy session pushes the trim back out: only truly idle stretches pay it
         _pendingTrim?.Stop();
-        _pendingTrim = new DispatcherTimer(DispatcherPriority.ApplicationIdle, _dispatcher) { Interval = TrimDelay };
+        _pendingTrim = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = TrimDelay };
         _pendingTrim.Tick += (_, _) =>
         {
             _pendingTrim?.Stop();
@@ -69,6 +73,12 @@ public sealed class MemorySettler
             RunTrim();
         };
         _pendingTrim.Start();
+    }
+
+    public void Dispose()
+    {
+        _pendingGc?.Stop();
+        _pendingTrim?.Stop();
     }
 
     private static void RunGc()
