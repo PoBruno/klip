@@ -87,6 +87,7 @@ internal static class Hi
         ["ToolUndo"] = "पूर्ववत करें (Ctrl+Z)",
         ["ToolRedo"] = "फिर से करें (Ctrl+Y)",
         ["ToolAutoCopy"] = "हर संपादन पर अपने आप कॉपी करें",
+        ["ToolCopyNow"] = "अभी कॉपी करें",
         ["ToolSaveAs"] = "इस रूप में सहेजें... (Ctrl+S)",
         ["Thickness"] = "मोटाई",
         ["Zoom"] = "ज़ूम",

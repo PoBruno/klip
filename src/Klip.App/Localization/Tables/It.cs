@@ -87,6 +87,7 @@ internal static class It
         ["ToolUndo"] = "Annulla (Ctrl+Z)",
         ["ToolRedo"] = "Ripristina (Ctrl+Y)",
         ["ToolAutoCopy"] = "Copia automaticamente a ogni modifica",
+        ["ToolCopyNow"] = "Copia ora",
         ["ToolSaveAs"] = "Salva con nome... (Ctrl+S)",
         ["Thickness"] = "Spessore",
         ["Zoom"] = "Zoom",

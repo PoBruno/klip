@@ -87,6 +87,7 @@ internal static class Fr
         ["ToolUndo"] = "Annuler (Ctrl+Z)",
         ["ToolRedo"] = "Rétablir (Ctrl+Y)",
         ["ToolAutoCopy"] = "Copier automatiquement à chaque modification",
+        ["ToolCopyNow"] = "Copier maintenant",
         ["ToolSaveAs"] = "Enregistrer sous... (Ctrl+S)",
         ["Thickness"] = "Épaisseur",
         ["Zoom"] = "Zoom",

@@ -87,6 +87,7 @@ internal static class Ko
         ["ToolUndo"] = "실행 취소 (Ctrl+Z)",
         ["ToolRedo"] = "다시 실행 (Ctrl+Y)",
         ["ToolAutoCopy"] = "편집할 때마다 자동으로 복사",
+        ["ToolCopyNow"] = "지금 복사",
         ["ToolSaveAs"] = "다른 이름으로 저장... (Ctrl+S)",
         ["Thickness"] = "두께",
         ["Zoom"] = "확대/축소",

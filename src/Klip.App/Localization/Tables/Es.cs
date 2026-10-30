@@ -87,6 +87,7 @@ internal static class Es
         ["ToolUndo"] = "Deshacer (Ctrl+Z)",
         ["ToolRedo"] = "Rehacer (Ctrl+Y)",
         ["ToolAutoCopy"] = "Copiar automáticamente con cada edición",
+        ["ToolCopyNow"] = "Copiar ahora",
         ["ToolSaveAs"] = "Guardar como... (Ctrl+S)",
         ["Thickness"] = "Grosor",
         ["Zoom"] = "Zoom",

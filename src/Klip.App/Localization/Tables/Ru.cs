@@ -87,6 +87,7 @@ internal static class Ru
         ["ToolUndo"] = "Отменить (Ctrl+Z)",
         ["ToolRedo"] = "Повторить (Ctrl+Y)",
         ["ToolAutoCopy"] = "Автоматически копировать при каждом изменении",
+        ["ToolCopyNow"] = "Скопировать сейчас",
         ["ToolSaveAs"] = "Сохранить как... (Ctrl+S)",
         ["Thickness"] = "Толщина",
         ["Zoom"] = "Масштаб",

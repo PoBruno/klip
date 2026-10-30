@@ -87,6 +87,7 @@ internal static class De
         ["ToolUndo"] = "Rückgängig (Ctrl+Z)",
         ["ToolRedo"] = "Wiederholen (Ctrl+Y)",
         ["ToolAutoCopy"] = "Bei jeder Bearbeitung automatisch kopieren",
+        ["ToolCopyNow"] = "Jetzt kopieren",
         ["ToolSaveAs"] = "Speichern unter... (Ctrl+S)",
         ["Thickness"] = "Stärke",
         ["Zoom"] = "Zoom",

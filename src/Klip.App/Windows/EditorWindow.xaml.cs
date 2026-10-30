@@ -194,6 +194,7 @@ public partial class EditorWindow
 
         UndoButton.Click += (_, _) => Undo();
         RedoButton.Click += (_, _) => Redo();
+        CopyNowButton.Click += (_, _) => CopyNow();
         SaveButton.Click += (_, _) => SaveAs();
         RemoveBgButton.Click += (_, _) => RemoveBackground();
         RotateLeftButton.Click += (_, _) => Rotate(clockwise: false);
@@ -236,7 +237,9 @@ public partial class EditorWindow
             // highlighter strokes are built by hand: straight by default, freehand with Ctrl
             _ => InkCanvasEditingMode.None,
         };
-        Ink.UseCustomCursor = Ink.EditingMode == InkCanvasEditingMode.None;
+        // always custom: deixa o cursor por nossa conta, senao o InkCanvas troca pra
+        // uma cruz feia sozinho durante o laco de selecao (modo Select nativo)
+        Ink.UseCustomCursor = true;
         Ink.Cursor = tool switch
         {
             EditorTool.Text => Cursors.IBeam,
@@ -307,6 +310,11 @@ public partial class EditorWindow
             attributes.StylusTip = StylusTip.Rectangle;
         }
         Ink.DefaultDrawingAttributes = attributes;
+
+        var dotSize = Math.Clamp(CurrentThickness * 1.6, 4, 26);
+        ThicknessPreviewDot.Width = dotSize;
+        ThicknessPreviewDot.Height = dotSize;
+        ThicknessPreviewDot.Fill = new SolidColorBrush(CurrentColor);
     }
 
     // ----- Canvas: strokes, shapes, text, crop -----
@@ -639,19 +647,21 @@ public partial class EditorWindow
         return geometry;
     }
 
-    /// <summary>Free text Excalidraw style, an editable box drops on click.</summary>
+    // tamanho fixo do texto solto do canvas: antes vinha da espessura do pincel
+    // (14 + espessura * 2), e digitar um texto depois de ajustar a caneta mudava
+    // o tamanho da fonte sem querer. Agora e independente, igual ao Excalidraw.
+    private const double TextFontSize = 20;
+
+    /// <summary>Free text Excalidraw style: caixa invisivel, sem moldura nem fundo.</summary>
     private void AddTextBox(Point pos)
     {
         var textBox = new TextBox
         {
-            MinWidth = 40,
-            FontSize = 14 + CurrentThickness * 2,
+            Style = (Style)Resources["WhiteboardTextBox"],
+            MinWidth = 20,
+            FontSize = TextFontSize,
             FontFamily = new FontFamily("Segoe UI Variable, Segoe UI"),
             Foreground = new SolidColorBrush(CurrentColor),
-            Background = Brushes.Transparent,
-            BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0x60, 0xA0, 0xFF)),
-            BorderThickness = new Thickness(1),
-            Padding = new Thickness(2),
             AcceptsReturn = true,
         };
         InkCanvas.SetLeft(textBox, pos.X);
@@ -660,7 +670,6 @@ public partial class EditorWindow
 
         textBox.LostFocus += (_, _) =>
         {
-            textBox.BorderBrush = Brushes.Transparent; // now it reads as a clean object
             if (string.IsNullOrWhiteSpace(textBox.Text))
             {
                 Ink.Children.Remove(textBox);
@@ -670,14 +679,64 @@ public partial class EditorWindow
                 MarkChanged();
             }
         };
-        textBox.GotFocus += (_, _) =>
-            textBox.BorderBrush = new SolidColorBrush(Color.FromArgb(0x80, 0x60, 0xA0, 0xFF));
 
         PushUndo(
             undo: () => Ink.Children.Remove(textBox),
             redo: () => Ink.Children.Add(textBox));
 
         textBox.Focus();
+    }
+
+    /// <summary>
+    /// Colar uma imagem (Ctrl+V) solta ela em cima do canvas ja selecionada,
+    /// pronta pra arrastar e redimensionar pelos handles nativos do Select.
+    /// </summary>
+    private void PasteImageFromClipboard()
+    {
+        BitmapSource? pasted;
+        try
+        {
+            if (!System.Windows.Clipboard.ContainsImage())
+                return;
+            pasted = System.Windows.Clipboard.GetImage();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("PasteImage", ex);
+            return;
+        }
+        if (pasted is null)
+            return;
+        if (!pasted.IsFrozen)
+            pasted.Freeze();
+
+        // cabe no tamanho do canvas atual, mas nao estica imagem pequena
+        var scale = _base is null
+            ? 1.0
+            : Math.Min(1.0, Math.Min(_base.PixelWidth / (double)pasted.PixelWidth, _base.PixelHeight / (double)pasted.PixelHeight));
+        var width = pasted.PixelWidth * scale;
+        var height = pasted.PixelHeight * scale;
+
+        var image = new Image
+        {
+            Source = pasted,
+            Width = width,
+            Height = height,
+            Stretch = Stretch.Fill,
+        };
+        var left = _base is null ? 0 : (_base.PixelWidth - width) / 2;
+        var top = _base is null ? 0 : (_base.PixelHeight - height) / 2;
+        InkCanvas.SetLeft(image, left);
+        InkCanvas.SetTop(image, top);
+        Ink.Children.Add(image);
+
+        PushUndo(
+            undo: () => Ink.Children.Remove(image),
+            redo: () => Ink.Children.Add(image));
+        MarkChanged();
+
+        SetTool(EditorTool.Select);
+        Ink.Select([], [image]);
     }
 
     // ----- Emoji stamp -----
@@ -1194,11 +1253,28 @@ public partial class EditorWindow
     private void MarkChanged()
     {
         _hasChanges = true;
-        if (AutoCopyToggle.IsChecked == true)
+        _autoCopyDebounce.Stop();
+        _autoCopyDebounce.Start();
+    }
+
+    private DispatcherTimer? _copiedFeedbackTimer;
+
+    /// <summary>Forces an immediate copy (no debounce) and pulses the button so it reads as an action, not a switch.</summary>
+    private void CopyNow()
+    {
+        _autoCopyDebounce.Stop();
+        _hasChanges = true; // copy even if nothing changed since the last auto-sync
+        SyncToClipboardAndHistory();
+
+        CopyNowGlyph.Text = ""; // checkmark
+        _copiedFeedbackTimer?.Stop();
+        _copiedFeedbackTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(1100) };
+        _copiedFeedbackTimer.Tick += (_, _) =>
         {
-            _autoCopyDebounce.Stop();
-            _autoCopyDebounce.Start();
-        }
+            _copiedFeedbackTimer!.Stop();
+            CopyNowGlyph.Text = "";
+        };
+        _copiedFeedbackTimer.Start();
     }
 
     /// <summary>Renders base plus annotations at exact pixels. Flatten only happens on export.</summary>
@@ -1288,6 +1364,10 @@ public partial class EditorWindow
 
     // ----- Zoom -----
 
+    // tem que bater com o Margin="1600" do CanvasHost no XAML: e o quanto de
+    // vazio sobra em volta da imagem pra poder arrastar ela pra um canto, tipo whiteboard.
+    private const double StageMargin = 1600;
+
     private void ApplyZoom()
     {
         var scale = ZoomSlider.Value;
@@ -1304,6 +1384,22 @@ public partial class EditorWindow
         var availableH = CanvasScroll.ViewportHeight > 32 ? CanvasScroll.ViewportHeight : Height - 220;
         var scale = Math.Min(1.0, Math.Min(availableW / _base.PixelWidth, availableH / _base.PixelHeight));
         ZoomSlider.Value = Math.Clamp(scale, ZoomSlider.Minimum, ZoomSlider.Maximum);
+        CenterOnImage();
+    }
+
+    /// <summary>Rola o whiteboard pra deixar a imagem no centro do viewport (em vez do canto do stage).</summary>
+    private void CenterOnImage()
+    {
+        if (_base is null)
+            return;
+        CanvasScroll.UpdateLayout();
+        var scale = ZoomSlider.Value;
+        var imgLeft = StageMargin * scale;
+        var imgTop = StageMargin * scale;
+        var imgW = _base.PixelWidth * scale;
+        var imgH = _base.PixelHeight * scale;
+        CanvasScroll.ScrollToHorizontalOffset(imgLeft - (CanvasScroll.ViewportWidth - imgW) / 2);
+        CanvasScroll.ScrollToVerticalOffset(imgTop - (CanvasScroll.ViewportHeight - imgH) / 2);
     }
 
     // ----- Keyboard -----
@@ -1328,8 +1424,11 @@ public partial class EditorWindow
                 case Key.Z: Undo(); e.Handled = true; return;
                 case Key.Y: Redo(); e.Handled = true; return;                case Key.S: SaveAs(); e.Handled = true; return;
                 case Key.C when !typingText:
-                    _hasChanges = true;
-                    SyncToClipboardAndHistory();
+                    CopyNow();
+                    e.Handled = true;
+                    return;
+                case Key.V when !typingText:
+                    PasteImageFromClipboard();
                     e.Handled = true;
                     return;
                 case Key.D0:
@@ -1400,9 +1499,19 @@ public partial class EditorWindow
     {
         if (Keyboard.Modifiers == ModifierKeys.Control)
         {
-            ZoomSlider.Value = Math.Clamp(
-                ZoomSlider.Value * (e.Delta > 0 ? 1.1 : 1 / 1.1),
-                ZoomSlider.Minimum, ZoomSlider.Maximum);
+            // zoom preso no ponteiro, nao no canto: o pixel debaixo do mouse fica
+            // no mesmo lugar da tela antes e depois, igual Figma/Excalidraw
+            var cursor = e.GetPosition(CanvasScroll);
+            var oldScale = ZoomSlider.Value;
+            var contentX = (CanvasScroll.HorizontalOffset + cursor.X) / oldScale;
+            var contentY = (CanvasScroll.VerticalOffset + cursor.Y) / oldScale;
+
+            var newScale = Math.Clamp(oldScale * (e.Delta > 0 ? 1.1 : 1 / 1.1), ZoomSlider.Minimum, ZoomSlider.Maximum);
+            ZoomSlider.Value = newScale;
+
+            CanvasScroll.UpdateLayout();
+            CanvasScroll.ScrollToHorizontalOffset(contentX * newScale - cursor.X);
+            CanvasScroll.ScrollToVerticalOffset(contentY * newScale - cursor.Y);
             e.Handled = true;
         }
         base.OnPreviewMouseWheel(e);

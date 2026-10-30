@@ -87,6 +87,7 @@ internal static class Nl
         ["ToolUndo"] = "Ongedaan maken (Ctrl+Z)",
         ["ToolRedo"] = "Opnieuw uitvoeren (Ctrl+Y)",
         ["ToolAutoCopy"] = "Automatisch kopiëren bij elke bewerking",
+        ["ToolCopyNow"] = "Nu kopiëren",
         ["ToolSaveAs"] = "Opslaan als... (Ctrl+S)",
         ["Thickness"] = "Dikte",
         ["Zoom"] = "Zoom",

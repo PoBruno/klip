@@ -254,6 +254,7 @@ public static partial class Loc
     public static string ToolUndo => Get(nameof(ToolUndo));
     public static string ToolRedo => Get(nameof(ToolRedo));
     public static string ToolAutoCopy => Get(nameof(ToolAutoCopy));
+    public static string ToolCopyNow => Get(nameof(ToolCopyNow));
     public static string ToolSaveAs => Get(nameof(ToolSaveAs));
     public static string Thickness => Get(nameof(Thickness));
     public static string Zoom => Get(nameof(Zoom));
@@ -607,6 +608,7 @@ public static partial class Loc
         [nameof(ToolUndo)] = "Desfazer (Ctrl+Z)",
         [nameof(ToolRedo)] = "Refazer (Ctrl+Y)",
         [nameof(ToolAutoCopy)] = "Copiar automaticamente a cada edição",
+        [nameof(ToolCopyNow)] = "Copiar agora",
         [nameof(ToolSaveAs)] = "Salvar como... (Ctrl+S)",
         [nameof(Thickness)] = "Espessura",
         [nameof(Zoom)] = "Zoom",
@@ -951,6 +953,7 @@ public static partial class Loc
         [nameof(ToolUndo)] = "Undo (Ctrl+Z)",
         [nameof(ToolRedo)] = "Redo (Ctrl+Y)",
         [nameof(ToolAutoCopy)] = "Copy automatically on every edit",
+        [nameof(ToolCopyNow)] = "Copy now",
         [nameof(ToolSaveAs)] = "Save as... (Ctrl+S)",
         [nameof(Thickness)] = "Thickness",
         [nameof(Zoom)] = "Zoom",

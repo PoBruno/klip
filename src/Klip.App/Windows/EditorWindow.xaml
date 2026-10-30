@@ -119,6 +119,38 @@
                 </Setter.Value>
             </Setter>
         </Style>
+        <!-- area do canvas: zero casca de scrollbar. O WPF-UI tema o ScrollViewer nativo e
+             desenha uma faixa clara mesmo com Hidden; template proprio sem Track/Thumb
+             garante que nao sobra nenhuma linha em volta do whiteboard. -->
+        <Style x:Key="WhiteboardScrollViewer" TargetType="ScrollViewer">
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="ScrollViewer">
+                        <Border Background="{TemplateBinding Background}">
+                            <ScrollContentPresenter />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+        <!-- texto solto do canvas: sem casca nenhuma. O TextBox nativo pega estilo tematico do
+             WPF-UI (fundo e borda) so de existir na arvore, e so setar Background/BorderThickness
+             na instancia nao basta pq o template deles ignora isso. Template proprio zera tudo. -->
+        <Style x:Key="WhiteboardTextBox" TargetType="TextBox">
+            <Setter Property="Background" Value="Transparent" />
+            <Setter Property="BorderThickness" Value="0" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="FocusVisualStyle" Value="{x:Null}" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="TextBox">
+                        <Border Background="Transparent">
+                            <ScrollViewer x:Name="PART_ContentHost" Background="Transparent" />
+                        </Border>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
     </ui:FluentWindow.Resources>
 
     <!-- layout/rendering alinhados ao pixel grid. Display vale para a moldura (glifos e rotulos de 11-16 px); a camada de documento (CanvasHost) volta para Ideal, ver comentario la embaixo. -->
@@ -212,10 +244,10 @@
                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE7A6;" />
                 </Button>
                 <Border Width="1" Margin="6,8" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
-                <ToggleButton x:Name="AutoCopyToggle" IsChecked="True" Style="{StaticResource ToolButton}"
-                              ToolTip="{DynamicResource Loc.ToolAutoCopy}">
-                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE8C8;" />
-                </ToggleButton>
+                <Button x:Name="CopyNowButton" Style="{StaticResource ActionButton}"
+                        ToolTip="{DynamicResource Loc.ToolCopyNow}">
+                    <TextBlock x:Name="CopyNowGlyph" Style="{StaticResource Glyph}" Text="&#xE8C8;" />
+                </Button>
                 <Button x:Name="PinButton" Style="{StaticResource ActionButton}" ToolTip="{DynamicResource Loc.ToolPinToScreen}">
                     <TextBlock Style="{StaticResource Glyph}" Text="&#xE718;" />
                 </Button>
@@ -232,18 +264,23 @@
             Margin="12,2,12,8"
             HorizontalAlignment="Center"
             Orientation="Horizontal">
-            <RadioButton x:Name="SwRed" Background="#FF4040" GroupName="Colors" IsChecked="True" Style="{StaticResource Swatch}" />
-            <RadioButton Background="#FFB900" GroupName="Colors" Style="{StaticResource Swatch}" />
-            <RadioButton Background="#10C060" GroupName="Colors" Style="{StaticResource Swatch}" />
-            <RadioButton Background="#0078D4" GroupName="Colors" Style="{StaticResource Swatch}" />
-            <RadioButton Background="#B146C2" GroupName="Colors" Style="{StaticResource Swatch}" />
-            <RadioButton Background="#000000" GroupName="Colors" Style="{StaticResource Swatch}" />
+            <RadioButton x:Name="SwRed" Background="#FF8787" GroupName="Colors" IsChecked="True" Style="{StaticResource Swatch}" />
+            <RadioButton Background="#FFC078" GroupName="Colors" Style="{StaticResource Swatch}" />
+            <RadioButton Background="#8CE99A" GroupName="Colors" Style="{StaticResource Swatch}" />
+            <RadioButton Background="#74C0FC" GroupName="Colors" Style="{StaticResource Swatch}" />
+            <RadioButton Background="#D0BFFF" GroupName="Colors" Style="{StaticResource Swatch}" />
+            <RadioButton Background="#343A40" GroupName="Colors" Style="{StaticResource Swatch}" />
             <RadioButton Background="#FFFFFF" GroupName="Colors" Style="{StaticResource Swatch}" />
             <Border Width="1" Margin="8,2" Background="{DynamicResource DividerStrokeColorDefaultBrush}" />
             <TextBlock Margin="0,0,6,0" VerticalAlignment="Center" FontSize="11"
                        Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{DynamicResource Loc.Thickness}" />
             <Slider x:Name="ThicknessSlider" Width="100" VerticalAlignment="Center"
                     Maximum="16" Minimum="1" Value="3" />
+            <!-- bolinha que cresce junto com a espessura, pra ver o traco antes de desenhar -->
+            <Border Width="28" Height="28" Margin="8,0,0,0">
+                <Ellipse x:Name="ThicknessPreviewDot" Width="6" Height="6"
+                         HorizontalAlignment="Center" VerticalAlignment="Center" />
+            </Border>
         </StackPanel>
 
         <!-- Canvas com zoom -->
@@ -252,11 +289,13 @@
             Grid.Row="3"
             Margin="12,8,12,0"
             Background="{DynamicResource ControlFillColorInputActiveBrush}"
-            HorizontalScrollBarVisibility="Auto"
-            VerticalScrollBarVisibility="Auto">
+            Style="{StaticResource WhiteboardScrollViewer}"
+            HorizontalScrollBarVisibility="Hidden"
+            VerticalScrollBarVisibility="Hidden">
             <Grid x:Name="ZoomWrapper" HorizontalAlignment="Center" VerticalAlignment="Center">
                 <!-- a camada de documento fica em Ideal (nao herda o Display da moldura): a anotacao de texto chega a 46 px (14 + espessura * 2), o conteudo sofre ScaleTransform de zoom e e rasterizado pelo RenderTargetBitmap da exportacao. Ideal preserva o resultado atual. -->
-                <Grid x:Name="CanvasHost" HorizontalAlignment="Left" VerticalAlignment="Top"
+                <!-- margem generosa = quadro tipo whiteboard: da pra arrastar a imagem inteira pra um canto e ver so vazio em volta, sem barra de rolagem aparecendo -->
+                <Grid x:Name="CanvasHost" Margin="1600" HorizontalAlignment="Left" VerticalAlignment="Top"
                       TextOptions.TextFormattingMode="Ideal">
                     <Image x:Name="BaseImage" Stretch="None" />
                     <InkCanvas

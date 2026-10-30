@@ -87,6 +87,7 @@ internal static class Ar
         ["ToolUndo"] = "تراجع (Ctrl+Z)",
         ["ToolRedo"] = "إعادة (Ctrl+Y)",
         ["ToolAutoCopy"] = "نسخ تلقائي مع كل تعديل",
+        ["ToolCopyNow"] = "انسخ الآن",
         ["ToolSaveAs"] = "حفظ باسم... (Ctrl+S)",
         ["Thickness"] = "السمك",
         ["Zoom"] = "تكبير/تصغير",

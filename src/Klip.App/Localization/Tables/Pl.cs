@@ -87,6 +87,7 @@ internal static class Pl
         ["ToolUndo"] = "Cofnij (Ctrl+Z)",
         ["ToolRedo"] = "Ponów (Ctrl+Y)",
         ["ToolAutoCopy"] = "Kopiuj automatycznie po każdej edycji",
+        ["ToolCopyNow"] = "Kopiuj teraz",
         ["ToolSaveAs"] = "Zapisz jako... (Ctrl+S)",
         ["Thickness"] = "Grubość",
         ["Zoom"] = "Powiększenie",

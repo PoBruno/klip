@@ -87,6 +87,7 @@ internal static class Zh
         ["ToolUndo"] = "撤消 (Ctrl+Z)",
         ["ToolRedo"] = "重做 (Ctrl+Y)",
         ["ToolAutoCopy"] = "每次编辑后自动复制",
+        ["ToolCopyNow"] = "立即复制",
         ["ToolSaveAs"] = "另存为... (Ctrl+S)",
         ["Thickness"] = "粗细",
         ["Zoom"] = "缩放",

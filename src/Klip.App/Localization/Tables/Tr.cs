@@ -87,6 +87,7 @@ internal static class Tr
         ["ToolUndo"] = "Geri al (Ctrl+Z)",
         ["ToolRedo"] = "Yinele (Ctrl+Y)",
         ["ToolAutoCopy"] = "Her düzenlemede otomatik kopyala",
+        ["ToolCopyNow"] = "Şimdi kopyala",
         ["ToolSaveAs"] = "Farklı kaydet... (Ctrl+S)",
         ["Thickness"] = "Kalınlık",
         ["Zoom"] = "Yakınlaştırma",

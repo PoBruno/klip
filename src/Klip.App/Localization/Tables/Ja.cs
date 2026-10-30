@@ -87,6 +87,7 @@ internal static class Ja
         ["ToolUndo"] = "元に戻す (Ctrl+Z)",
         ["ToolRedo"] = "やり直す (Ctrl+Y)",
         ["ToolAutoCopy"] = "編集のたびに自動コピー",
+        ["ToolCopyNow"] = "今すぐコピー",
         ["ToolSaveAs"] = "名前を付けて保存... (Ctrl+S)",
         ["Thickness"] = "太さ",
         ["Zoom"] = "ズーム",
