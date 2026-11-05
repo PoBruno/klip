@@ -3,9 +3,11 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Klip.Core.Clipboard;
+using Klip.Core.Imaging;
 using Klip.Core.Settings;
 using Klip.Interop;
 using Klip.Interop.Clipboard;
@@ -374,6 +376,7 @@ public sealed class ClipboardMonitorService : IDisposable
         {
             // CF_DIB como fallback: decodifica e reencoda em PNG. Continua caro,
             // mas agora e a thread do clipboard que paga, nao a UI.
+            image = IgnoreUnfilledAlpha(image);
             image.Freeze();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
@@ -399,6 +402,31 @@ public sealed class ClipboardMonitorService : IDisposable
             SourceApp = sourceApp,
             SourceTitle = sourceTitle,
         };
+    }
+
+    /// <summary>
+    /// WeChat 4.x puts 32 bpp bitmaps on the clipboard with good colors and alpha 0 on
+    /// every pixel. Saved as is, the png is fully transparent and the dark panel shows a
+    /// black square. When nothing in the alpha is set, read the same bytes as Bgr32 so
+    /// the alpha is dropped. The pixels are copied raw on purpose: converting a Pbgra32
+    /// source to Bgra32 divides by the alpha and would wipe the colors too.
+    /// </summary>
+    private static BitmapSource IgnoreUnfilledAlpha(BitmapSource image)
+    {
+        if (image.Format != PixelFormats.Bgra32 && image.Format != PixelFormats.Pbgra32)
+            return image;
+
+        var width = image.PixelWidth;
+        var height = image.PixelHeight;
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        image.CopyPixels(pixels, stride, 0);
+
+        if (!AlphaChannel.IsFullyTransparent(pixels))
+            return image;
+
+        return BitmapSource.Create(width, height, image.DpiX, image.DpiY,
+            PixelFormats.Bgr32, null, pixels, stride);
     }
 
     /// <summary>
