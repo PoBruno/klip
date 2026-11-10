@@ -75,6 +75,50 @@ public sealed class MediaEditorExportService(SettingsService settings)
         }
     }
 
+    /// <summary>
+    /// Exporta um projeto de video com mais de uma trilha: mesma cadeia de
+    /// fallback de codec da rota de trilha unica, so trocando o builder do
+    /// filter_complex (um input por trilha, compostas por overlay).
+    /// </summary>
+    public async Task ExportMultiTrackVideoAsync(
+        MediaEditProject project, VideoExportSettings template,
+        IReadOnlyDictionary<int, FfmpegArgsBuilder.TrackOverlay> overlays, string outputPath,
+        IProgress<double> progress, CancellationToken cancellationToken)
+    {
+        var ffmpeg = LocateFfmpeg() ?? throw new FfmpegNotFoundException();
+        var temp = TempPathFor(outputPath);
+        try
+        {
+            FfmpegRunResult? last = null;
+            for (var i = 0; i < VideoCodecChain.Length; i++)
+            {
+                var codecSettings = new VideoExportSettings
+                {
+                    VideoCodec = VideoCodecChain[i],
+                    BitrateKbps = template.BitrateKbps,
+                    FastStart = template.FastStart,
+                    Width = template.Width,
+                    Height = template.Height,
+                    Fps = template.Fps,
+                };
+                var args = FfmpegArgsBuilder.BuildMultiTrackVideoExportArgs(project, codecSettings, overlays, temp);
+                last = await _runner.RunAsync(ffmpeg, args, project.EditedDuration, progress, cancellationToken, temp)
+                    .ConfigureAwait(false);
+                if (last.Success)
+                {
+                    File.Move(temp, outputPath, overwrite: true);
+                    return;
+                }
+                StartupLog.Write($"Export MP4 multi-trilha: codec {VideoCodecChain[i]} falhou (exit {last.ExitCode}), tentando o proximo");
+            }
+            throw new InvalidOperationException($"ffmpeg falhou em todos os codecs. Stderr: {last?.StderrTail}");
+        }
+        finally
+        {
+            DeleteQuiet(temp);
+        }
+    }
+
     /// <summary>Exporta o projeto de video como GIF via palettegen.</summary>
     public async Task ExportGifFromVideoAsync(
         MediaEditProject project, GifFromVideoSettings gifSettings, string outputPath,

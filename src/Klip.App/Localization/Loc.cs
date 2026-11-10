@@ -102,6 +102,7 @@ public static partial class Loc
     // ----- Tray -----
     public static string TrayOpenHistory => Get(nameof(TrayOpenHistory));
     public static string TrayCapture => Get(nameof(TrayCapture));
+    public static string TrayMediaEditor => Get(nameof(TrayMediaEditor));
     public static string TraySettings => Get(nameof(TraySettings));
     public static string TrayExit => Get(nameof(TrayExit));
     public static string TrayPauseHistory => Get(nameof(TrayPauseHistory));
@@ -441,6 +442,11 @@ public static partial class Loc
     public static string MediaFpsOriginal => Get(nameof(MediaFpsOriginal));
     public static string MediaAudioTrack => Get(nameof(MediaAudioTrack));
     public static string MediaMuteTooltip => Get(nameof(MediaMuteTooltip));
+    public static string MediaEmptyHint => Get(nameof(MediaEmptyHint));
+    public static string MediaRemoveTrack => Get(nameof(MediaRemoveTrack));
+    public static string MediaDuplicateSegment => Get(nameof(MediaDuplicateSegment));
+    public static string MediaClipVolume => Get(nameof(MediaClipVolume));
+    public static string MediaClipOpacity => Get(nameof(MediaClipOpacity));
     public static string MediaExporting => Get(nameof(MediaExporting));
     public static string MediaExportDone => Get(nameof(MediaExportDone));
     public static string MediaExportFailed => Get(nameof(MediaExportFailed));
@@ -464,6 +470,7 @@ public static partial class Loc
     {
         [nameof(TrayOpenHistory)] = "Abrir histórico",
         [nameof(TrayCapture)] = "Capturar tela",
+        [nameof(TrayMediaEditor)] = "Editor de vídeo",
         [nameof(TraySettings)] = "Configurações",
         [nameof(TrayExit)] = "Sair",
         [nameof(TrayPauseHistory)] = "Pausar histórico de clipboard",
@@ -787,6 +794,11 @@ public static partial class Loc
         [nameof(MediaFpsOriginal)] = "Original",
         [nameof(MediaAudioTrack)] = "Áudio",
         [nameof(MediaMuteTooltip)] = "Mudo (aplicado na exportação)",
+        [nameof(MediaEmptyHint)] = "Arraste um vídeo (.mp4) ou cole com Ctrl+V",
+        [nameof(MediaRemoveTrack)] = "Remover trilha",
+        [nameof(MediaDuplicateSegment)] = "Duplicar em trilha nova (Ctrl+D)",
+        [nameof(MediaClipVolume)] = "Volume",
+        [nameof(MediaClipOpacity)] = "Opacidade",
         [nameof(MediaExporting)] = "Exportando...",
         [nameof(MediaExportDone)] = "Exportação concluída: {0}",
         [nameof(MediaExportFailed)] = "A exportação falhou: {0}",
@@ -809,6 +821,7 @@ public static partial class Loc
     {
         [nameof(TrayOpenHistory)] = "Open history",
         [nameof(TrayCapture)] = "Capture screen",
+        [nameof(TrayMediaEditor)] = "Video editor",
         [nameof(TraySettings)] = "Settings",
         [nameof(TrayExit)] = "Exit",
         [nameof(TrayPauseHistory)] = "Pause clipboard history",
@@ -1132,6 +1145,11 @@ public static partial class Loc
         [nameof(MediaFpsOriginal)] = "Original",
         [nameof(MediaAudioTrack)] = "Audio",
         [nameof(MediaMuteTooltip)] = "Mute (applied on export)",
+        [nameof(MediaEmptyHint)] = "Drag a video (.mp4) in or paste with Ctrl+V",
+        [nameof(MediaRemoveTrack)] = "Remove track",
+        [nameof(MediaDuplicateSegment)] = "Duplicate to new track (Ctrl+D)",
+        [nameof(MediaClipVolume)] = "Volume",
+        [nameof(MediaClipOpacity)] = "Opacity",
         [nameof(MediaExporting)] = "Exporting...",
         [nameof(MediaExportDone)] = "Export finished: {0}",
         [nameof(MediaExportFailed)] = "The export failed: {0}",

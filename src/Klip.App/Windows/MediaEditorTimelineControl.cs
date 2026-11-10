@@ -8,24 +8,32 @@ using Klip.Core.Media.Editing;
 namespace Klip.App.Windows;
 
 /// <summary>
-/// Controle proprio de timeline do editor de midia (
-/// ): regua em unidades da timeline EDITADA (segundos no MP4,
-/// frames no GIF), segmentos como blocos POSICIONADOS por TimelineStart /
-/// TimelineFrameStart (timeline livre), gaps com fundo mais escuro
-/// e hachura diagonal sutil, handles de trim nas bordas e playhead
-/// arrastavel. Arrastar o CORPO do segmento reposiciona-o na timeline
-/// (MoveSegmentTo), com clamp visual nos vizinhos e snapping nas bordas dos
-/// vizinhos e no playhead (~8 px); cruzar vizinhos no drag nao e
-/// suportado - a reordenacao por indice fica no menu de contexto
-/// da janela (SegmentContextMenuRequested). Renderizacao via OnRender e hit
-/// test manual - controle custom, code-behind pesado e esperado aqui.
-/// Durante trim/move o controle mostra um preview local e so emite o evento
-/// de commit no mouse-up (um snapshot de undo por gesto).
-/// Desempenho (correcao do re-render integral a cada tick do playhead): a
-/// parte ESTATICA (regua + segmentos + gaps + thumbnails) fica cacheada num
-/// DrawingGroup invalidado apenas quando projeto/selecao/gesto/tamanho mudam;
-/// mover o playhead so replays o cache + redesenha a linha. Os FormattedText
-/// da regua tambem sao cacheados por rotulo.
+/// Controle proprio de timeline do editor de midia: regua em unidades da
+/// timeline EDITADA (segundos no MP4, frames no GIF), uma LANE horizontal por
+/// trilha de video (GIF so tem a trilha 0), segmentos como blocos
+/// POSICIONADOS por TimelineStart / TimelineFrameStart (timeline livre
+/// dentro da propria lane), gaps com fundo mais escuro e hachura diagonal
+/// sutil, handles de trim nas bordas e playhead arrastavel.
+/// <para>
+/// Arrastar o CORPO de um segmento reposiciona-o dentro da mesma lane
+/// (MoveSegmentTo) com snapping nas bordas dos vizinhos/playhead; soltar
+/// numa lane DIFERENTE (ou abaixo da ultima) muda a trilha do segmento
+/// (MoveSegmentToTrack) - arrastar para baixo da ultima lane cria uma trilha
+/// nova automaticamente, ja que trilhas sao so o agrupamento por TrackIndex
+/// no Core (nenhuma segue "vazia": sair da ultima faz ela sumir sozinha).
+/// Durante o drag o segmento arrastado some do layout estatico da lane de
+/// origem e um "ghost" translucido segue o mouse, sempre na lane-alvo atual
+/// (ou numa linha tracejada abaixo de tudo quando o alvo e uma trilha nova).
+/// </para>
+/// <para>
+/// Renderizacao via OnRender e hit test manual - controle custom, code-behind
+/// pesado e esperado aqui. Durante trim/move o controle mostra um preview
+/// local e so emite o evento de commit no mouse-up (um snapshot de undo por
+/// gesto). A parte ESTATICA (regua + lanes + segmentos + gaps + thumbnails)
+/// fica cacheada num DrawingGroup invalidado apenas quando
+/// projeto/selecao/gesto/tamanho mudam; mover o playhead so troca o cache +
+/// redesenha a linha. Os FormattedText da regua tambem sao cacheados.
+/// </para>
 /// </summary>
 public sealed class MediaEditorTimelineControl : FrameworkElement
 {
@@ -33,6 +41,9 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     private const double TrimHandleWidth = 6;
     private const double DragThreshold = 4;
     private const double MinVideoTrimSeconds = 0.1;
+    private const double MinLaneHeight = 36;
+    private const double LaneGap = 3;
+    private const double NewLaneStripHeight = 28;
 
     /// <summary>Raio de snapping do move em pixels.</summary>
     private const double SnapPixels = 8;
@@ -44,9 +55,9 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     private MediaEditProject? _project;
     private double _playheadUnits;
     private Guid? _selectedId;
-    private IReadOnlyList<BitmapSource>? _gifThumbnails; // por frame do SOURCE
+    private IReadOnlyList<BitmapSource>? _gifThumbnails; // por frame do SOURCE (so ha trilha 0 em GIF)
 
-    // cache do desenho estatico (regua + segmentos); null = reconstruir
+    // cache do desenho estatico (regua + lanes + segmentos); null = reconstruir
     private DrawingGroup? _staticDrawing;
     // cache dos FormattedText da regua, por rotulo (limpo se brush/dpi mudam)
     private readonly Dictionary<string, FormattedText> _rulerTextCache = new();
@@ -55,11 +66,13 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     // estado do gesto corrente
     private DragMode _mode;
-    private int _dragIndex = -1;
+    private Guid? _dragSegmentId;
+    private int _dragOriginTrack; // lane de onde o segmento saiu (para sumir do estatico)
+    private int _dragCurrentTrack; // lane-alvo corrente do preview (pode ser Lanes().Count = trilha nova)
     private Point _dragStart;
     private double _pendingTrimStartUnits;
     private double _pendingTrimEndUnits;
-    // inicio pendente do segmento arrastado na timeline editada
+    // inicio pendente do segmento arrastado na timeline editada (dentro da lane-alvo)
     private double _pendingMoveStartUnits;
     // escala congelada no inicio do gesto: a regua pode reescalar durante o
     // preview e o delta do mouse precisa de uma conversao estavel
@@ -79,11 +92,18 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     public event Action<Guid?>? SegmentSelected;
 
     /// <summary>
-    /// Commit do reposicionamento livre: id + novo inicio na
-    /// timeline EDITADA (segundos no video, frame no GIF). O chamador aplica
-    /// MoveSegmentTo/MoveSegmentToFrame (1 snapshot de undo).
+    /// Commit do reposicionamento livre DENTRO DA MESMA trilha: id + novo
+    /// inicio na timeline EDITADA (segundos no video, frame no GIF). O
+    /// chamador aplica MoveSegmentTo/MoveSegmentToFrame (1 snapshot de undo).
     /// </summary>
     public event Action<Guid, double>? SegmentMoveToRequested;
+
+    /// <summary>
+    /// Commit do reposicionamento para OUTRA trilha (lane diferente, inclusive
+    /// uma nova): id + indice da trilha de destino + novo inicio. Video only
+    /// (GIF so tem uma lane, este evento nunca dispara para GIF).
+    /// </summary>
+    public event Action<Guid, int, double>? SegmentMoveToTrackRequested;
 
     /// <summary>Commit de trim: novos limites em unidades do SOURCE.</summary>
     public event Action<Guid, double, double>? SegmentTrimRequested;
@@ -102,7 +122,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     public void SetProject(MediaEditProject? project)
     {
         _project = project;
-        if (_selectedId is { } id && project?.Segments.All(s => s.Id != id) != false)
+        if (_selectedId is { } id && project?.Segments.Any(s => s.Id == id) != true)
             _selectedId = null;
         InvalidateStaticDrawing();
     }
@@ -114,7 +134,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         InvalidateVisual();
     }
 
-    /// <summary>Miniaturas por frame do source para a strip GIF.</summary>
+    /// <summary>Miniaturas por frame do source para a strip GIF (so a trilha 0 existe em GIF).</summary>
     public void SetGifThumbnails(IReadOnlyList<BitmapSource> thumbnails)
     {
         _gifThumbnails = thumbnails;
@@ -138,14 +158,12 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     private bool IsGif => _project?.Kind == MediaKind.Gif;
 
-    /// <summary>Total COMMITADO da timeline editada, gaps incluidos.</summary>
+    /// <summary>Total COMMITADO da timeline editada (maior trilha), gaps incluidos.</summary>
     private double TotalUnits => _project is null
         ? 0
         : IsGif ? _project.EditedFrameCount : _project.EditedDuration.TotalSeconds;
 
-    private double SourceTotalUnits => _project is null
-        ? 0
-        : IsGif ? _project.SourceFrameCount : _project.SourceDuration.TotalSeconds;
+    private double SourceTotalUnits(TimelineSegment seg) => IsGif ? _project!.SourceFrameCount : seg.SourceFileDuration.TotalSeconds;
 
     private static double SegSourceStart(TimelineSegment seg, bool gif) =>
         gif ? seg.FrameStart : seg.SourceStart.TotalSeconds;
@@ -160,50 +178,124 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         gif ? seg.TimelineFrameEnd : seg.TimelineEnd.TotalSeconds;
 
     /// <summary>
-    /// Spans (inicio, comprimento) dos segmentos na timeline EDITADA
-    /// , com o gesto pendente (trim/move) aplicado como preview.
+    /// Trilhas em ordem visual (lane 0 no topo); GIF sempre devolve so [0].
+    /// Ordem DESCENDENTE de TrackIndex de proposito: o export compoe de
+    /// tras pra frente em ordem ASCENDENTE (a trilha com indice mais baixo e
+    /// o fundo, cada indice maior cobre por cima - ver FfmpegArgsBuilder), e
+    /// a regra pedida foi "o que esta em cima na timeline fica em cima no
+    /// render" - entao a lane do topo aqui precisa ser o indice MAIOR.
     /// </summary>
-    private (double Start, double Length)[] SegmentSpans()
+    private IReadOnlyList<int> Lanes() => _project?.GetTrackIndices().Reverse().ToList() ?? [];
+
+    private double LaneHeight()
     {
-        var project = _project!;
+        var count = Math.Max(1, Lanes().Count);
+        var available = Math.Max(0, ActualHeight - RulerHeight - NewLaneStripReserved());
+        return Math.Max(MinLaneHeight, available / count);
+    }
+
+    private double LaneTop(int laneSlot) => RulerHeight + laneSlot * LaneHeight();
+
+    /// <summary>
+    /// Tira reservada abaixo da ultima lane para o convite "+ nova trilha"
+    /// (ghost de arrastar-para-baixo ficava fora da area visivel - clipada -
+    /// quando so havia uma lane preenchendo 100% da altura). So 0 (degrada
+    /// sem a tira) se a janela for baixa demais pra manter a altura minima
+    /// de cada lane existente.
+    /// </summary>
+    private double NewLaneStripReserved()
+    {
+        if (_project is null || IsGif)
+            return 0;
+        var count = Math.Max(1, Lanes().Count);
+        var available = Math.Max(0, ActualHeight - RulerHeight);
+        return available - count * MinLaneHeight >= NewLaneStripHeight ? NewLaneStripHeight : 0;
+    }
+
+    /// <summary>
+    /// Resolve em qual lane (0-based, posicao na lista de <see cref="Lanes"/>)
+    /// um Y cai; um Y abaixo de todas as lanes devolve Lanes().Count (pedido
+    /// de trilha nova).
+    /// </summary>
+    private int LaneSlotFromY(double y)
+    {
+        var relative = Math.Max(0, y - RulerHeight);
+        var slot = (int)(relative / LaneHeight());
+        return Math.Min(slot, Lanes().Count); // clampa em "uma lane nova"
+    }
+
+    /// <summary>TrackIndex real correspondente a um slot (slot == Lanes().Count pede trilha nova).</summary>
+    private int TrackIndexForSlot(int slot)
+    {
+        var lanes = Lanes();
+        if (slot < lanes.Count)
+            return lanes[slot];
+        return lanes.Count == 0 ? 0 : lanes.Max() + 1;
+    }
+
+    /// <summary>
+    /// Spans (inicio, comprimento) dos segmentos de UMA trilha na timeline
+    /// EDITADA, com o gesto pendente de TRIM aplicado como preview (move
+    /// vira um "ghost" fora do layout normal - ver <see cref="DrawGhost"/> -
+    /// e some daqui enquanto arrasta, inclusive da lane de origem).
+    /// </summary>
+    private (double Start, double Length, TimelineSegment Segment)[] SegmentSpansForTrack(int trackIndex)
+    {
         var gif = IsGif;
-        var spans = new (double Start, double Length)[project.Segments.Count];
-        for (var i = 0; i < spans.Length; i++)
+        var segs = _project!.SegmentsOnTrack(trackIndex);
+        var spans = new List<(double, double, TimelineSegment)>(segs.Count);
+        foreach (var seg in segs)
         {
-            var seg = project.Segments[i];
+            if (_mode == DragMode.Move && seg.Id == _dragSegmentId)
+                continue; // some da lane de origem enquanto vira ghost
             var start = SegTimelineStart(seg, gif);
             var length = SegSourceEnd(seg, gif) - SegSourceStart(seg, gif);
-            if (i == _dragIndex && _mode is DragMode.TrimLeft or DragMode.TrimRight)
+            if (seg.Id == _dragSegmentId && _mode is DragMode.TrimLeft or DragMode.TrimRight)
             {
                 // semantica do Core: TimelineStart desloca junto com o source
                 // start (trim esquerdo mantem a borda direita fixa)
                 start += _pendingTrimStartUnits - SegSourceStart(seg, gif);
                 length = _pendingTrimEndUnits - _pendingTrimStartUnits;
             }
-            else if (i == _dragIndex && _mode == DragMode.Move)
-            {
-                start = _pendingMoveStartUnits;
-            }
-            spans[i] = (start, length);
+            spans.Add((start, length, seg));
         }
-        return spans;
+        return spans.ToArray();
+    }
+
+    private IReadOnlyList<TimelineLayout.Block> ComputeBlocksForTrack(int trackIndex)
+    {
+        var spans = SegmentSpansForTrack(trackIndex);
+        var plain = spans.Select(s => (s.Start, s.Length)).ToArray();
+        return TimelineLayout.ComputePositionedBlocks(plain, RenderTotalUnits(), ActualWidth);
     }
 
     /// <summary>
-    /// Total da regua durante o render: fim do ultimo span com o gesto
-    /// pendente aplicado (nunca menor que o total commitado - arrastar o
-    /// ultimo segmento para a direita ESTENDE a timeline).
+    /// Total da regua durante o render: fim do ultimo span de QUALQUER
+    /// trilha, com o gesto pendente aplicado (nunca menor que o total
+    /// commitado - arrastar/trimar o ultimo segmento para a direita ESTENDE a
+    /// timeline).
     /// </summary>
     private double RenderTotalUnits()
     {
         var total = TotalUnits;
-        foreach (var (start, length) in SegmentSpans())
-            total = Math.Max(total, start + length);
+        if (_project is null)
+            return total;
+        var gif = IsGif;
+
+        if (_mode == DragMode.Move && _dragSegmentId is { } movingId)
+        {
+            var seg = _project.Segments.First(s => s.Id == movingId);
+            var length = SegSourceEnd(seg, gif) - SegSourceStart(seg, gif);
+            total = Math.Max(total, _pendingMoveStartUnits + length);
+        }
+        else if (_mode is DragMode.TrimLeft or DragMode.TrimRight && _dragSegmentId is { } trimId)
+        {
+            var seg = _project.Segments.First(s => s.Id == trimId);
+            var tlStart = SegTimelineStart(seg, gif) + (_pendingTrimStartUnits - SegSourceStart(seg, gif));
+            total = Math.Max(total, tlStart + (_pendingTrimEndUnits - _pendingTrimStartUnits));
+        }
         return total;
     }
-
-    private IReadOnlyList<TimelineLayout.Block> ComputeBlocks() =>
-        TimelineLayout.ComputePositionedBlocks(SegmentSpans(), RenderTotalUnits(), ActualWidth);
 
     // ----- input -----
 
@@ -214,41 +306,48 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
             return;
 
         var pos = e.GetPosition(this);
-        var blocks = ComputeBlocks();
-
         if (pos.Y <= RulerHeight)
         {
             BeginScrub(pos);
+            e.Handled = true;
+            return;
         }
+
+        var slot = LaneSlotFromY(pos.Y);
+        if (slot >= Lanes().Count)
+        {
+            e.Handled = true;
+            return; // clique abaixo de todas as lanes: nada para clicar ainda
+        }
+        var trackIndex = Lanes()[slot];
+        var blocks = ComputeBlocksForTrack(trackIndex);
+        var hitIndex = TimelineLayout.HitTest(blocks, pos.X);
+        if (hitIndex < 0)
+        {
+            BeginScrub(pos); // clique em gap: posiciona o playhead
+            e.Handled = true;
+            return;
+        }
+
+        var seg = SegmentSpansForTrack(trackIndex)[hitIndex].Segment;
+        var block = blocks[hitIndex];
+        Select(seg.Id);
+
+        if (pos.X - block.X <= TrimHandleWidth)
+            BeginTrim(seg, DragMode.TrimLeft, pos);
+        else if (block.Right - pos.X <= TrimHandleWidth)
+            BeginTrim(seg, DragMode.TrimRight, pos);
         else
         {
-            var index = TimelineLayout.HitTest(blocks, pos.X);
-            if (index >= 0)
-            {
-                var block = blocks[index];
-                var seg = _project.Segments[index];
-                Select(seg.Id);
-
-                if (pos.X - block.X <= TrimHandleWidth)
-                    BeginTrim(index, DragMode.TrimLeft, pos);
-                else if (block.Right - pos.X <= TrimHandleWidth)
-                    BeginTrim(index, DragMode.TrimRight, pos);
-                else
-                {
-                    // corpo do segmento: candidato a MOVE na timeline
-                    _mode = DragMode.MaybeDrag;
-                    _dragIndex = index;
-                    _dragStart = pos;
-                    _pendingMoveStartUnits = SegTimelineStart(seg, IsGif);
-                    CaptureGestureScale();
-                    CaptureMouse();
-                }
-            }
-            else
-            {
-                // clique em gap ou fora dos blocos: posiciona o playhead
-                BeginScrub(pos);
-            }
+            // corpo do segmento: candidato a MOVE (mesma trilha ou outra)
+            _mode = DragMode.MaybeDrag;
+            _dragSegmentId = seg.Id;
+            _dragOriginTrack = trackIndex;
+            _dragCurrentTrack = trackIndex;
+            _dragStart = pos;
+            _pendingMoveStartUnits = SegTimelineStart(seg, IsGif);
+            CaptureGestureScale();
+            CaptureMouse();
         }
         e.Handled = true;
     }
@@ -262,13 +361,18 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         var pos = e.GetPosition(this);
         if (pos.Y <= RulerHeight)
             return;
-        var index = TimelineLayout.HitTest(ComputeBlocks(), pos.X);
-        if (index < 0)
+        var slot = LaneSlotFromY(pos.Y);
+        if (slot >= Lanes().Count)
+            return;
+        var trackIndex = Lanes()[slot];
+        var blocks = ComputeBlocksForTrack(trackIndex);
+        var hitIndex = TimelineLayout.HitTest(blocks, pos.X);
+        if (hitIndex < 0)
             return;
 
-        var id = _project.Segments[index].Id;
+        var id = SegmentSpansForTrack(trackIndex)[hitIndex].Segment.Id;
         Select(id);
-        SegmentContextMenuRequested?.Invoke(id); // remover/ripple no menu
+        SegmentContextMenuRequested?.Invoke(id); // remover/ripple/reordenar no menu
         e.Handled = true;
     }
 
@@ -279,11 +383,12 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         RaiseScrub(pos.X);
     }
 
-    private void BeginTrim(int index, DragMode mode, Point pos)
+    private void BeginTrim(TimelineSegment seg, DragMode mode, Point pos)
     {
-        var seg = _project!.Segments[index];
         _mode = mode;
-        _dragIndex = index;
+        _dragSegmentId = seg.Id;
+        _dragOriginTrack = seg.TrackIndex;
+        _dragCurrentTrack = seg.TrackIndex;
         _dragStart = pos;
         _pendingTrimStartUnits = SegSourceStart(seg, IsGif);
         _pendingTrimEndUnits = SegSourceEnd(seg, IsGif);
@@ -294,7 +399,8 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     /// <summary>Congela a escala unidades/pixel para o gesto corrente.</summary>
     private void CaptureGestureScale()
     {
-        _gestureUnitsPerPixel = TotalUnits <= 0 || ActualWidth <= 0 ? 0 : TotalUnits / ActualWidth;
+        var total = RenderTotalUnits();
+        _gestureUnitsPerPixel = total <= 0 || ActualWidth <= 0 ? 0 : total / ActualWidth;
     }
 
     protected override void OnMouseMove(MouseEventArgs e)
@@ -310,12 +416,13 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
                 RaiseScrub(pos.X);
                 break;
 
-            case DragMode.MaybeDrag when Math.Abs(pos.X - _dragStart.X) > DragThreshold:
+            case DragMode.MaybeDrag when Math.Abs(pos.X - _dragStart.X) > DragThreshold ||
+                                          Math.Abs(pos.Y - _dragStart.Y) > DragThreshold:
                 _mode = DragMode.Move;
                 goto case DragMode.Move;
 
             case DragMode.Move:
-                UpdateMovePreview(pos.X);
+                UpdateMovePreview(pos);
                 break;
 
             case DragMode.TrimLeft or DragMode.TrimRight:
@@ -349,23 +456,27 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
             }
             case DragMode.Move:
             {
-                var seg = _project.Segments[_dragIndex];
+                var id = _dragSegmentId!.Value;
+                var seg = _project.Segments.First(s => s.Id == id);
+                var sameTrack = _dragCurrentTrack == _dragOriginTrack;
                 var target = _pendingMoveStartUnits;
-                var changed = Math.Abs(target - SegTimelineStart(seg, IsGif)) > 1e-9;
-                var id = seg.Id;
+                var changedPosition = Math.Abs(target - SegTimelineStart(seg, IsGif)) > 1e-9;
+                var destinationTrack = TrackIndexForSlotSafe(_dragCurrentTrack);
                 ResetGesture();
-                if (changed)
+                if (sameTrack && changedPosition)
                     SegmentMoveToRequested?.Invoke(id, target);
+                else if (!sameTrack)
+                    SegmentMoveToTrackRequested?.Invoke(id, destinationTrack, target);
                 break;
             }
             case DragMode.TrimLeft or DragMode.TrimRight:
             {
-                var seg = _project.Segments[_dragIndex];
+                var id = _dragSegmentId!.Value;
+                var seg = _project.Segments.First(s => s.Id == id);
                 var start = _pendingTrimStartUnits;
                 var end = _pendingTrimEndUnits;
                 var changed = Math.Abs(start - SegSourceStart(seg, IsGif)) > 1e-9 ||
                               Math.Abs(end - SegSourceEnd(seg, IsGif)) > 1e-9;
-                var id = seg.Id;
                 ResetGesture();
                 if (changed)
                     SegmentTrimRequested?.Invoke(id, start, end);
@@ -376,6 +487,9 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
                 break;
         }
     }
+
+    /// <summary>_dragCurrentTrack guarda um SLOT (posicao na lista de lanes), nao o TrackIndex cru.</summary>
+    private int TrackIndexForSlotSafe(int slot) => TrackIndexForSlot(slot);
 
     protected override void OnLostMouseCapture(MouseEventArgs e)
     {
@@ -397,7 +511,7 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     private void ResetGesture()
     {
         _mode = DragMode.None;
-        _dragIndex = -1;
+        _dragSegmentId = null;
         if (IsMouseCaptured)
             ReleaseMouseCapture();
         InvalidateStaticDrawing();
@@ -423,31 +537,42 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
     }
 
     /// <summary>
-    /// Preview do reposicionamento livre: converte o delta do
-    /// mouse em unidades com a escala congelada do gesto, aplica snapping nas
-    /// bordas dos vizinhos e no playhead (~8 px) e clampa nos vizinhos
-    /// espelhando MoveSegmentTo - cruzar vizinhos nao e suportado.
+    /// Preview do reposicionamento livre (X dentro da lane-alvo corrente,
+    /// snapping nas bordas dos vizinhos DESSA lane e no playhead; Y escolhe a
+    /// lane-alvo, inclusive "uma lane nova" abaixo da ultima). Cruzar vizinhos
+    /// dentro da mesma lane nao e suportado - a reordenacao por indice fica
+    /// no menu de contexto.
     /// </summary>
-    private void UpdateMovePreview(double x)
+    private void UpdateMovePreview(Point pos)
     {
-        var project = _project!;
         var gif = IsGif;
-        var seg = project.Segments[_dragIndex];
+        var seg = _project!.Segments.First(s => s.Id == _dragSegmentId);
         var length = SegSourceEnd(seg, gif) - SegSourceStart(seg, gif);
-        var target = SegTimelineStart(seg, gif) + (x - _dragStart.X) * _gestureUnitsPerPixel;
 
-        var lower = _dragIndex > 0 ? SegTimelineEnd(project.Segments[_dragIndex - 1], gif) : 0;
-        double? nextStart = _dragIndex < project.Segments.Count - 1
-            ? SegTimelineStart(project.Segments[_dragIndex + 1], gif)
-            : null;
+        _dragCurrentTrack = gif ? 0 : LaneSlotFromY(pos.Y); // GIF: sempre a unica lane
+        var targetTrackIndex = TrackIndexForSlot(_dragCurrentTrack);
+        var sameTrack = targetTrackIndex == _dragOriginTrack;
 
-        // snapping: candidato mais proximo dentro do raio (borda esquerda no
-        // fim do vizinho anterior/playhead; borda direita no inicio do
-        // proximo/playhead)
+        // vizinhos da lane-alvo (excluindo o proprio segmento se ainda esta nela)
+        var neighbours = _project.SegmentsOnTrack(targetTrackIndex)
+            .Where(s => s.Id != seg.Id)
+            .OrderBy(s => SegTimelineStart(s, gif))
+            .ToArray();
+
+        var target = SegTimelineStart(seg, gif) + (pos.X - _dragStart.X) * _gestureUnitsPerPixel;
+        if (!sameTrack)
+            target = Math.Max(0, target); // noutra lane nao ha vizinho anterior conhecido de antemao
+
+        var prev = neighbours.LastOrDefault(n => SegTimelineEnd(n, gif) <= target);
+        var next = neighbours.FirstOrDefault(n => SegTimelineStart(n, gif) >= (prev is null ? 0 : SegTimelineEnd(prev, gif)));
+
+        var lower = prev is null ? 0 : SegTimelineEnd(prev, gif);
+        double? nextStart = next is null ? null : SegTimelineStart(next, gif);
+
         var snapRadius = SnapPixels * _gestureUnitsPerPixel;
         var candidates = new List<double> { lower, _playheadUnits, _playheadUnits - length };
-        if (nextStart is { } next)
-            candidates.Add(next - length);
+        if (nextStart is { } n2)
+            candidates.Add(n2 - length);
         var bestDist = snapRadius;
         var best = double.NaN;
         foreach (var candidate in candidates)
@@ -462,25 +587,19 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         if (!double.IsNaN(best))
             target = best;
 
-        // clamp nos vizinhos, o mesmo do Core; ultimo segmento e
-        // livre a direita (estende a timeline)
-        var upper = nextStart is { } n ? Math.Max(lower, n - length) : double.MaxValue;
+        var upper = nextStart is { } nn ? Math.Max(lower, nn - length) : double.MaxValue;
         target = Math.Clamp(target, lower, upper);
         if (gif)
             target = Math.Clamp(Math.Round(target), lower, upper);
 
         _pendingMoveStartUnits = target;
-        InvalidateStaticDrawing(); // blocos e gaps mudam de lugar no preview
+        InvalidateStaticDrawing(); // lanes, ghost e gaps mudam de lugar no preview
     }
 
-    /// <summary>
-    /// Trim com clamp aos limites do source, aos vizinhos na timeline
-    ///  e snapping.
-    /// </summary>
+    /// <summary>Trim com clamp aos limites do SOURCE DO SEGMENTO, aos vizinhos na mesma trilha e snapping.</summary>
     private void UpdateTrimPreview(double x)
     {
-        var project = _project!;
-        var seg = project.Segments[_dragIndex];
+        var seg = _project!.Segments.First(s => s.Id == _dragSegmentId);
         var gif = IsGif;
         var deltaUnits = (x - _dragStart.X) * _gestureUnitsPerPixel;
 
@@ -488,14 +607,14 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         var srcEnd = SegSourceEnd(seg, gif);
         var tlStart = SegTimelineStart(seg, gif);
         var minLength = gif ? 1 : MinVideoTrimSeconds;
+        var track = _project.SegmentsOnTrack(seg.TrackIndex);
+        var index = track.ToList().FindIndex(s => s.Id == seg.Id);
 
         if (_mode == DragMode.TrimLeft)
         {
             var next = srcStart + deltaUnits;
             next = gif ? Math.Round(next) : Math.Round(next, 1); // snap frame / 0,1 s
-            // a borda esquerda (que desloca TimelineStart junto com
-            // o source start) nao pode invadir o vizinho anterior
-            var prevEnd = _dragIndex > 0 ? SegTimelineEnd(project.Segments[_dragIndex - 1], gif) : 0;
+            var prevEnd = index > 0 ? SegTimelineEnd(track[index - 1], gif) : 0;
             var lowerBound = Math.Min(Math.Max(0, srcStart + (prevEnd - tlStart)), srcEnd - minLength);
             _pendingTrimStartUnits = Math.Clamp(next, lowerBound, srcEnd - minLength);
             _pendingTrimEndUnits = srcEnd;
@@ -504,10 +623,10 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         {
             var next = srcEnd + deltaUnits;
             next = gif ? Math.Round(next) : Math.Round(next, 1);
-            // a borda direita nao pode invadir o vizinho seguinte
-            var upperBound = _dragIndex < project.Segments.Count - 1
-                ? Math.Min(SourceTotalUnits, srcStart + (SegTimelineStart(project.Segments[_dragIndex + 1], gif) - tlStart))
-                : SourceTotalUnits;
+            var sourceTotal = SourceTotalUnits(seg);
+            var upperBound = index < track.Count - 1
+                ? Math.Min(sourceTotal, srcStart + (SegTimelineStart(track[index + 1], gif) - tlStart))
+                : sourceTotal;
             upperBound = Math.Max(upperBound, srcStart + minLength);
             _pendingTrimStartUnits = srcStart;
             _pendingTrimEndUnits = Math.Clamp(next, srcStart + minLength, upperBound);
@@ -517,12 +636,19 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
 
     private void UpdateCursor(Point pos)
     {
-        if (pos.Y <= RulerHeight)
+        if (pos.Y <= RulerHeight || _project is null)
         {
             Cursor = Cursors.Arrow;
             return;
         }
-        var blocks = ComputeBlocks();
+        var slot = LaneSlotFromY(pos.Y);
+        if (slot >= Lanes().Count)
+        {
+            Cursor = Cursors.Arrow;
+            return;
+        }
+        var trackIndex = Lanes()[slot];
+        var blocks = ComputeBlocksForTrack(trackIndex);
         var index = TimelineLayout.HitTest(blocks, pos.X);
         if (index < 0)
         {
@@ -546,18 +672,23 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         if (_project is null || ActualWidth <= 0 || ActualHeight <= RulerHeight)
             return;
 
-        // regua + segmentos saem do cache; so o playhead e redesenhado por tick
+        // regua + lanes saem do cache; so o playhead e o ghost (durante um
+        // drag) sao redesenhados a cada frame
         if (_staticDrawing is null)
         {
             var group = new DrawingGroup();
             using (var ctx = group.Open())
             {
                 DrawRuler(ctx);
-                DrawSegments(ctx);
+                foreach (var trackIndex in Lanes())
+                    DrawLane(ctx, trackIndex);
+                DrawNewLaneInvite(ctx);
             }
             _staticDrawing = group;
         }
         dc.DrawDrawing(_staticDrawing);
+        if (_mode == DragMode.Move)
+            DrawGhost(dc);
         DrawPlayhead(dc);
     }
 
@@ -607,10 +738,23 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         return text;
     }
 
-    private void DrawSegments(DrawingContext dc)
+    /// <summary>Desenha uma lane inteira: divisor, gaps e blocos de uma trilha.</summary>
+    private void DrawLane(DrawingContext dc, int trackIndex)
     {
-        var project = _project!;
-        var blocks = ComputeBlocks();
+        var laneSlot = Lanes().ToList().IndexOf(trackIndex);
+        var top = LaneTop(laneSlot) + LaneGap;
+        var height = Math.Max(10, LaneHeight() - LaneGap * 2);
+
+        if (laneSlot > 0)
+        {
+            var dividerPen = new Pen(FindBrush("DividerStrokeColorDefaultBrush", Color.FromArgb(0x30, 0x80, 0x80, 0x80)), 1);
+            dividerPen.Freeze();
+            dc.DrawLine(dividerPen, new Point(0, LaneTop(laneSlot)), new Point(ActualWidth, LaneTop(laneSlot)));
+        }
+
+        var blocks = ComputeBlocksForTrack(trackIndex);
+        DrawGaps(dc, blocks, top, height);
+
         var accent = FindBrush("AccentFillColorDefaultBrush", Color.FromRgb(0x00, 0x78, 0xD4));
         var fill = FindBrush("ControlFillColorDefaultBrush", Color.FromArgb(0x30, 0x80, 0x80, 0x80));
         var borderPen = new Pen(FindBrush("ControlElevationBorderBrush", Color.FromArgb(0x60, 0x80, 0x80, 0x80)), 1);
@@ -619,28 +763,20 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         selectedPen.Freeze();
         var textBrush = FindBrush("TextFillColorPrimaryBrush", Colors.White);
 
-        var top = RulerHeight + 6;
-        var height = Math.Max(10, ActualHeight - top - 6);
-
-        DrawGaps(dc, blocks, top, height); // areas de gap
-
+        var spans = SegmentSpansForTrack(trackIndex);
         for (var i = 0; i < blocks.Count; i++)
         {
-            var isDragged = _mode == DragMode.Move && i == _dragIndex;
-            if (isDragged)
-                dc.PushOpacity(0.75); // preview do move: bloco levemente translucido
-            DrawSegmentBlock(dc, project.Segments[i], blocks[i], top, height,
-                fill, project.Segments[i].Id == _selectedId ? selectedPen : borderPen, textBrush);
-            if (isDragged)
-                dc.Pop();
+            var seg = spans[i].Segment;
+            DrawSegmentBlock(dc, seg, blocks[i], top, height, fill,
+                seg.Id == _selectedId ? selectedPen : borderPen, textBrush);
         }
     }
 
     /// <summary>
-    /// Gaps da timeline editada: trechos da faixa de segmentos nao
-    /// cobertos por nenhum bloco recebem fundo mais escuro + hachura diagonal
-    /// sutil (renderizam preto no preview/export). Nao existe gap
-    /// depois do ultimo segmento por invariante do Core.
+    /// Gaps da timeline editada DE UMA LANE: trechos nao cobertos por nenhum
+    /// bloco recebem fundo mais escuro + hachura diagonal sutil (renderizam
+    /// preto no preview/export, so na trilha 0 - trilhas extras nao tocam ao
+    /// vivo). Nao existe gap depois do ultimo segmento por invariante do Core.
     /// </summary>
     private static void DrawGaps(DrawingContext dc, IReadOnlyList<TimelineLayout.Block> blocks,
         double top, double height)
@@ -679,27 +815,24 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         if (IsGif && _gifThumbnails is { Count: > 0 } thumbs)
         {
             DrawGifStrip(dc, seg, rect, thumbs);
+            return;
         }
-        else if (!IsGif)
+
+        var isDragging = seg.Id == _dragSegmentId && _mode is DragMode.TrimLeft or DragMode.TrimRight;
+        var start = isDragging ? _pendingTrimStartUnits : SegSourceStart(seg, IsGif);
+        var end = isDragging ? _pendingTrimEndUnits : SegSourceEnd(seg, IsGif);
+        var label = seg.TrackIndex == 0
+            ? $"{FormatTime(start)} - {FormatTime(end)}"
+            : System.IO.Path.GetFileName(seg.SourcePath); // trilhas extras: arquivo inteiro, mostra o nome
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var text = new FormattedText(label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe UI Variable Text"), 11, textBrush, dpi)
         {
-            // LIMITACAO v1: sem thumbnails de MP4 (MF Source Reader e upgrade
-            // futuro) - blocos mostram o intervalo de tempo do source
-            var gif = IsGif;
-            var start = _mode is DragMode.TrimLeft or DragMode.TrimRight && _project!.Segments.IndexOf(seg) == _dragIndex
-                ? _pendingTrimStartUnits : SegSourceStart(seg, gif);
-            var end = _mode is DragMode.TrimLeft or DragMode.TrimRight && _project!.Segments.IndexOf(seg) == _dragIndex
-                ? _pendingTrimEndUnits : SegSourceEnd(seg, gif);
-            var label = $"{FormatTime(start)} - {FormatTime(end)}";
-            var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
-            var text = new FormattedText(label, CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
-                new Typeface("Segoe UI Variable Text"), 11, textBrush, dpi)
-            {
-                MaxTextWidth = Math.Max(0, rect.Width - 8),
-                MaxLineCount = 1,
-                Trimming = TextTrimming.CharacterEllipsis,
-            };
-            dc.DrawText(text, new Point(rect.X + 6, rect.Y + (rect.Height - text.Height) / 2));
-        }
+            MaxTextWidth = Math.Max(0, rect.Width - 8),
+            MaxLineCount = 1,
+            Trimming = TextTrimming.CharacterEllipsis,
+        };
+        dc.DrawText(text, new Point(rect.X + 6, rect.Y + (rect.Height - text.Height) / 2));
     }
 
     /// <summary>Strip de miniaturas dentro do bloco (frames do cache GIF).</summary>
@@ -721,6 +854,70 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         }
         dc.Pop();
     }
+
+    /// <summary>
+    /// Convite sempre visivel pra criar uma trilha nova arrastando um clipe
+    /// pra baixo da ultima lane. Sem isso a faixa ficava inteiramente fora da
+    /// area visivel quando so havia uma lane (ela ocupava 100% da altura e o
+    /// ClipToBounds cortava o ghost no fundo, invisivel mesmo com a logica
+    /// de drop certa).
+    /// </summary>
+    private void DrawNewLaneInvite(DrawingContext dc)
+    {
+        var reserved = NewLaneStripReserved();
+        if (reserved <= 0)
+            return;
+        var top = RulerHeight + Lanes().Count * LaneHeight();
+        var rect = new Rect(0, top + LaneGap, ActualWidth, Math.Max(10, reserved - LaneGap * 2));
+
+        var dashPen = new Pen(FindBrush("DividerStrokeColorDefaultBrush", Color.FromArgb(0x50, 0x80, 0x80, 0x80)), 1)
+        {
+            DashStyle = DashStyles.Dash,
+        };
+        dashPen.Freeze();
+        dc.DrawRoundedRectangle(null, dashPen, rect, 4, 4);
+
+        var glyphBrush = FindBrush("TextFillColorSecondaryBrush", Colors.Gray);
+        var dpi = VisualTreeHelper.GetDpi(this).PixelsPerDip;
+        var glyph = new FormattedText("", CultureInfo.CurrentUICulture, FlowDirection.LeftToRight,
+            new Typeface("Segoe Fluent Icons"), 12, glyphBrush, dpi);
+        dc.DrawText(glyph, new Point(rect.X + (rect.Width - glyph.Width) / 2, rect.Y + (rect.Height - glyph.Height) / 2));
+    }
+
+    /// <summary>
+    /// Bloco translucido que segue o mouse durante um Move: sempre na lane-alvo
+    /// corrente (<see cref="_dragCurrentTrack"/>), com borda tracejada quando
+    /// o alvo e uma trilha nova (slot == Lanes().Count).
+    /// </summary>
+    private void DrawGhost(DrawingContext dc)
+    {
+        if (_dragSegmentId is not { } id || _project is null)
+            return;
+        var seg = _project.Segments.First(s => s.Id == id);
+        var gif = IsGif;
+        var length = SegSourceEnd(seg, gif) - SegSourceStart(seg, gif);
+        var total = RenderTotalUnits();
+
+        var x0 = TimelineLayout.UnitsToX(_pendingMoveStartUnits, total, ActualWidth);
+        var x1 = TimelineLayout.UnitsToX(_pendingMoveStartUnits + length, total, ActualWidth);
+        var isNewLane = _dragCurrentTrack >= Lanes().Count;
+        var top = LaneTop(_dragCurrentTrack) + LaneGap;
+        var height = isNewLane
+            ? Math.Max(10, NewLaneStripHeight - LaneGap * 2)
+            : Math.Max(10, LaneHeight() - LaneGap * 2);
+        var rect = new Rect(x0, top, Math.Max(1, x1 - x0), height);
+
+        var accent = FindBrush("AccentFillColorDefaultBrush", Color.FromRgb(0x00, 0x78, 0xD4));
+        var fill = new SolidColorBrush(((SolidColorBrush)Clone(accent)).Color) { Opacity = 0.35 };
+        fill.Freeze();
+        var pen = new Pen(accent, 1.5);
+        if (isNewLane)
+            pen.DashStyle = DashStyles.Dash;
+        pen.Freeze();
+        dc.DrawRoundedRectangle(fill, pen, rect, 4, 4);
+    }
+
+    private static Brush Clone(Brush brush) => brush is SolidColorBrush s ? new SolidColorBrush(s.Color) : brush;
 
     private void DrawPlayhead(DrawingContext dc)
     {
@@ -756,18 +953,5 @@ public sealed class MediaEditorTimelineControl : FrameworkElement
         return time.TotalHours >= 1
             ? time.ToString(@"h\:mm\:ss", CultureInfo.CurrentUICulture)
             : time.ToString(@"m\:ss\.f", CultureInfo.CurrentUICulture);
-    }
-}
-
-file static class SegmentListExtensions
-{
-    public static int IndexOf(this IReadOnlyList<TimelineSegment> segments, TimelineSegment segment)
-    {
-        for (var i = 0; i < segments.Count; i++)
-        {
-            if (ReferenceEquals(segments[i], segment))
-                return i;
-        }
-        return -1;
     }
 }

@@ -1,6 +1,7 @@
 using System.IO;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
 using System.Windows.Input;
 using System.Windows.Threading;
 using Klip.App.Localization;
@@ -43,6 +44,11 @@ public partial class MediaEditorWindow
 
     private MediaEditorSession? _session;
     private string? _filePath;
+
+    // ----- trilhas extras (video) -----
+    // trackIndex -> como ela aparece no composite do export (escala/canto);
+    // ausencia = padrao do FfmpegArgsBuilder (30%, canto inferior direito)
+    private readonly Dictionary<int, FfmpegArgsBuilder.TrackOverlay> _overlays = new();
 
     // ----- GIF -----
     private Media.GifFrameCache? _gifCache;
@@ -107,6 +113,7 @@ public partial class MediaEditorWindow
         WireToolbar();
         WireTimeline();
         WireAudioPanel();
+        WireClipPropertiesPanel();
 
         PreviewKeyDown += OnPreviewKeyDown;
         DragOver += OnFileDragOver;
@@ -141,6 +148,7 @@ public partial class MediaEditorWindow
         Teardown();
         _filePath = path;
         _session = null;
+        _overlays.Clear();
         _playheadUnits = 0;
         StatusText.Text = Path.GetFileName(path);
 
@@ -225,6 +233,7 @@ public partial class MediaEditorWindow
     {
         _session = session;
         session.Changed += OnSessionChanged;
+        EmptyStateHint.Visibility = Visibility.Collapsed;
         OnSessionChanged();
     }
 
@@ -281,9 +290,140 @@ public partial class MediaEditorWindow
         UpdateUndoButtons();
         UpdatePositionLabel();
         UpdateGifStatus();
+        UpdateClipProperties();
+    }
+
+    // ----- propriedades do clipe selecionado (trilhas extras) -----
+
+    private bool _updatingClipProperties; // reentrancia: SliderValueChanged ao setar Value no codigo
+
+    /// <summary>
+    /// Troca os sliders de volume/opacidade so quando muda a selecao -
+    /// evita reconstruir a UI (perdia o foco/drag do mouse no slider) toda
+    /// vez que o projeto muda por outro motivo qualquer.
+    /// </summary>
+    private void WireClipPropertiesPanel()
+    {
+        ClipVolumeSlider.ValueChanged += (_, _) => OnClipPropertyChanged(
+            () => CurrentOverlay() with { VolumePercent = ClipVolumeSlider.Value }, ClipVolumeLabel, ClipVolumeSlider.Value);
+        ClipOpacitySlider.ValueChanged += (_, _) => OnClipPropertyChanged(
+            () => CurrentOverlay() with { Opacity = ClipOpacitySlider.Value }, ClipOpacityLabel, ClipOpacitySlider.Value);
+        ClipRemoveTrackButton.Click += (_, _) =>
+        {
+            if (_session is not { } session || SelectedExtraTrack() is not { } trackIndex)
+                return;
+            _overlays.Remove(trackIndex);
+            session.Apply(session.Project.RemoveTrack(trackIndex));
+        };
+    }
+
+    private FfmpegArgsBuilder.TrackOverlay CurrentOverlay() =>
+        SelectedExtraTrack() is { } trackIndex && _overlays.TryGetValue(trackIndex, out var o) ? o : FfmpegArgsBuilder.TrackOverlay.Default;
+
+    private void OnClipPropertyChanged(Func<FfmpegArgsBuilder.TrackOverlay> next, TextBlock label, double value)
+    {
+        label.Text = $"{(int)value}%";
+        if (_updatingClipProperties || SelectedExtraTrack() is not { } trackIndex)
+            return;
+        _overlays[trackIndex] = next();
+    }
+
+    /// <summary>Trilha do segmento selecionado, so se NAO for a trilha do preview ao vivo (essa usa o AudioPanel).</summary>
+    private int? SelectedExtraTrack()
+    {
+        if (_session is not { } session || IsGif || Timeline.SelectedSegmentId is not { } id)
+            return null;
+        var seg = session.Project.Segments.FirstOrDefault(s => s.Id == id);
+        return seg is null || seg.TrackIndex == PrimaryTrackIndex ? null : seg.TrackIndex;
+    }
+
+    /// <summary>
+    /// Mostra/esconde o painel de propriedades conforme a selecao: so
+    /// aparece com UM clipe de uma trilha extra selecionado (a trilha do
+    /// preview ao vivo usa o AudioPanel de cima, que ja e o volume geral
+    /// dela). Opacidade/volume sao do CLIPE inteiro, sem keyframe - quem
+    /// quiser um fade entra cortando o clipe em pedacos.
+    /// </summary>
+    private void UpdateClipProperties()
+    {
+        if (SelectedExtraTrack() is not { } trackIndex)
+        {
+            ClipPropertiesPanel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var segment = _session!.Project.SegmentsOnTrack(trackIndex)[0];
+        var overlay = _overlays.TryGetValue(trackIndex, out var o) ? o : FfmpegArgsBuilder.TrackOverlay.Default;
+
+        _updatingClipProperties = true;
+        ClipPropertiesLabel.Text = Path.GetFileName(segment.SourcePath);
+        ClipVolumeSlider.Value = overlay.VolumePercent;
+        ClipVolumeLabel.Text = $"{(int)overlay.VolumePercent}%";
+        ClipOpacitySlider.Value = overlay.Opacity;
+        ClipOpacityLabel.Text = $"{(int)overlay.Opacity}%";
+        _updatingClipProperties = false;
+        ClipPropertiesPanel.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Trilha nova a partir de um arquivo: abre num player descartavel so
+    /// para ler a duracao (MediaOpened), nunca entra em tela, e fecha assim
+    /// que o Core ja tem o que precisa. Entra no playhead atual.
+    /// </summary>
+    private void AddVideoTrackFromFile(string path)
+    {
+        if (_session is not { } session || IsGif)
+            return;
+
+        var probe = new Media.MediaElementVideoPlayer();
+        ProbeHost.Children.Add(probe.Visual);
+        var startUnits = _playheadUnits;
+
+        probe.MediaOpened += () =>
+        {
+            var duration = probe.Duration > TimeSpan.Zero ? probe.Duration : TimeSpan.FromSeconds(1);
+            Dispatcher.BeginInvoke(() =>
+            {
+                ProbeHost.Children.Remove(probe.Visual);
+                probe.Close();
+                session.Apply(session.Project.AddTrack(path, duration, TimeSpan.FromSeconds(startUnits)));
+            });
+        };
+        probe.MediaFailed += ex =>
+        {
+            StartupLog.WriteException("MediaEditorAddTrack", ex);
+            Dispatcher.BeginInvoke(() =>
+            {
+                ProbeHost.Children.Remove(probe.Visual);
+                probe.Close();
+            });
+        };
+        probe.Open(path);
+    }
+
+    /// <summary>Primeiro arquivo (editor vazio) abre normalmente; com uma sessao ja ativa, vira trilha nova.</summary>
+    private void AddOrOpen(string path)
+    {
+        if (_session is null)
+            OpenFile(path);
+        else
+            AddVideoTrackFromFile(path);
     }
 
     private bool IsGif => _session?.Project.Kind == MediaKind.Gif;
+
+    /// <summary>
+    /// Trilha que o player ao vivo toca: a que segura o arquivo que esta
+    /// aberto em <see cref="_player"/> (_filePath), nao necessariamente
+    /// TrackIndex 0 - arrastar o segmento desse arquivo para outra lane so
+    /// muda o indice dele, o arquivo continua o mesmo (DuplicateSegmentToNewTrack
+    /// e MoveSegmentToTrack nunca trocam SourcePath). Cai em 0 se por algum
+    /// motivo o source sumir do projeto (nunca deveria acontecer).
+    /// </summary>
+    private int PrimaryTrackIndex =>
+        _session is { } session && _filePath is { } path
+            ? session.Project.Segments.FirstOrDefault(s => s.SourcePath == path)?.TrackIndex ?? 0
+            : 0;
 
     private double TotalUnits => _session is not { } session
         ? 0
@@ -295,7 +435,11 @@ public partial class MediaEditorWindow
     {
         Timeline.PlayheadScrubbed += OnPlayheadScrubbed;
         Timeline.PlayheadScrubEnded += OnPlayheadScrubEnded;
-        Timeline.SegmentSelected += _ => UpdateUndoButtons();
+        Timeline.SegmentSelected += _ =>
+        {
+            UpdateUndoButtons();
+            UpdateClipProperties();
+        };
         Timeline.SegmentMoveToRequested += (id, units) =>
         {
             // reposicionamento livre na timeline editada (o Core
@@ -321,6 +465,20 @@ public partial class MediaEditorWindow
                 // trim degenerado (clamp produziu faixa vazia): ignora o gesto
             }
         };
+        Timeline.SegmentMoveToTrackRequested += (id, trackIndex, units) =>
+        {
+            // arrastou pra outra lane (ou uma nova, abaixo da ultima); so Video tem mais de uma trilha
+            if (_session is not { } session || IsGif)
+                return;
+            try
+            {
+                session.Apply(session.Project.MoveSegmentToTrack(id, trackIndex, TimeSpan.FromSeconds(units)));
+            }
+            catch (InvalidOperationException)
+            {
+                // sobrepos outro segmento na trilha de destino: ignora o gesto (volta pro lugar)
+            }
+        };
     }
 
     /// <summary>
@@ -333,20 +491,16 @@ public partial class MediaEditorWindow
     {
         if (_session is not { } session)
             return;
-        var segments = session.Project.Segments;
-        var index = -1;
-        for (var i = 0; i < segments.Count; i++)
-        {
-            if (segments[i].Id == id)
-            {
-                index = i;
-                break;
-            }
-        }
+        var owner = session.Project.Segments.FirstOrDefault(s => s.Id == id);
+        if (owner is null)
+            return;
+        // reordenar (subir/descer) e escopado a propria trilha do segmento
+        var segments = session.Project.SegmentsOnTrack(owner.TrackIndex);
+        var index = segments.ToList().FindIndex(s => s.Id == id);
         if (index < 0)
             return;
 
-        var canRemove = segments.Count > 1;
+        var canRemove = session.Project.Segments.Count > 1;
         var menu = new ContextMenu { PlacementTarget = Timeline };
         AddCommandItem(menu, Loc.MediaRemoveSegment, canRemove, () => RemoveSegmentById(id, ripple: false));
         AddCommandItem(menu, Loc.MediaRemoveSegmentRipple, canRemove, () => RemoveSegmentById(id, ripple: true));
@@ -355,7 +509,19 @@ public partial class MediaEditorWindow
             () => { _session?.Apply(_session.Project.MoveSegment(id, index - 1)); });
         AddCommandItem(menu, Loc.MediaSwapNext, index < segments.Count - 1,
             () => { _session?.Apply(_session.Project.MoveSegment(id, index + 1)); });
+        if (!IsGif)
+        {
+            menu.Items.Add(new Separator());
+            AddCommandItem(menu, Loc.MediaDuplicateSegment, true, () => DuplicateSegmentById(id));
+        }
         menu.IsOpen = true;
+    }
+
+    private void DuplicateSegmentById(Guid id)
+    {
+        if (_session is not { } session)
+            return;
+        session.Apply(session.Project.DuplicateSegmentToNewTrack(id));
     }
 
     private static void AddCommandItem(ContextMenu menu, string header, bool enabled, Action onClick)
@@ -392,9 +558,15 @@ public partial class MediaEditorWindow
 
     private void OnPreviewKeyDown(object sender, KeyEventArgs e)
     {
+        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
+        if (e.Key == Key.V && ctrl)
+        {
+            PasteFromClipboard();
+            e.Handled = true;
+            return;
+        }
         if (_session is null)
             return;
-        var ctrl = Keyboard.Modifiers.HasFlag(ModifierKeys.Control);
         switch (e.Key)
         {
             case Key.Space:
@@ -424,6 +596,10 @@ public partial class MediaEditorWindow
                 break;
             case Key.Y when ctrl:
                 _session.Redo();
+                e.Handled = true;
+                break;
+            case Key.D when ctrl && !IsGif && Timeline.SelectedSegmentId is { } selected:
+                DuplicateSegmentById(selected);
                 e.Handled = true;
                 break;
         }
@@ -759,17 +935,20 @@ public partial class MediaEditorWindow
     /// </summary>
     private (int Index, TimeSpan SourceTime, bool InGap) LocateVideo(double editedSeconds)
     {
-        var project = _session!.Project;
+        // player ao vivo so existe pra trilha do arquivo aberto - trilhas extras nao tocam no preview
+        var track = _session!.Project.SegmentsOnTrack(PrimaryTrackIndex);
+        if (track.Count == 0)
+            return (0, TimeSpan.Zero, true); // nao deveria acontecer, mas nunca deixa estourar indice
         var position = TimeSpan.FromSeconds(editedSeconds);
-        for (var i = 0; i < project.Segments.Count; i++)
+        for (var i = 0; i < track.Count; i++)
         {
-            var seg = project.Segments[i];
+            var seg = track[i];
             if (position < seg.TimelineStart)
                 return (i, seg.SourceStart, true); // gap antes do segmento i
             if (position < seg.TimelineEnd)
                 return (i, seg.SourceStart + (position - seg.TimelineStart), false);
         }
-        return (project.Segments.Count - 1, project.Segments[^1].SourceEnd, false);
+        return (track.Count - 1, track[^1].SourceEnd, false);
     }
 
     /// <summary>
@@ -802,7 +981,14 @@ public partial class MediaEditorWindow
     {
         if (!_isPlaying || _session is not { } session || _player is not { } player)
             return;
-        var project = session.Project;
+        // player ao vivo so existe pra trilha do arquivo aberto
+        var primaryTrack = PrimaryTrackIndex;
+        var track = session.Project.SegmentsOnTrack(primaryTrack);
+        if (track.Count == 0)
+        {
+            StopPlayback(); // nao deveria acontecer, mas nunca deixa estourar indice
+            return;
+        }
 
         // dentro de um gap o relogio e o da TIMELINE EDITADA
         // (Stopwatch ancorado na entrada), nao o do source - o player fica
@@ -819,7 +1005,7 @@ public partial class MediaEditorWindow
                 StopPlayback();
                 _playheadUnits = TotalUnits;
             }
-            else if (project.TryMapToSource(TimeSpan.FromSeconds(_playheadUnits), out var resume))
+            else if (session.Project.TryMapToSource(TimeSpan.FromSeconds(_playheadUnits), primaryTrack, out var resume, out _))
             {
                 // saiu do gap: retoma o player no segmento seguinte
                 var (index, _, _) = LocateVideo(_playheadUnits);
@@ -833,18 +1019,18 @@ public partial class MediaEditorWindow
             return;
         }
 
-        if (_mp4SegmentIndex >= project.Segments.Count)
-            _mp4SegmentIndex = project.Segments.Count - 1;
+        if (_mp4SegmentIndex >= track.Count)
+            _mp4SegmentIndex = track.Count - 1;
 
-        var seg = project.Segments[_mp4SegmentIndex];
+        var seg = track[_mp4SegmentIndex];
         var pos = player.Position;
 
         // cruzou a borda do segmento: proximo contiguo ou gap
         if (pos >= seg.SourceEnd - TimeSpan.FromMilliseconds(30))
         {
-            if (_mp4SegmentIndex + 1 < project.Segments.Count)
+            if (_mp4SegmentIndex + 1 < track.Count)
             {
-                var next = project.Segments[_mp4SegmentIndex + 1];
+                var next = track[_mp4SegmentIndex + 1];
                 if (next.TimelineStart > seg.TimelineEnd)
                 {
                     // ha um gap entre este segmento e o proximo
@@ -997,9 +1183,20 @@ public partial class MediaEditorWindow
             Height = height,
             Fps = GapFillerFallbackFps,
         };
-        await RunExportWithDialogAsync(
-            (progress, ct) => _export.ExportVideoAsync(project, exportSettings, output, progress, ct),
-            output);
+
+        if (project.GetTrackIndices().Count > 1)
+        {
+            var overlays = new Dictionary<int, FfmpegArgsBuilder.TrackOverlay>(_overlays);
+            await RunExportWithDialogAsync(
+                (progress, ct) => _export.ExportMultiTrackVideoAsync(project, exportSettings, overlays, output, progress, ct),
+                output);
+        }
+        else
+        {
+            await RunExportWithDialogAsync(
+                (progress, ct) => _export.ExportVideoAsync(project, exportSettings, output, progress, ct),
+                output);
+        }
     }
 
     /// <summary>
@@ -1158,25 +1355,42 @@ public partial class MediaEditorWindow
         ExportCompleted?.Invoke(message);
     }
 
-    // ----- drag-and-drop -----
+    // ----- drag-and-drop / colar -----
 
     private void OnFileDragOver(object sender, DragEventArgs e)
     {
-        e.Effects = GetDroppedMediaFile(e) is not null ? DragDropEffects.Copy : DragDropEffects.None;
+        e.Effects = GetDroppedMediaFiles(e).Count > 0 ? DragDropEffects.Copy : DragDropEffects.None;
         e.Handled = true;
     }
 
+    /// <summary>
+    /// Com o editor vazio, o primeiro arquivo abre normalmente (vira a trilha
+    /// base); com uma sessao ja ativa (ou mais de um arquivo soltos de uma
+    /// vez), cada arquivo adicional vira uma trilha nova.
+    /// </summary>
     private void OnFileDrop(object sender, DragEventArgs e)
     {
-        if (GetDroppedMediaFile(e) is { } path)
-            OpenFile(path);
+        var files = GetDroppedMediaFiles(e);
+        foreach (var path in files)
+            AddOrOpen(path);
     }
 
-    private static string? GetDroppedMediaFile(DragEventArgs e)
+    private static List<string> GetDroppedMediaFiles(DragEventArgs e)
     {
         if (e.Data.GetData(DataFormats.FileDrop) is not string[] files)
-            return null;
-        return files.FirstOrDefault(f =>
-            Path.GetExtension(f).ToLowerInvariant() is ".gif" or ".mp4");
+            return [];
+        return files.Where(f => Path.GetExtension(f).ToLowerInvariant() is ".gif" or ".mp4").ToList();
+    }
+
+    /// <summary>Ctrl+V com um arquivo de video/gif no clipboard: mesmo fluxo do drag-and-drop.</summary>
+    private void PasteFromClipboard()
+    {
+        if (!System.Windows.Clipboard.ContainsFileDropList())
+            return;
+        foreach (var path in System.Windows.Clipboard.GetFileDropList())
+        {
+            if (path is not null && Path.GetExtension(path).ToLowerInvariant() is ".gif" or ".mp4")
+                AddOrOpen(path);
+        }
     }
 }

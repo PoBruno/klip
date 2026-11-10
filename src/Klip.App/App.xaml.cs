@@ -745,14 +745,19 @@ public partial class App : Application
     /// Abre o editor de midia: uma janela por arquivo; se ja existe
     /// uma para o mesmo caminho, apenas reativa.
     /// </summary>
-    private void OpenMediaEditor(string filePath)
+    private void OpenMediaEditor(string filePath) => OpenMediaEditorWindow(filePath);
+
+    /// <summary>Item da bandeja: editor vazio, pronto para colar/arrastar video (sem gravacao previa).</summary>
+    private void OpenMediaEditorEmpty() => OpenMediaEditorWindow(null);
+
+    private void OpenMediaEditorWindow(string? filePath)
     {
         if (_services is null)
             return;
         try
         {
             PowerEfficiency.EnterProcessHighQos(); // janela a frente
-            if (_mediaEditors.TryGetValue(filePath, out var existing))
+            if (filePath is not null && _mediaEditors.TryGetValue(filePath, out var existing))
             {
                 existing.Show();
                 if (existing.WindowState == WindowState.Minimized)
@@ -767,7 +772,7 @@ public partial class App : Application
             window.ExportCompleted += message => _tray?.ShowNotification("Klip", message);
             window.FileOpened += (w, path) =>
             {
-                // drag-and-drop trocou o arquivo: re-mapeia a janela
+                // drag-and-drop/colar trocou ou definiu o arquivo base: re-mapeia a janela
                 foreach (var stale in _mediaEditors.Where(kv => kv.Value == w).Select(kv => kv.Key).ToList())
                     _mediaEditors.Remove(stale);
                 _mediaEditors[path] = w;
@@ -778,7 +783,8 @@ public partial class App : Application
                     _mediaEditors.Remove(stale);
                 _memory?.Schedule(); // preview frame cache is big
             };
-            window.OpenFile(filePath);
+            if (filePath is not null)
+                window.OpenFile(filePath);
             window.Show();
             window.Activate();
         }
@@ -938,6 +944,7 @@ public partial class App : Application
         menu.Items.Add(CreateMenuItem(Loc.TrayOpenHistory, "\uE81C", (_, _) => ToggleHistoryFlyout()));
         menu.Items.Add(CreateMenuItem(Loc.TrayCapture, "\uE722", (_, _) => StartCapture()));
         menu.Items.Add(CreateMenuItem(Loc.TrayRepeatRegion, "\uE72C", (_, _) => RepeatLastRegion()));
+        menu.Items.Add(CreateMenuItem(Loc.TrayMediaEditor, "\uE714", (_, _) => OpenMediaEditorEmpty()));
         menu.Items.Add(BuildPinnedMenuItem());
         menu.Items.Add(CreateMenuItem(Loc.TraySettings, "\uE713", (_, _) => ShowMainWindow()));
         menu.Items.Add(new Separator());
