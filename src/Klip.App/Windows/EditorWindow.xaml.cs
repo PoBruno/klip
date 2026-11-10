@@ -1287,9 +1287,30 @@ public partial class EditorWindow
             Ink.Select(new StrokeCollection());
 
         CanvasHost.UpdateLayout();
-        var rtb = new RenderTargetBitmap(
-            (int)CanvasHost.Width, (int)CanvasHost.Height, 96, 96, PixelFormats.Pbgra32);
-        rtb.Render(CanvasHost);
+        var width = (int)CanvasHost.Width;
+        var height = (int)CanvasHost.Height;
+
+        // Render(CanvasHost) direto desenha o host na posicao dele dentro do pai, e com a
+        // margem do whiteboard (1600) a imagem cai fora do bitmap e sai 100% transparente.
+        // the brush viewbox lives in the same parent space, so it starts at the host offset
+        var offset = VisualTreeHelper.GetOffset(CanvasHost);
+        var bounds = new Rect(0, 0, width, height);
+        var brush = new VisualBrush(CanvasHost)
+        {
+            Stretch = Stretch.None,
+            AlignmentX = AlignmentX.Left,
+            AlignmentY = AlignmentY.Top,
+            ViewboxUnits = BrushMappingMode.Absolute,
+            Viewbox = new Rect(offset.X, offset.Y, width, height),
+            ViewportUnits = BrushMappingMode.Absolute,
+            Viewport = bounds,
+        };
+        var visual = new DrawingVisual();
+        using (var dc = visual.RenderOpen())
+            dc.DrawRectangle(brush, null, bounds);
+
+        var rtb = new RenderTargetBitmap(width, height, 96, 96, PixelFormats.Pbgra32);
+        rtb.Render(visual);
         rtb.Freeze();
 
         if (cropWasVisible)
