@@ -41,6 +41,7 @@ public sealed unsafe class LowLevelHookHost : IDisposable
     private const uint WM_KLIP_UNINSTALL = NativeMethods.WM_APP + 2;
 
     private const int VK_V = 0x56;
+    private const int VK_ESCAPE = 0x1B;
 
     // KBDLLHOOKSTRUCT.flags: Alt is held for this key
     private const uint LLKHF_ALTDOWN = 0x20;
@@ -603,6 +604,14 @@ public sealed unsafe class LowLevelHookHost : IDisposable
                     // mesmo - senao a fila travaria no primeiro descarte.
                     HookPolicy.ReleaseCtrlV();
                 }
+            }
+
+            // Esc with the queue armed and the panel closed cancels the queue. never
+            // swallowed: the app below still gets its Esc
+            if (HookPolicy.CtrlVArmed && vk == VK_ESCAPE && !HookPolicy.KeyboardActive)
+            {
+                if (!Ring.TryEnqueue(KlipInputMessages.QueueEscape, vk, scan, time))
+                    HookPolicy.Metrics.RecordDrop();
             }
 
             // 2) Flyout aberto: publica a tecla e decide o descarte em O(1).

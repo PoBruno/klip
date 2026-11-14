@@ -196,18 +196,6 @@
                 </RadioButton>
             </StackPanel>
             <Button
-                x:Name="MultiSelectButton"
-                HorizontalAlignment="Right"
-                Margin="0,0,64,0"
-                Style="{StaticResource CardActionButton}"
-                Padding="8,6"
-                ToolTip="{DynamicResource Loc.MultiPasteTooltip}">
-                <TextBlock FontFamily="Segoe Fluent Icons" FontSize="16" Text="&#xE762;" />
-                <Button.ContextMenu>
-                    <ContextMenu x:Name="MultiSelectMenu" />
-                </Button.ContextMenu>
-            </Button>
-            <Button
                 x:Name="DateFilterButton"
                 HorizontalAlignment="Right"
                 Margin="0,0,32,0"
@@ -314,24 +302,7 @@
                 </Grid>
             </Border>
 
-            <!-- Cards marcados para colar juntos -->
-            <Border Style="{StaticResource BannerBorder}" Visibility="{Binding HasChecks, Converter={StaticResource BoolToVisibility}}">
-                <Grid>
-                    <TextBlock Style="{StaticResource BannerText}" HorizontalAlignment="Left" Text="{Binding CheckedBannerText}" />
-                    <StackPanel HorizontalAlignment="Right" Orientation="Horizontal">
-                        <Button Style="{StaticResource CardActionButton}" Command="{Binding PasteCheckedCommand}">
-                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CheckedPaste}" />
-                        </Button>
-                        <Button Style="{StaticResource CardActionButton}" Command="{Binding ClearChecksCommand}">
-                            <TextBlock Style="{StaticResource BannerButtonText}" Text="{DynamicResource Loc.CheckedClear}" />
-                        </Button>
-                    </StackPanel>
-                </Grid>
-            </Border>
         </StackPanel>
-
-        <!-- Modo seleção múltipla: só as bolinhas numeradas nos cards indicam a ordem;
-             fechar ou Enter confirma, Esc cancela. Sem barra nem botões. -->
 
         <!-- Lista de cards -->
         <!-- Flat list on purpose: with GroupStyle the WPF-UI ListBox style turns
@@ -412,23 +383,25 @@
                     <Border
                         Padding="12"
                         Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+                        BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
                         BorderThickness="1"
                         CornerRadius="4">
-                        <Border.Style>
-                            <Style TargetType="Border">
-                                <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-                                <Style.Triggers>
-                                    <DataTrigger Binding="{Binding IsChecked}" Value="True">
-                                        <Setter Property="BorderBrush" Value="{DynamicResource AccentFillColorDefaultBrush}" />
-                                    </DataTrigger>
-                                </Style.Triggers>
-                            </Style>
-                        </Border.Style>
                         <Grid>
                             <Grid.RowDefinitions>
                                 <RowDefinition Height="*" />
                                 <RowDefinition Height="Auto" />
                             </Grid.RowDefinitions>
+
+                            <!-- colar juntos: barra accent na lateral, de ponta a ponta do card -->
+                            <Rectangle
+                                Grid.RowSpan="2"
+                                Width="3"
+                                Margin="-11,-11,0,-11"
+                                HorizontalAlignment="Left"
+                                Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                                RadiusX="1.5"
+                                RadiusY="1.5"
+                                Visibility="{Binding IsJoined, Converter={StaticResource BoolToVisibility}}" />
 
                             <!-- Badges do canto: atalho (Ctrl/Alt segurado), marca de colar juntos e ordem na fila -->
                             <StackPanel
@@ -453,33 +426,59 @@
                                         FontWeight="Bold"
                                         Text="{Binding ShortcutNumber}" />
                                 </Border>
+                                <!-- colar juntos: pilula contornada com elo e numero -->
                                 <Border
-                                    Width="20" Height="20"
-                                    Margin="0,0,4,0"
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
+                                    Height="20"
+                                    Padding="5,0,6,0"
+                                    Background="{DynamicResource SolidBackgroundFillColorTertiaryBrush}"
+                                    BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                                    BorderThickness="1.5"
                                     CornerRadius="10"
-                                    Visibility="{Binding IsChecked, Converter={StaticResource BoolToVisibility}}">
+                                    Visibility="{Binding IsJoined, Converter={StaticResource BoolToVisibility}}">
+                                    <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
+                                        <TextBlock
+                                            Margin="0,1,3,0"
+                                            VerticalAlignment="Center"
+                                            FontFamily="Segoe Fluent Icons"
+                                            FontSize="10"
+                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                            Text="&#xE71B;" />
+                                        <TextBlock
+                                            VerticalAlignment="Center"
+                                            FontSize="11"
+                                            FontWeight="Bold"
+                                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                            Text="{Binding JoinOrder}" />
+                                    </StackPanel>
+                                </Border>
+                                <!-- colar em sequencia: ticket com recortes laterais -->
+                                <Grid
+                                    Width="26"
+                                    Height="18"
+                                    Margin="0,1,0,0"
+                                    Visibility="{Binding IsSequenced, Converter={StaticResource BoolToVisibility}}">
+                                    <Grid.Clip>
+                                        <CombinedGeometry GeometryCombineMode="Exclude">
+                                            <CombinedGeometry.Geometry1>
+                                                <RectangleGeometry Rect="0,0,26,18" RadiusX="3" RadiusY="3" />
+                                            </CombinedGeometry.Geometry1>
+                                            <CombinedGeometry.Geometry2>
+                                                <GeometryGroup>
+                                                    <EllipseGeometry Center="0,9" RadiusX="3.5" RadiusY="3.5" />
+                                                    <EllipseGeometry Center="26,9" RadiusX="3.5" RadiusY="3.5" />
+                                                </GeometryGroup>
+                                            </CombinedGeometry.Geometry2>
+                                        </CombinedGeometry>
+                                    </Grid.Clip>
+                                    <Rectangle Fill="{DynamicResource AccentFillColorDefaultBrush}" />
                                     <TextBlock
                                         HorizontalAlignment="Center"
                                         VerticalAlignment="Center"
                                         FontSize="11"
                                         FontWeight="Bold"
                                         Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                        Text="{Binding CheckOrder}" />
-                                </Border>
-                                <Border
-                                    Width="20" Height="20"
-                                    Background="{DynamicResource AccentFillColorDefaultBrush}"
-                                    CornerRadius="10"
-                                    Visibility="{Binding IsQueued, Converter={StaticResource BoolToVisibility}}">
-                                    <TextBlock
-                                        HorizontalAlignment="Center"
-                                        VerticalAlignment="Center"
-                                        FontSize="11"
-                                        FontWeight="Bold"
-                                        Foreground="{DynamicResource TextOnAccentFillColorPrimaryBrush}"
-                                        Text="{Binding QueueOrder}" />
-                                </Border>
+                                        Text="{Binding SequenceOrder}" />
+                                </Grid>
                             </StackPanel>
 
                             <!-- Conteúdo -->
@@ -904,7 +903,8 @@
                 FontSize="11"
                 VerticalAlignment="Center"
                 Foreground="{DynamicResource TextFillColorTertiaryBrush}"
-                Text="{DynamicResource Loc.FooterHints}">
+                Text="{DynamicResource Loc.FooterHints}"
+                ToolTip="{DynamicResource Loc.PickFooterTip}">
                 <TextBlock.Style>
                     <Style TargetType="TextBlock">
                         <Setter Property="Visibility" Value="Collapsed" />
@@ -912,10 +912,74 @@
                             <DataTrigger Binding="{Binding StatusText}" Value="">
                                 <Setter Property="Visibility" Value="Visible" />
                             </DataTrigger>
+                            <DataTrigger Binding="{Binding HasPick}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
                         </Style.Triggers>
                     </Style>
                 </TextBlock.Style>
             </TextBlock>
+
+            <!-- modo da selecao: diz se e juntos ou sequencia e o que o Ctrl+V vai fazer -->
+            <DockPanel LastChildFill="True">
+                <DockPanel.Style>
+                    <Style TargetType="DockPanel">
+                        <Setter Property="Visibility" Value="Collapsed" />
+                        <Style.Triggers>
+                            <MultiDataTrigger>
+                                <MultiDataTrigger.Conditions>
+                                    <Condition Binding="{Binding HasPick}" Value="True" />
+                                    <Condition Binding="{Binding StatusText}" Value="" />
+                                </MultiDataTrigger.Conditions>
+                                <Setter Property="Visibility" Value="Visible" />
+                            </MultiDataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </DockPanel.Style>
+                <Border
+                    Width="22"
+                    Height="18"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                    CornerRadius="4"
+                    DockPanel.Dock="Left">
+                    <Grid>
+                        <TextBlock
+                            HorizontalAlignment="Center"
+                            VerticalAlignment="Center"
+                            FontFamily="Segoe Fluent Icons"
+                            FontSize="11"
+                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                            Text="&#xE71B;"
+                            Visibility="{Binding IsJoinPick, Converter={StaticResource BoolToVisibility}}" />
+                        <Rectangle
+                            Width="12"
+                            Height="8"
+                            Fill="{DynamicResource AccentFillColorDefaultBrush}"
+                            RadiusX="1.5"
+                            RadiusY="1.5"
+                            Visibility="{Binding IsJoinPick, Converter={StaticResource InverseBoolToVisibility}}" />
+                    </Grid>
+                </Border>
+                <TextBlock
+                    Margin="8,0,0,0"
+                    VerticalAlignment="Center"
+                    DockPanel.Dock="Right"
+                    FontSize="11"
+                    Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                    Text="{DynamicResource Loc.PickEscClears}" />
+                <TextBlock
+                    VerticalAlignment="Center"
+                    FontSize="11"
+                    TextTrimming="CharacterEllipsis">
+                    <Run FontWeight="SemiBold" Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding PickTitle, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text=" · " />
+                    <Run Foreground="{DynamicResource TextFillColorPrimaryBrush}" Text="{Binding PickCountText, Mode=OneWay}" />
+                    <Run Foreground="{DynamicResource TextFillColorTertiaryBrush}" Text=" · " />
+                    <Run Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="{Binding PickHint, Mode=OneWay}" />
+                </TextBlock>
+            </DockPanel>
             <ui:Button
                 x:Name="ClearAllButton"
                 HorizontalAlignment="Right"
@@ -923,7 +987,17 @@
                 Appearance="Transparent"
                 Content="{DynamicResource Loc.ClearAll}"
                 FontSize="12"
-                ToolTip="{DynamicResource Loc.ClearAllTooltip}" />
+                ToolTip="{DynamicResource Loc.ClearAllTooltip}">
+                <ui:Button.Style>
+                    <Style TargetType="ui:Button" BasedOn="{StaticResource {x:Type ui:Button}}">
+                        <Style.Triggers>
+                            <DataTrigger Binding="{Binding HasPick}" Value="True">
+                                <Setter Property="Visibility" Value="Collapsed" />
+                            </DataTrigger>
+                        </Style.Triggers>
+                    </Style>
+                </ui:Button.Style>
+            </ui:Button>
         </Grid>
     </Grid>
 </ui:FluentWindow>

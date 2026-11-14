@@ -139,7 +139,8 @@ public partial class HistoryFlyoutWindow
             AddMenuItem(menu, Loc.MenuTypeText, "", () => _viewModel.TypeTextCommand.Execute(item));
         AddMenuItem(menu, Loc.MenuCopy, "", () => _viewModel.CopyOnlyCommand.Execute(item));
         AddMenuItem(menu, Loc.MenuPreview, "", () => _ = _viewModel.OpenPreviewAsync(item));
-        AddMenuItem(menu, item.IsChecked ? Loc.MenuUnselect : Loc.MenuSelect, "", () => _viewModel.ToggleCheck(item));
+        AddMenuItem(menu, item.IsJoined || item.IsSequenced ? Loc.MenuUnselect : Loc.MenuSelect, "", () =>
+            _viewModel.Pick(item, _viewModel.HasPick ? _viewModel.PickMode : Core.Clipboard.PickMode.Join));
         menu.Items.Add(new Separator());
 
         var isText = item.Item.Type is ClipboardItemType.Text or ClipboardItemType.Html;
@@ -241,8 +242,9 @@ public partial class HistoryFlyoutWindow
             _badgesOn = false;
             return;
         }
-        // only the history list has numbered cards
-        if (!IsVisible || _viewModel.IsPreviewOpen || _viewModel.IsSnippetEditing ||
+        // only the history list has numbered cards. while picking, Ctrl is the pick
+        // gesture: gray numbers next to the tickets would only confuse
+        if (!IsVisible || _viewModel.HasPick || _viewModel.IsPreviewOpen || _viewModel.IsSnippetEditing ||
             ItemsList.Visibility != Visibility.Visible)
         {
             _badgesOn = false;
@@ -390,6 +392,16 @@ public partial class HistoryFlyoutWindow
     {
         _dragItem = null;
         _suppressClick = false;
+        // Shift/Ctrl are read here, at the press: a quick click often lets go of the
+        // modifier before the mouse-up gets handled, and the pick turned into a paste
+        // the mouse hook saw the press first; trust it when it is this same click
+        var hookMods = Environment.TickCount64 - System.Threading.Volatile.Read(ref _hookClickTick) < 1500
+            ? System.Threading.Volatile.Read(ref _hookClickMods)
+            : 0;
+        _clickCtrl = (hookMods & 1) != 0 || NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
+        _clickShift = (hookMods & 2) != 0 || NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
+        _clickAlt = (hookMods & 4) != 0 || NativeMethods.IsKeyDown(NativeMethods.VK_MENU);
+        System.Threading.Volatile.Write(ref _hookClickTick, 0);
         if (e.OriginalSource is not DependencyObject source || IsInsideButton(source))
             return;
         _dragItem = FindItem(source);

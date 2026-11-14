@@ -1,3 +1,4 @@
+using System.Windows;
 using System.Windows.Threading;
 using Klip.Core.Input;
 using Klip.Core.Storage;
@@ -17,12 +18,21 @@ namespace Klip.App.Services;
 /// </summary>
 public sealed class PasteQueueService : IDisposable
 {
+    private static readonly TimeSpan IdleTimeout = TimeSpan.FromMinutes(2);
+
     private readonly ClipboardWriteGuard _writeGuard;
     private readonly MediaStore _mediaStore;
     private readonly Dispatcher _dispatcher;
+    private readonly DispatcherTimer _idleTimer;
 
     private readonly Core.Clipboard.PasteQueue<ClipboardItem> _queue = new();
-    private DateTime _armedAt;
+    private DateTime _lastActivity;
+
+    // what was on the clipboard before the pick started; put back when the queue ends
+    private IDataObject? _restore;
+
+    // item 1 already written by an earlier arm of the same pick (re-arm skips the write)
+    private long? _writtenFirstId;
 
     // escopo do hook de teclado. Nulo = nenhum hook instalado por esta fila.
     private IDisposable? _hookScope;
@@ -33,7 +43,18 @@ public sealed class PasteQueueService : IDisposable
 
     public bool IsArmed => _queue.IsArmed;
 
-    /// <summary>Collect mode can hand over more than the 1 to 5 picker.</summary>
+    /// <summary>1-based item the next Ctrl+V pastes.</summary>
+    public int Position => _queue.CursorPosition;
+
+    public int Count => _queue.Count;
+
+    /// <summary>
+    /// While the history panel is still open with the pick, the idle timeout waits:
+    /// nobody pastes while choosing.
+    /// </summary>
+    public bool HoldTimeout { get; set; }
+
+    /// <summary>Collect mode can hand over more than a pick holds.</summary>
     public const int MaxItems = Core.Clipboard.PasteJoin.MaxCollected;
 
     public PasteQueueService(ClipboardWriteGuard writeGuard, MediaStore mediaStore)
@@ -42,39 +63,67 @@ public sealed class PasteQueueService : IDisposable
         _mediaStore = mediaStore;
         _dispatcher = Dispatcher.CurrentDispatcher;
 
+        _idleTimer = new DispatcherTimer(DispatcherPriority.Background, _dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(10),
+        };
+        _idleTimer.Tick += (_, _) =>
+        {
+            if (!_queue.IsArmed)
+                _idleTimer.Stop();
+            else if (!HoldTimeout && DateTime.UtcNow - _lastActivity > IdleTimeout)
+                Cancel();
+        };
+
         // o host entrega os eventos numa thread worker propria; a assinatura
         // dura a vida do servico (singleton) e nao instala hook nenhum sozinha.
         LowLevelHookHost.Shared.Observed += OnHookEvent;
     }
 
-    /// <summary>Arms the queue with the items in the chosen order and installs the hook.</summary>
-    public void Arm(IReadOnlyList<ClipboardItem> items)
+    /// <summary>
+    /// Arms the queue with the items in the chosen order and installs the hook. Arming
+    /// again replaces the list; when item 1 is the same, the clipboard is not rewritten.
+    /// <paramref name="restore"/> is what goes back on the clipboard when it ends.
+    /// </summary>
+    public void Arm(IReadOnlyList<ClipboardItem> items, IDataObject? restore = null)
     {
-        // um novo arme substitui o anterior: solta o escopo antigo antes de contar outro
-        ReleaseHook();
         _queue.Reset();
         if (items.Count == 0)
+        {
+            Disarm();
             return;
+        }
         _queue.Begin(items.Count, MaxItems);
         foreach (var item in items)
             _queue.Toggle(item);
-        _armedAt = DateTime.UtcNow;
+        _lastActivity = DateTime.UtcNow;
+        if (restore is not null)
+            _restore = restore;
 
-        // leave the FIRST item on the clipboard, ready for the first Ctrl+V
-        WriteItem(_queue.Current!);
+        // leave the FIRST item on the clipboard, ready for the first Ctrl+V. synthetic
+        // items (joined text, id 0) are always written
+        var first = _queue.Current!;
+        if (first.Id == 0 || _writtenFirstId != first.Id)
+        {
+            WriteItem(first);
+            _writtenFirstId = first.Id == 0 ? null : first.Id;
+        }
 
-        // Start e idempotente, mas precisa ter rodado antes do primeiro Acquire.
-        LowLevelHookHost.Shared.Start();
-        // ReleaseCtrlV antes de armar: um cancelamento anterior por excecao pode ter
-        // deixado o guard de colagem em voo tomado, e a fila nova nasceria bloqueada.
-        HookPolicy.ReleaseCtrlV();
-        // Arma antes de instalar para nao existir instante com hook vivo e fila
-        // desarmada (o Ctrl+V daquele instante seria perdido).
-        HookPolicy.CtrlVArmed = true;
-        _hookScope = LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Keyboard);
-
+        if (_hookScope is null)
+        {
+            // Start e idempotente, mas precisa ter rodado antes do primeiro Acquire.
+            LowLevelHookHost.Shared.Start();
+            // ReleaseCtrlV antes de armar: um cancelamento anterior por excecao pode ter
+            // deixado o guard de colagem em voo tomado, e a fila nova nasceria bloqueada.
+            HookPolicy.ReleaseCtrlV();
+            // Arma antes de instalar para nao existir instante com hook vivo e fila
+            // desarmada (o Ctrl+V daquele instante seria perdido).
+            HookPolicy.CtrlVArmed = true;
+            _hookScope = LowLevelHookHost.Shared.Acquire(LowLevelHookKind.Keyboard);
+            StartupLog.Write($"Fila de colagem armada: {_queue.Count} itens");
+        }
+        _idleTimer.Start();
         QueueProgress?.Invoke(_queue.CursorPosition, _queue.Count);
-        StartupLog.Write($"Fila de colagem armada: {_queue.Count} itens");
     }
 
     /// <summary>
@@ -85,6 +134,8 @@ public sealed class PasteQueueService : IDisposable
     {
         if (ev.Message == KlipInputMessages.CtrlV)
             OnCtrlVDetected();
+        else if (ev.Message == KlipInputMessages.QueueEscape)
+            _dispatcher.BeginInvoke(() => Cancel());
     }
 
     /// <summary>
@@ -101,20 +152,13 @@ public sealed class PasteQueueService : IDisposable
             return;
         }
 
-        // timeout de seguranca: se travou no meio, aborta a fila
-        if ((DateTime.UtcNow - _armedAt).TotalMinutes > 2)
-        {
-            // Cancel desarma, e desarmar tambem devolve o guard (ver HookPolicy.CtrlVArmed)
-            _dispatcher.BeginInvoke(Cancel);
-            return;
-        }
-
         // current item is already on the clipboard (put there by Arm or the last Ctrl+V).
         // this Ctrl+V pastes it; meanwhile we get the NEXT one ready in the background.
         _dispatcher.BeginInvoke(() =>
         {
             try
             {
+                _lastActivity = DateTime.UtcNow;
                 var hasNext = _queue.Advance();
                 if (hasNext)
                 {
@@ -173,18 +217,41 @@ public sealed class PasteQueueService : IDisposable
 
     private void Finish()
     {
-        ReleaseHook();
-        _queue.Reset();
-        QueueFinished?.Invoke();
+        if (_hookScope is null)
+            return;
+        End(restore: true);
         StartupLog.Write("Fila de colagem concluída");
     }
 
-    public void Cancel()
+    /// <summary>Stops the queue and puts the original clipboard back.</summary>
+    public void Cancel() => Cancel(restore: true);
+
+    public void Cancel(bool restore)
     {
-        if (!_queue.IsArmed)
+        // the hook scope is what says "armed": the queue list may already be reset
+        if (_hookScope is null)
+        {
+            _restore = null;
+            _writtenFirstId = null;
             return;
+        }
+        End(restore);
+    }
+
+    /// <summary>Stops without touching the clipboard (the pick moved to another mode).</summary>
+    public void Disarm() => Cancel(restore: false);
+
+    private void End(bool restore)
+    {
         ReleaseHook();
         _queue.Reset();
+        _idleTimer.Stop();
+        _writtenFirstId = null;
+        HoldTimeout = false;
+        var snapshot = _restore;
+        _restore = null;
+        if (restore && snapshot is not null)
+            _writeGuard.Restore(snapshot);
         QueueFinished?.Invoke();
     }
 
@@ -203,6 +270,7 @@ public sealed class PasteQueueService : IDisposable
     public void Dispose()
     {
         LowLevelHookHost.Shared.Observed -= OnHookEvent;
+        _idleTimer.Stop();
         ReleaseHook();
     }
 }

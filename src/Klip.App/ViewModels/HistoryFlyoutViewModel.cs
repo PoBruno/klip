@@ -50,7 +50,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     private readonly MediaStore _mediaStore;
     private readonly PasteService _pasteService;
     private readonly SettingsService _settings;
-    private readonly PasteQueueService _pasteQueue;
+    private readonly PickPasteService _pickPaste;
     private readonly SnippetRepository _snippets;
     private readonly HistoryPause _pause;
     private readonly ClipboardIngestService _ingest;
@@ -83,7 +83,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         ClipboardItemRepository repository,
         MediaStore mediaStore,
         PasteService pasteService,
-        PasteQueueService pasteQueue,
+        PickPasteService pickPaste,
         SettingsService settings,
         SnippetRepository snippets,
         HistoryPause pause,
@@ -94,7 +94,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         _repository = repository;
         _mediaStore = mediaStore;
         _pasteService = pasteService;
-        _pasteQueue = pasteQueue;
+        _pickPaste = pickPaste;
         _settings = settings;
         _snippets = snippets;
         _pause = pause;
@@ -103,17 +103,6 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         _pins = pins;
         _dispatcher = System.Windows.Application.Current.Dispatcher;
         InitFeatures();
-    }
-
-    private readonly Core.Clipboard.PasteQueue<HistoryItemViewModel> _selection = new();
-    // match VMs by item Id: different pages build separate instances
-    private static readonly IEqualityComparer<HistoryItemViewModel> ByItemId =
-        new ItemIdComparer();
-
-    private sealed class ItemIdComparer : IEqualityComparer<HistoryItemViewModel>
-    {
-        public bool Equals(HistoryItemViewModel? a, HistoryItemViewModel? b) => a?.Id == b?.Id;
-        public int GetHashCode(HistoryItemViewModel vm) => vm.Id.GetHashCode();
     }
 
     public BulkObservableCollection<HistoryItemViewModel> Items { get; } = [];
@@ -146,19 +135,6 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
 
     /// <summary>Pinned/Recent headers only make sense on the Recent tab with no search.</summary>
     private bool ShowSectionHeaders => SelectedTab == HistoryTab.Recent && !HasSearch;
-
-    /// <summary>Multi-select mode is on plus how many are picked.</summary>
-    [ObservableProperty]
-    private bool _isMultiSelectMode;
-
-    [ObservableProperty]
-    private int _multiSelectTarget;
-
-    /// <summary>Reads like "1 / 3" while picking items.</summary>
-    public string MultiSelectStatus => $"{_selection.Count} / {MultiSelectTarget}";
-
-    partial void OnIsMultiSelectModeChanged(bool value) => OnPropertyChanged(nameof(MultiSelectStatus));
-    partial void OnMultiSelectTargetChanged(int value) => OnPropertyChanged(nameof(MultiSelectStatus));
 
     /// <summary>
     /// Raised to close the window. The bool says whether HideFlyout should restore
@@ -364,10 +340,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         if (generation != _generation)
             return; // something newer already replaced the list
 
-        // when reopening or filtering, drop any pending selection (badges go stale)
-        if (!IsMultiSelectMode)
-            _selection.Reset();
-        ClearChecks();
+        // the pick is keyed by item id, so it survives a search or a filter
         SetAliasHit(page.AliasHit);
 
         var vms = new List<HistoryItemViewModel>(page.Pinned.Count + page.Recent.Count);
@@ -408,8 +381,8 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         var absImage = item.FilePath is not null ? _mediaStore.ToAbsolute(item.FilePath) : null;
         var absThumb = item.ThumbPath is not null ? _mediaStore.ToAbsolute(item.ThumbPath) : null;
         var vm = new HistoryItemViewModel(item, absImage, absThumb, _ingest.IsSecretItem(item.Id));
-        if (IsMultiSelectMode)
-            vm.QueueOrder = _selection.OrderOf(vm, ByItemId);
+        if (!_pick.IsEmpty)
+            vm.SetPick(_pick.Mode, _pick.OrderOf(vm.Id));
         return vm;
     }
 
@@ -529,7 +502,7 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
     {
         if (item is null)
             return;
-        if (IsMultiSelectMode || !EnterCopiesOnly)
+        if (!EnterCopiesOnly)
         {
             Paste(item);
             return;
@@ -545,78 +518,8 @@ public sealed partial class HistoryFlyoutViewModel : ObservableObject
         if (item is null)
             return;
 
-        // in multi-select mode a click queues instead of pasting
-        if (IsMultiSelectMode)
-        {
-            ToggleSelection(item);
-            return;
-        }
-
         CloseRequested?.Invoke(false); // paste flow handles focus + Ctrl+V itself
         _pasteService.PasteItem(item.Item);
-    }
-
-    // ----- Sequential paste queue -----
-
-    /// <summary>Enters multi-select mode for k items (1 to 5).</summary>
-    [RelayCommand]
-    private void StartMultiSelect(int count)
-    {
-        ClearSelectionOrder();
-        MultiSelectTarget = Math.Clamp(count, 1, 5);
-        _selection.Begin(MultiSelectTarget);
-        IsMultiSelectMode = true;
-    }
-
-    /// <summary>Leaves multi-select without arming the queue.</summary>
-    [RelayCommand]
-    private void CancelMultiSelect()
-    {
-        ClearSelectionOrder();
-        IsMultiSelectMode = false;
-    }
-
-    /// <summary>Adds or removes an item from the queue, keeping order.</summary>
-    private void ToggleSelection(HistoryItemViewModel item)
-    {
-        _selection.Toggle(item, ByItemId);
-        // only queued cards carry a badge, so only they (and the clicked one) need refreshing
-        foreach (var vm in Items)
-        {
-            if (vm.QueueOrder > 0 || ReferenceEquals(vm, item))
-                vm.QueueOrder = _selection.OrderOf(vm, ByItemId);
-        }
-
-        OnPropertyChanged(nameof(MultiSelectStatus));
-
-        // hit the target count, so arm it on its own
-        if (_selection.IsFull)
-            ConfirmMultiSelect();
-    }
-
-    /// <summary>Closes the flyout and arms the paste queue.</summary>
-    [RelayCommand]
-    private void ConfirmMultiSelect()
-    {
-        if (_selection.Count == 0)
-            return;
-        // the queue writes the content itself, so it needs the full rows (at most 5, ~0.1 ms each)
-        var items = _selection.Snapshot().Select(vm => _repository.LoadFull(vm.Item)).ToList();
-        ClearSelectionOrder();
-        IsMultiSelectMode = false;
-        CloseRequested?.Invoke(true);
-        _pasteQueue.Arm(items);
-    }
-
-    private void ClearSelectionOrder()
-    {
-        foreach (var vm in Items)
-        {
-            if (vm.QueueOrder != 0)
-                vm.QueueOrder = 0;
-        }
-        _selection.Reset();
-        OnPropertyChanged(nameof(MultiSelectStatus));
     }
 
     /// <summary>Shift+Enter: paste as plain text.</summary>

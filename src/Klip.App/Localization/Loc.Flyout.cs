@@ -19,9 +19,17 @@ public static partial class Loc
     public static string CollectPasteAll => Get(nameof(CollectPasteAll));
     public static string CollectClear => Get(nameof(CollectClear));
     public static string CollectExit => Get(nameof(CollectExit));
-    public static string CheckedBanner => Get(nameof(CheckedBanner));
-    public static string CheckedPaste => Get(nameof(CheckedPaste));
-    public static string CheckedClear => Get(nameof(CheckedClear));
+    public static string PickJoinTitle => Get(nameof(PickJoinTitle));
+    public static string PickSequenceTitle => Get(nameof(PickSequenceTitle));
+    public static string PickCountOne => Get(nameof(PickCountOne));
+    public static string PickCountMany => Get(nameof(PickCountMany));
+    public static string PickSequenceCount => Get(nameof(PickSequenceCount));
+    public static string PickJoinHint => Get(nameof(PickJoinHint));
+    public static string PickSequenceHint => Get(nameof(PickSequenceHint));
+    public static string PickEscClears => Get(nameof(PickEscClears));
+    public static string PickLimit => Get(nameof(PickLimit));
+    public static string PickFooterTip => Get(nameof(PickFooterTip));
+    public static string QueueTrayProgress => Get(nameof(QueueTrayProgress));
     public static string MenuPreview => Get(nameof(MenuPreview));
     public static string MenuSelect => Get(nameof(MenuSelect));
     public static string MenuUnselect => Get(nameof(MenuUnselect));
@@ -86,9 +94,6 @@ public static partial class Loc
         ["CollectPasteAll"] = "Colar tudo",
         ["CollectClear"] = "Limpar",
         ["CollectExit"] = "Sair",
-        ["CheckedBanner"] = "{0} selecionados",
-        ["CheckedPaste"] = "Colar juntos",
-        ["CheckedClear"] = "Limpar",
         ["MenuPreview"] = "Visualizar (Espaço)",
         ["MenuSelect"] = "Selecionar para colar juntos",
         ["MenuUnselect"] = "Tirar da seleção",
@@ -133,6 +138,17 @@ public static partial class Loc
         ["TrayPause60"] = "Pausar por 1 hora",
         ["TrayPauseUntil"] = "Pausar até reativar",
         ["TrayIgnoreNext"] = "Ignorar a próxima cópia",
+        ["PickJoinTitle"] = "Juntos",
+        ["PickSequenceTitle"] = "Sequência",
+        ["PickCountOne"] = "1 item",
+        ["PickCountMany"] = "{0} itens",
+        ["PickSequenceCount"] = "{0} na fila",
+        ["PickJoinHint"] = "Ctrl+V cola tudo",
+        ["PickSequenceHint"] = "Ctrl+V cola o próximo",
+        ["PickEscClears"] = "Esc limpa",
+        ["PickLimit"] = "Limite de {0} itens",
+        ["PickFooterTip"] = "Shift+clique: colar juntos · Ctrl+clique: colar em sequência",
+        ["QueueTrayProgress"] = "Klip: colando {0} de {1}",
         ["FooterHints"] = "Enter cola · Espaço visualiza · Del exclui",
         ["FooterHintsCopy"] = "Enter copia · Espaço visualiza · Del exclui",
     };
@@ -155,9 +171,6 @@ public static partial class Loc
         ["CollectPasteAll"] = "Paste all",
         ["CollectClear"] = "Clear",
         ["CollectExit"] = "Exit",
-        ["CheckedBanner"] = "{0} selected",
-        ["CheckedPaste"] = "Paste together",
-        ["CheckedClear"] = "Clear",
         ["MenuPreview"] = "Preview (Space)",
         ["MenuSelect"] = "Select to paste together",
         ["MenuUnselect"] = "Remove from selection",
@@ -202,6 +215,17 @@ public static partial class Loc
         ["TrayPause60"] = "Pause for 1 hour",
         ["TrayPauseUntil"] = "Pause until resumed",
         ["TrayIgnoreNext"] = "Ignore the next copy",
+        ["PickJoinTitle"] = "Together",
+        ["PickSequenceTitle"] = "Sequence",
+        ["PickCountOne"] = "1 item",
+        ["PickCountMany"] = "{0} items",
+        ["PickSequenceCount"] = "{0} in line",
+        ["PickJoinHint"] = "Ctrl+V pastes all",
+        ["PickSequenceHint"] = "Ctrl+V pastes the next",
+        ["PickEscClears"] = "Esc clears",
+        ["PickLimit"] = "Up to {0} items",
+        ["PickFooterTip"] = "Shift+click: paste together · Ctrl+click: paste in sequence",
+        ["QueueTrayProgress"] = "Klip: pasting {0} of {1}",
         ["FooterHints"] = "Enter pastes · Space previews · Del deletes",
         ["FooterHintsCopy"] = "Enter copies · Space previews · Del deletes",
     };

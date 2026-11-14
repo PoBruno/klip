@@ -34,6 +34,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private SettingsShell? _settingsWindow;
     private HistoryFlyoutWindow? _flyout;
+    private Windows.SequenceTicketWindow? _sequenceTicket;
     private PasteService? _pasteService;
     private ClipboardMonitorService? _clipboardMonitor;
     private CaptureController? _captureController;
@@ -195,6 +196,7 @@ public partial class App : Application
         services.AddSingleton<ExplorerPasteService>();
         services.AddSingleton<PasteService>();
         services.AddSingleton<PasteQueueService>();
+        services.AddSingleton<PickPasteService>();
         services.AddSingleton<ScreenCaptureService>();
         services.AddSingleton<PanoramicCaptureService>();
         // recording: concrete interop types only through the factory
@@ -292,7 +294,11 @@ public partial class App : Application
         // o flyout fecha por varios caminhos (Esc, clique fora, colar,
         // hotkey). Ao inves de espalhar EnterProcessEcoQos por todos eles, reage a
         // visibilidade: sem janela visivel, o app volta ao estado de repouso.
-        _flyout.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
+        _flyout.IsVisibleChanged += (_, _) =>
+        {
+            ApplyIdleQosIfNoWindowVisible();
+            ShowSequenceTicket();
+        };
         _clipboardMonitor = _services.GetRequiredService<ClipboardMonitorService>();
         StartupLog.Write("OnStartup: clipboard monitor ativo");
         if (_startedByRecycle)
@@ -313,19 +319,22 @@ public partial class App : Application
         Views.Controls.PasteAsFileSettings.SettingsSource = settings;
         _services.GetRequiredService<ExplorerPasteService>().Start();
 
-        // indicator for the sequential paste queue
+        // indicator for the sequential paste queue: tray tooltip, plus the ticket by the
+        // caret once the history panel is out of the way
         var pasteQueue = _services.GetRequiredService<PasteQueueService>();
         pasteQueue.QueueProgress += (current, total) =>
             Dispatcher.BeginInvoke(() =>
             {
                 if (_tray is not null)
-                    _tray.ToolTipText = $"Klip - colando {current} de {total}";
+                    _tray.ToolTipText = string.Format(Localization.Loc.QueueTrayProgress, current, total);
+                ShowSequenceTicket();
             });
         pasteQueue.QueueFinished += () =>
             Dispatcher.BeginInvoke(() =>
             {
                 if (_tray is not null)
                     _tray.ToolTipText = "Klip";
+                _sequenceTicket?.Hide();
             });
 
         // capture overlay
@@ -628,6 +637,127 @@ public partial class App : Application
         return "falhou";
     }
 
+    /// <summary>
+    /// The one way the settings page changes a shortcut. Picking a key Windows owns
+    /// (Win+V, Win+Shift+S, Print Screen) takes it over in the registry; moving off one
+    /// gives that key alone back. Used to be two controls (the shortcut field and the
+    /// takeover buttons) that could disagree: typing Win+Shift+S in the field saved it
+    /// without freeing it from Windows, and leaving Print Screen kept it freed for nobody.
+    /// Returns "ok", "conflito", "precisa-hklm" (Win+V on 24H2) or "falhou".
+    /// </summary>
+    public async Task<string> ChangeShortcutAsync(string slot, string gesture)
+    {
+        var settings = _services!.GetRequiredService<SettingsService>();
+        var registry = _services!.GetRequiredService<SystemHotkeyService>();
+
+        string Get(AppSettings s) => slot switch
+        {
+            "history" => s.HotkeyHistory,
+            "capture" => s.HotkeyCapture,
+            "stop" => s.StopRecordingHotkey,
+            "text" => s.HotkeyCaptureText,
+            "repeat" => s.HotkeyRepeatRegion,
+            "video" => s.HotkeyRecordVideo,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null),
+        };
+        void Set(AppSettings s, string g)
+        {
+            switch (slot)
+            {
+                case "history": s.HotkeyHistory = g; break;
+                case "capture": s.HotkeyCapture = g; break;
+                case "stop": s.StopRecordingHotkey = g; break;
+                case "text": s.HotkeyCaptureText = g; break;
+                case "repeat": s.HotkeyRepeatRegion = g; break;
+                case "video": s.HotkeyRecordVideo = g; break;
+            }
+        }
+
+        var old = Get(settings.Current);
+        if (string.Equals(old, gesture, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyHotkeys(settings);
+            return "ok";
+        }
+
+        var state = await Task.Run(registry.GetState);
+        var restartExplorer = false;
+
+        // take the new key from Windows when it is one of its own
+        if (SystemKeyLetter(gesture) is { } takeLetter &&
+            !(takeLetter == 'V' ? state.WinVFreed || state.HklmClipboardFeatureOff : state.WinSFreed))
+        {
+            registry.AddDisabledHotkeyLetters(takeLetter.ToString());
+            restartExplorer = true;
+        }
+        if (IsPrintScreen(gesture) && !state.PrintScreenFreed)
+            registry.SetPrintScreenFreed(true);
+
+        settings.UpdateAndFlush(s => Set(s, gesture));
+
+        // give the old key back, unless another action still uses it
+        var stillUsed = UsesGesture(settings.Current, old);
+        if (!stillUsed && SystemKeyLetter(old) is { } giveLetter && registry.RemoveDisabledHotkeyLetter(giveLetter))
+            restartExplorer = true;
+        if (!stillUsed && IsPrintScreen(old))
+            registry.SetPrintScreenFreed(false);
+
+        if (restartExplorer)
+            await SystemHotkeyService.RestartExplorerAsync();
+
+        // the stop recording key is only registered during a recording
+        if (slot == "stop")
+            return "ok";
+
+        // after an Explorer restart the shell may hold the key for a few seconds
+        var deadline = DateTime.UtcNow.AddSeconds(restartExplorer ? 10 : 0);
+        while (true)
+        {
+            if (ApplyHotkeys(settings))
+                return "ok";
+            if (DateTime.UtcNow >= deadline)
+                break;
+            await Task.Delay(400);
+        }
+
+        // Win+V on Windows 11 24H2 only lets go with the feature off in HKLM (elevated)
+        if (slot == "history" && gesture == "Win+V" && !settings.Current.RegistryHklmClipboardOffApplied)
+            return "precisa-hklm";
+        return SystemKeyLetter(gesture) is not null ? "falhou" : "conflito";
+    }
+
+    /// <summary>
+    /// Unregisters every Klip hotkey while the shortcut dialog listens, so pressing
+    /// the current Win+V reaches the dialog instead of opening the panel. ApplyHotkeys
+    /// puts them back.
+    /// </summary>
+    public void SuspendHotkeys()
+    {
+        var hotkeys = _services?.GetService<HotkeyService>();
+        if (hotkeys is null)
+            return;
+        if (_historyHotkeyId != 0) { hotkeys.Unregister(_historyHotkeyId); _historyHotkeyId = 0; }
+        if (_captureHotkeyId != 0) { hotkeys.Unregister(_captureHotkeyId); _captureHotkeyId = 0; }
+        foreach (var id in _optionalHotkeyIds)
+            hotkeys.Unregister(id);
+        _optionalHotkeyIds.Clear();
+    }
+
+    private static char? SystemKeyLetter(string? gesture) => gesture switch
+    {
+        "Win+V" => 'V',
+        "Win+Shift+S" or "Shift+Win+S" => 'S',
+        _ => null,
+    };
+
+    private static bool IsPrintScreen(string? gesture) =>
+        string.Equals(gesture, "PrintScreen", StringComparison.OrdinalIgnoreCase);
+
+    private static bool UsesGesture(AppSettings s, string? gesture) =>
+        !string.IsNullOrEmpty(gesture) &&
+        new[] { s.HotkeyHistory, s.HotkeyCapture, s.HotkeyCaptureText, s.HotkeyRepeatRegion, s.HotkeyRecordVideo, s.StopRecordingHotkey }
+            .Any(g => string.Equals(g, gesture, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Full rollback of every takeover.</summary>
     public async Task RevertTakeoversAsync()
     {
@@ -863,19 +993,33 @@ public partial class App : Application
         }
     }
 
+    /// <summary>The "2/3" ticket shows while a sequence runs and the history panel is closed.</summary>
+    private void ShowSequenceTicket()
+    {
+        var queue = _services?.GetRequiredService<PasteQueueService>();
+        if (queue is null || !queue.IsArmed || _flyout is { IsVisible: true })
+        {
+            _sequenceTicket?.Hide();
+            return;
+        }
+        _sequenceTicket ??= new Windows.SequenceTicketWindow();
+        _sequenceTicket.ShowProgress(queue.Position, queue.Count);
+    }
+
     /// <summary>Grabs the target app before showing the flyout.</summary>
     private void ToggleHistoryFlyout()
     {
         if (_flyout is null)
             return;
         _idleRecycler?.NoteActivity();
-        // opening history cancels a paste queue that is running
-        _services?.GetRequiredService<PasteQueueService>().Cancel();
         if (_flyout.IsVisible)
         {
+            // closing with the hotkey keeps a pick, same as a click outside
             _flyout.HideFlyout(); // IsVisibleChanged puts the qos back to rest
             return;
         }
+        // opening history cancels a paste queue that is running
+        _services?.GetRequiredService<PasteQueueService>().Cancel();
         var latency = HotkeyLatency.Begin("historico");
         // HighQoS ANTES de montar/mostrar a janela, senao o primeiro layout
         // e a composicao Mica rodam num efficient core e o painel abre devagar.

@@ -163,20 +163,30 @@ public sealed partial class HistoryItemViewModel(
 
     public bool HasShortcut => ShortcutNumber > 0;
 
-    /// <summary>Picked for "paste together" (Ctrl+click or Shift+arrows); the number is the pick order.</summary>
+    /// <summary>Place in a "paste together" pick (Shift+click); 0 means not picked.</summary>
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(IsChecked))]
-    private int _checkOrder;
+    [NotifyPropertyChangedFor(nameof(IsJoined))]
+    private int _joinOrder;
 
-    public bool IsChecked => CheckOrder > 0;
+    public bool IsJoined => JoinOrder > 0;
 
-    /// <summary>Position in the paste queue; 0 means not queued.</summary>
+    /// <summary>Place in a "paste in sequence" pick (Ctrl+click); 0 means not picked.</summary>
     [ObservableProperty]
-    private int _queueOrder;
+    [NotifyPropertyChangedFor(nameof(IsSequenced))]
+    private int _sequenceOrder;
 
-    public bool IsQueued => QueueOrder > 0;
+    public bool IsSequenced => SequenceOrder > 0;
 
-    partial void OnQueueOrderChanged(int value) => OnPropertyChanged(nameof(IsQueued));
+    /// <summary>Puts the card's badge in line with the pick (one call, at most one badge).</summary>
+    public void SetPick(Core.Clipboard.PickMode mode, int order)
+    {
+        var join = mode == Core.Clipboard.PickMode.Join ? order : 0;
+        var sequence = mode == Core.Clipboard.PickMode.Sequence ? order : 0;
+        if (JoinOrder != join)
+            JoinOrder = join;
+        if (SequenceOrder != sequence)
+            SequenceOrder = sequence;
+    }
 
     /// <summary>
     /// "Pinned"/"Recent" label drawn above this card when it opens a section. The list is

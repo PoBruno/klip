@@ -21,8 +21,7 @@ public sealed class PasteService(
     MediaStore mediaStore,
     SettingsService settings,
     ClipboardThread clipboardThread,
-    ClipboardItemRepository repository,
-    PasteQueueService pasteQueue)
+    ClipboardItemRepository repository)
 {
     /// <summary>
     /// Dispatcher da UI, resolvido uma vez na construcao (o host sobe na UI
@@ -334,21 +333,113 @@ public sealed class PasteService(
 
     /// <summary>
     /// Several items at once (collect mode, "paste together"). All text: one paste with a
-    /// line break between them. Anything else: the sequential queue, one per Ctrl+V.
+    /// line break between them. With images or files: pasted one after the other in a
+    /// single go, runs of text still joined into one block.
     /// </summary>
-    public void PasteTogether(IReadOnlyList<ClipboardItem> items)
+    public void PasteTogether(IReadOnlyList<ClipboardItem> items, System.Windows.IDataObject? restoreAfter = null)
     {
         if (items.Count == 0)
             return;
         if (Klip.Core.Clipboard.PasteJoin.CanJoinAsText(items))
         {
-            PasteTextCore(() => Klip.Core.Clipboard.PasteJoin.Join(
-                items.Select(i => repository.LoadFull(i).TextContent)));
+            PasteTextCore(() => JoinText(items));
             return;
         }
-        // the queue writes the content itself, so it gets full rows (at most a hundred)
-        var full = items.Select(repository.LoadFull).ToList();
-        pasteQueue.Arm(full);
+        PasteSeries(items, restoreAfter);
+    }
+
+    /// <summary>The items' text joined one per line, read in full from the database.</summary>
+    public string JoinText(IEnumerable<ClipboardItem> items) =>
+        Klip.Core.Clipboard.PasteJoin.Join(items.Select(i => repository.LoadFull(i).TextContent));
+
+    /// <summary>
+    /// Builds the steps of a mixed pick: each run of text becomes one synthetic text item
+    /// (id 0), images and files stay as they are. Full rows, read here.
+    /// </summary>
+    public List<ClipboardItem> PlanSteps(IReadOnlyList<ClipboardItem> items)
+    {
+        var steps = new List<ClipboardItem>();
+        var plan = Klip.Core.Clipboard.PasteJoin.PlanSeries(items, Klip.Core.Clipboard.PasteJoin.IsTextual);
+        for (var i = 0; i < plan.Count; i++)
+        {
+            var step = plan[i];
+            if (step.Count == 1 && !Klip.Core.Clipboard.PasteJoin.IsTextual(step[0]))
+            {
+                steps.Add(repository.LoadFull(step[0]));
+                continue;
+            }
+            // one per line, also next to an image: the text block carries the breaks
+            var text = JoinText(step);
+            if (i > 0)
+                text = "\r\n" + text;
+            if (i < plan.Count - 1)
+                text += "\r\n";
+            steps.Add(new ClipboardItem { Type = ClipboardItemType.Text, TextContent = text, ContentHash = "" });
+        }
+        return steps;
+    }
+
+    // one paste per step, back to back. the wait lets the app read the clipboard before
+    // the next step replaces it
+    private void PasteSeries(IReadOnlyList<ClipboardItem> items, System.Windows.IDataObject? restoreAfter)
+    {
+        var target = SavedTargetWindow;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var steps = PlanSteps(items);
+                if (!BringTargetBack(target))
+                    _uiDispatcher.BeginInvoke(() => PasteFailed?.Invoke());
+                NativeMethods.ReleasePressedModifiers();
+                Thread.Sleep(20);
+                foreach (var step in steps)
+                {
+                    if (step.Type == ClipboardItemType.Image && step.FilePath is not null)
+                    {
+                        var (png, bitmap) = ClipboardWriteGuard.DecodeImageFile(mediaStore.ToAbsolute(step.FilePath));
+                        if (png is not null && bitmap is not null)
+                            clipboardThread.Invoke(() => writeGuard.WriteImageFromPng(png, bitmap));
+                    }
+                    else
+                    {
+                        writeGuard.WriteItem(step, plainTextOnly: step.Id == 0);
+                    }
+                    Thread.Sleep(30);
+                    NativeMethods.SendCtrlV();
+                    Thread.Sleep(250);
+                }
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("PasteSeries", ex);
+            }
+            if (restoreAfter is not null)
+                clipboardThread.BeginInvoke(() => writeGuard.Restore(restoreAfter));
+        });
+    }
+
+    /// <summary>
+    /// Fires one Ctrl+V into the target for an armed sequence (Enter in the panel, or
+    /// Ctrl+V while the panel had focus). The queue hook sees it and moves on.
+    /// </summary>
+    public void PasteNextInQueue()
+    {
+        var target = SavedTargetWindow;
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                BringTargetBack(target);
+                NativeMethods.ReleasePressedModifiers();
+                Thread.Sleep(20);
+                NativeMethods.SendCtrlV();
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("PasteNextInQueue", ex);
+            }
+        });
     }
 
     // {clipboard} reads the clipboard thread; called from a pool thread
