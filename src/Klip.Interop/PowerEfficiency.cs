@@ -26,12 +26,22 @@ public static class PowerEfficiency
     private static bool _threadApiMissing;
     private static bool _threadPriorityApiMissing;
 
+    // SetProcessInformation replaces the whole throttling state, so every Eco/High
+    // switch used to drop the ignore-timer-resolution bit set at startup. keep it here
+    // and fold it into every call.
+    private static readonly object ThrottlingLock = new();
+    private static uint _speedControl;
+    private static uint _speedState;
+    private static uint _timerControl;
+    private static uint _timerState;
+
     /// <summary>
     /// Marca o PROCESSO como EcoQoS: frequencia eficiente e E-cores, inclusive na
-    /// tomada. Chamar quando todas as janelas estiverem escondidas.
+    /// tomada. So enquanto um jogo ou app em tela cheia tem a maquina; em repouso
+    /// comum o app usa <see cref="ResetProcessQosToSystem"/>.
     /// ControlMask = POWER_THROTTLING_EXECUTION_SPEED, StateMask = POWER_THROTTLING_EXECUTION_SPEED.
     /// </summary>
-    public static bool EnterProcessEcoQos() => SetProcessThrottling(
+    public static bool EnterProcessEcoQos() => SetExecutionSpeed(
         controlMask: NativeMethods.POWER_THROTTLING_EXECUTION_SPEED,
         stateMask: NativeMethods.POWER_THROTTLING_EXECUTION_SPEED);
 
@@ -40,7 +50,7 @@ public static class PowerEfficiency
     /// ou iniciar uma captura - caso contrario o primeiro layout roda em E-core lento.
     /// ControlMask = POWER_THROTTLING_EXECUTION_SPEED, StateMask = 0 (mecanismo desligado).
     /// </summary>
-    public static bool EnterProcessHighQos() => SetProcessThrottling(
+    public static bool EnterProcessHighQos() => SetExecutionSpeed(
         controlMask: NativeMethods.POWER_THROTTLING_EXECUTION_SPEED,
         stateMask: 0);
 
@@ -48,7 +58,7 @@ public static class PowerEfficiency
     /// Devolve o controle ao sistema (heuristicas por visibilidade/audio).
     /// ControlMask = 0, StateMask = 0.
     /// </summary>
-    public static bool ResetProcessQosToSystem() => SetProcessThrottling(
+    public static bool ResetProcessQosToSystem() => SetExecutionSpeed(
         controlMask: 0,
         stateMask: 0);
 
@@ -57,13 +67,30 @@ public static class PowerEfficiency
     /// que chamem timeBeginPeriod. A operacao e reversivel: ao desligar, o sistema
     /// lembra e volta a honrar o request anterior.
     /// </summary>
-    public static bool IgnoreTimerResolutionRequests(bool ignore) => SetProcessThrottling(
-        controlMask: NativeMethods.PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION,
-        stateMask: ignore ? NativeMethods.PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION : 0);
+    public static bool IgnoreTimerResolutionRequests(bool ignore)
+    {
+        lock (ThrottlingLock)
+        {
+            _timerControl = NativeMethods.PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION;
+            _timerState = ignore ? NativeMethods.PROCESS_POWER_THROTTLING_IGNORE_TIMER_RESOLUTION : 0;
+            return SetProcessThrottling(_speedControl | _timerControl, _speedState | _timerState);
+        }
+    }
+
+    private static bool SetExecutionSpeed(uint controlMask, uint stateMask)
+    {
+        lock (ThrottlingLock)
+        {
+            _speedControl = controlMask;
+            _speedState = stateMask;
+            return SetProcessThrottling(_speedControl | _timerControl, _speedState | _timerState);
+        }
+    }
 
     /// <summary>
     /// Prioridade de memoria BAIXA: "apare as minhas paginas antes das dos outros".
-    /// Alternativa correta e nao destrutiva ao EmptyWorkingSet.
+    /// So durante jogo/tela cheia: em repouso comum isso faz a primeira hotkey depois
+    /// de um tempo parado pagar o page-in de tudo.
     /// </summary>
     public static bool SetProcessMemoryPriorityLow() =>
         SetProcessMemoryPriority(NativeMethods.MEMORY_PRIORITY_LOW);
@@ -74,9 +101,18 @@ public static class PowerEfficiency
 
     /// <summary>
     /// Marca a THREAD ATUAL como EcoQoS. Use em threads de manutencao (retencao,
-    /// thumbnails, VACUUM): vao para os E-cores sem afetar a UI thread.
+    /// thumbnails, VACUUM): vao para os E-cores sem afetar a UI thread. Numa thread do
+    /// pool, desfazer com <see cref="ResetCurrentThreadQos"/> antes de devolver a thread:
+    /// a marca fica na thread, e a proxima tarefa (recarga do flyout, encode) herdaria.
     /// </summary>
-    public static bool MarkCurrentThreadEco()
+    public static bool MarkCurrentThreadEco() => SetCurrentThreadThrottling(
+        NativeMethods.POWER_THROTTLING_EXECUTION_SPEED,
+        NativeMethods.POWER_THROTTLING_EXECUTION_SPEED);
+
+    /// <summary>Devolve a QoS da thread atual ao sistema (desfaz <see cref="MarkCurrentThreadEco"/>).</summary>
+    public static bool ResetCurrentThreadQos() => SetCurrentThreadThrottling(0, 0);
+
+    private static bool SetCurrentThreadThrottling(uint controlMask, uint stateMask)
     {
         if (_threadApiMissing)
             return false;
@@ -84,8 +120,8 @@ public static class PowerEfficiency
         var state = new NativeMethods.POWER_THROTTLING_STATE
         {
             Version = NativeMethods.THREAD_POWER_THROTTLING_CURRENT_VERSION,
-            ControlMask = NativeMethods.POWER_THROTTLING_EXECUTION_SPEED,
-            StateMask = NativeMethods.POWER_THROTTLING_EXECUTION_SPEED,
+            ControlMask = controlMask,
+            StateMask = stateMask,
         };
 
         try
@@ -105,6 +141,53 @@ public static class PowerEfficiency
         {
             _threadApiMissing = true;
             return false;
+        }
+    }
+
+    /// <summary>
+    /// Puts the process back on normal priority when it inherited a lower one. A child
+    /// gets IDLE or BELOW_NORMAL from whoever launched it (an editor, a script), and an
+    /// idle class tray app loses the cpu to any normal load right when a hotkey comes in.
+    /// Never raises above normal. Returns the inherited class when it changed something.
+    /// </summary>
+    public static uint? NormalizePriorityClass()
+    {
+        try
+        {
+            var process = NativeMethods.GetCurrentProcess();
+            var current = NativeMethods.GetPriorityClass(process);
+            if (current != NativeMethods.IDLE_PRIORITY_CLASS &&
+                current != NativeMethods.BELOW_NORMAL_PRIORITY_CLASS)
+                return null;
+            return NativeMethods.SetPriorityClass(process, NativeMethods.NORMAL_PRIORITY_CLASS)
+                ? current
+                : null;
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>Current priority class in plain words, for the log.</summary>
+    public static string DescribePriorityClass()
+    {
+        try
+        {
+            return NativeMethods.GetPriorityClass(NativeMethods.GetCurrentProcess()) switch
+            {
+                NativeMethods.IDLE_PRIORITY_CLASS => "Idle",
+                NativeMethods.BELOW_NORMAL_PRIORITY_CLASS => "BelowNormal",
+                NativeMethods.NORMAL_PRIORITY_CLASS => "Normal",
+                0x8000 => "AboveNormal",
+                0x80 => "High",
+                0x100 => "Realtime",
+                var other => $"0x{other:X}",
+            };
+        }
+        catch (EntryPointNotFoundException)
+        {
+            return "?";
         }
     }
 
@@ -139,6 +222,8 @@ public static class PowerEfficiency
         {
             if (entered)
                 TryEndBackgroundIo(thread);
+            // usually a pool thread: the next task on it must not inherit eco
+            ResetCurrentThreadQos();
         }
     }
 

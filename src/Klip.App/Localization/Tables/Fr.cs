@@ -17,6 +17,7 @@ internal static class Fr
         ["NotifyCaptureCopied"] = "Capture copiée ({0}x{1})",
         ["NotifyClickToEdit"] = "Cliquez pour modifier",
         ["NotifyHotkeyConflict"] = "Le raccourci {0} est déjà utilisé par une autre application",
+        ["NotifyTakeoverLost"] = "{0} ouvre de nouveau l'outil de Windows. Cliquez pour le reprendre dans les réglages des raccourcis",
         ["NotifyMemoryLimit"] = "Limite de mémoire atteinte. La capture a été terminée automatiquement",
         ["NotifyFramesDiscarded"] = "Certaines portions ont été ignorées. Faites défiler plus lentement la prochaine fois",
 

@@ -17,6 +17,7 @@ internal static class De
         ["NotifyCaptureCopied"] = "Aufnahme kopiert ({0}x{1})",
         ["NotifyClickToEdit"] = "Zum Bearbeiten klicken",
         ["NotifyHotkeyConflict"] = "Die Tastenkombination {0} wird bereits von einer anderen App verwendet",
+        ["NotifyTakeoverLost"] = "{0} öffnet wieder das Windows-Tool. Klicken, um es in den Tastenkürzel-Einstellungen zurückzuholen",
         ["NotifyMemoryLimit"] = "Speicherlimit erreicht. Die Aufnahme wurde automatisch abgeschlossen",
         ["NotifyFramesDiscarded"] = "Einige Abschnitte wurden verworfen. Scrollen Sie beim nächsten Mal langsamer",
 

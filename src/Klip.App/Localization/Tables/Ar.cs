@@ -17,6 +17,7 @@ internal static class Ar
         ["NotifyCaptureCopied"] = "تم نسخ اللقطة ({0}x{1})",
         ["NotifyClickToEdit"] = "انقر للتحرير",
         ["NotifyHotkeyConflict"] = "الاختصار {0} مستخدم بالفعل من تطبيق آخر",
+        ["NotifyTakeoverLost"] = "عاد {0} لفتح أداة Windows. انقر لاستعادته من إعدادات الاختصارات",
         ["NotifyMemoryLimit"] = "تم بلوغ حد الذاكرة. اكتمل الالتقاط تلقائيًا",
         ["NotifyFramesDiscarded"] = "تم تجاهل بعض المقاطع. مرر ببطء أكثر في المرة القادمة",
 

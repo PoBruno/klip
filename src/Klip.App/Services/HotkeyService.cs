@@ -15,6 +15,27 @@ public sealed class HotkeyService : IDisposable
     private readonly Dictionary<int, Action> _handlers = [];
     private int _nextId = 1;
 
+    /// <summary>Win32 error of the last failed <see cref="TryRegister"/> (1409 = taken by another app).</summary>
+    public int LastError { get; private set; }
+
+    /// <summary>
+    /// How long the WM_HOTKEY being handled waited in the queue before its handler ran,
+    /// in ms. Read it at the start of a hotkey handler; anything a blocked ui thread
+    /// added before the handler shows up here and nowhere else.
+    /// </summary>
+    public static int LastQueueMs { get; private set; } = -1;
+
+    /// <summary>
+    /// Returns <see cref="LastQueueMs"/> and clears it, so an open that did not come
+    /// from a hotkey (tray menu, settings) does not report a stale value. -1 = none.
+    /// </summary>
+    public static int TakeQueueMs()
+    {
+        var value = LastQueueMs;
+        LastQueueMs = -1;
+        return value;
+    }
+
     public HotkeyService()
     {
         // message-only window (HWND_MESSAGE = -3): gets WM_HOTKEY with no UI
@@ -43,7 +64,10 @@ public sealed class HotkeyService : IDisposable
 
         var newId = _nextId;
         if (!NativeMethods.RegisterHotKey(_source.Handle, newId, mods, vk))
+        {
+            LastError = System.Runtime.InteropServices.Marshal.GetLastPInvokeError();
             return false;
+        }
 
         _nextId++;
         id = newId;
@@ -61,6 +85,8 @@ public sealed class HotkeyService : IDisposable
     {
         if (msg == NativeMethods.WM_HOTKEY && _handlers.TryGetValue((int)wParam, out var action))
         {
+            // both clocks wrap together every ~49 days, the difference stays right
+            LastQueueMs = Math.Max(0, Environment.TickCount - NativeMethods.GetMessageTime());
             action();
             handled = true;
         }

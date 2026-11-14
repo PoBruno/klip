@@ -17,6 +17,7 @@ internal static class Es
         ["NotifyCaptureCopied"] = "Captura copiada ({0}x{1})",
         ["NotifyClickToEdit"] = "Haz clic para editar",
         ["NotifyHotkeyConflict"] = "El atajo {0} ya está en uso por otra aplicación",
+        ["NotifyTakeoverLost"] = "{0} vuelve a abrir la herramienta de Windows. Haz clic para recuperarlo en los ajustes de atajos",
         ["NotifyMemoryLimit"] = "Límite de memoria alcanzado. La captura se finalizó automáticamente",
         ["NotifyFramesDiscarded"] = "Se descartaron algunos fragmentos. Desplázate más despacio la próxima vez",
 

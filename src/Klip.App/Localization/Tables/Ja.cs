@@ -17,6 +17,7 @@ internal static class Ja
         ["NotifyCaptureCopied"] = "キャプチャをコピーしました ({0}x{1})",
         ["NotifyClickToEdit"] = "クリックして編集",
         ["NotifyHotkeyConflict"] = "ショートカット {0} は既に別のアプリで使用されています",
+        ["NotifyTakeoverLost"] = "{0} が再び Windows のツールを開くようになりました。クリックしてショートカット設定で取り戻せます",
         ["NotifyMemoryLimit"] = "メモリの上限に達しました。キャプチャは自動的に終了しました",
         ["NotifyFramesDiscarded"] = "一部の区間が破棄されました。次回はゆっくりスクロールしてください",
 

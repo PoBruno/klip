@@ -17,6 +17,7 @@ internal static class It
         ["NotifyCaptureCopied"] = "Cattura copiata ({0}x{1})",
         ["NotifyClickToEdit"] = "Fai clic per modificare",
         ["NotifyHotkeyConflict"] = "La scorciatoia {0} è già in uso da un'altra applicazione",
+        ["NotifyTakeoverLost"] = "{0} apre di nuovo lo strumento di Windows. Fai clic per riprenderlo nelle impostazioni delle scorciatoie",
         ["NotifyMemoryLimit"] = "Limite di memoria raggiunto. La cattura è stata completata automaticamente",
         ["NotifyFramesDiscarded"] = "Alcune sezioni sono state scartate. Scorri più lentamente la prossima volta",
 

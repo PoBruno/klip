@@ -113,6 +113,7 @@ public static partial class Loc
     public static string NotifyCaptureCopied => Get(nameof(NotifyCaptureCopied));
     public static string NotifyClickToEdit => Get(nameof(NotifyClickToEdit));
     public static string NotifyHotkeyConflict => Get(nameof(NotifyHotkeyConflict));
+    public static string NotifyTakeoverLost => Get(nameof(NotifyTakeoverLost));
     public static string NotifyMemoryLimit => Get(nameof(NotifyMemoryLimit));
     public static string NotifyFramesDiscarded => Get(nameof(NotifyFramesDiscarded));
     public static string PasteFailedToast => Get(nameof(PasteFailedToast));
@@ -480,6 +481,7 @@ public static partial class Loc
         [nameof(NotifyCaptureCopied)] = "Captura copiada ({0}x{1})",
         [nameof(NotifyClickToEdit)] = "Clique para editar",
         [nameof(NotifyHotkeyConflict)] = "O atalho {0} já está em uso por outro aplicativo",
+        [nameof(NotifyTakeoverLost)] = "{0} voltou a abrir a ferramenta do Windows. Clique para retomar nas configurações de atalhos",
         [nameof(NotifyMemoryLimit)] = "Limite de memória atingido. A captura foi concluída automaticamente",
         [nameof(NotifyFramesDiscarded)] = "Alguns trechos foram descartados. Role mais devagar na próxima",
         [nameof(PasteFailedToast)] = "Item copiado. Cole com Ctrl+V (não foi possível colar automaticamente).",
@@ -831,6 +833,7 @@ public static partial class Loc
         [nameof(NotifyCaptureCopied)] = "Capture copied ({0}x{1})",
         [nameof(NotifyClickToEdit)] = "Click to edit",
         [nameof(NotifyHotkeyConflict)] = "The shortcut {0} is already in use by another app",
+        [nameof(NotifyTakeoverLost)] = "{0} opens the Windows tool again. Click to take it back in the shortcut settings",
         [nameof(NotifyMemoryLimit)] = "Memory limit reached. The capture was finished automatically",
         [nameof(NotifyFramesDiscarded)] = "Some sections were discarded. Scroll slower next time",
         [nameof(PasteFailedToast)] = "Item copied. Paste with Ctrl+V (could not paste automatically).",

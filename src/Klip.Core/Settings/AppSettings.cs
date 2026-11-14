@@ -6,6 +6,10 @@ public sealed class AppSettings
     // General
     public bool StartWithWindows { get; set; } = true;
     public bool StartMinimized { get; set; } = true;
+    // swap the process for a fresh one after hours untouched or a long sleep (no settings
+    // page). off by default: it leaves the hotkeys unregistered for a moment right at
+    // resume, and the rest policy fixes are meant to make it unnecessary
+    public bool IdleRecycle { get; set; }
     public string Theme { get; set; } = "system"; // system | light | dark
     public string Language { get; set; } = "system";
 

@@ -17,6 +17,7 @@ internal static class Nl
         ["NotifyCaptureCopied"] = "Opname gekopieerd ({0}x{1})",
         ["NotifyClickToEdit"] = "Klik om te bewerken",
         ["NotifyHotkeyConflict"] = "De sneltoets {0} is al in gebruik door een andere app",
+        ["NotifyTakeoverLost"] = "{0} opent weer de Windows-tool. Klik om hem terug te nemen in de sneltoetsinstellingen",
         ["NotifyMemoryLimit"] = "Geheugenlimiet bereikt. De opname is automatisch voltooid",
         ["NotifyFramesDiscarded"] = "Sommige delen zijn overgeslagen. Scrol de volgende keer langzamer",
 

@@ -17,6 +17,7 @@ internal static class Ko
         ["NotifyCaptureCopied"] = "캡처가 복사됨 ({0}x{1})",
         ["NotifyClickToEdit"] = "클릭하여 편집",
         ["NotifyHotkeyConflict"] = "바로 가기 키 {0}이(가) 이미 다른 앱에서 사용 중입니다",
+        ["NotifyTakeoverLost"] = "{0}이(가) 다시 Windows 도구를 엽니다. 클릭하여 바로 가기 설정에서 다시 가져오세요",
         ["NotifyMemoryLimit"] = "메모리 한도에 도달했습니다. 캡처가 자동으로 완료되었습니다",
         ["NotifyFramesDiscarded"] = "일부 구간이 누락되었습니다. 다음에는 더 천천히 스크롤하세요",
 

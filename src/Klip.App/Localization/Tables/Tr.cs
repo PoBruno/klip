@@ -17,6 +17,7 @@ internal static class Tr
         ["NotifyCaptureCopied"] = "Yakalama kopyalandı ({0}x{1})",
         ["NotifyClickToEdit"] = "Düzenlemek için tıklayın",
         ["NotifyHotkeyConflict"] = "{0} kısayolu zaten başka bir uygulama tarafından kullanılıyor",
+        ["NotifyTakeoverLost"] = "{0} yeniden Windows aracını açıyor. Kısayol ayarlarından geri almak için tıklayın",
         ["NotifyMemoryLimit"] = "Bellek sınırına ulaşıldı. Yakalama otomatik olarak tamamlandı",
         ["NotifyFramesDiscarded"] = "Bazı bölümler atlandı. Bir dahaki sefere daha yavaş kaydırın",
 

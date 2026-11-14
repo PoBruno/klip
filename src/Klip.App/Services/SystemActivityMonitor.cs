@@ -33,11 +33,15 @@ public sealed class SystemActivityMonitor : IDisposable
 
     private System.Threading.Timer? _timer;
 
+    // while suspended with no hook alive there is no polling, so this one-shot looks
+    // again every so often; otherwise the eco/low memory state could stay for hours
+    private System.Threading.Timer? _recheck;
+    private const int RecheckMilliseconds = 30_000;
+
     // (int)SystemActivityState - int para permitir leitura com Volatile.
     private int _state = (int)SystemActivityState.Normal;
 
     private int _tickInFlight;
-    private int _threadMarkedEco;
     private int _disposed;
 
     /// <summary>Ultimo estado avaliado. Nasce em <see cref="SystemActivityState.Normal"/>.</summary>
@@ -73,8 +77,9 @@ public sealed class SystemActivityMonitor : IDisposable
     }
 
     /// <summary>
-    /// Para o polling. NAO desfaz uma suspensao em curso: quem decide voltar ao
-    /// estado normal e uma avaliacao, nao a parada do monitor.
+    /// Para o polling. Stopping is not leaving the state, so a suspension in course is
+    /// evaluated once more right away (off the caller's thread, the shell query can
+    /// block) and, while it lasts, again every 30 s until the fullscreen app is gone.
     /// </summary>
     public void Stop()
     {
@@ -86,6 +91,48 @@ public sealed class SystemActivityMonitor : IDisposable
         }
 
         timer?.Dispose();
+        RecheckSoon();
+    }
+
+    /// <summary>
+    /// Asks for one evaluation off the calling thread when the state is suspended
+    /// (unlock, a hotkey, polling just stopped). No-op in the normal state.
+    /// </summary>
+    public void RecheckSoon()
+    {
+        if (State != SystemActivityState.Suspended || Volatile.Read(ref _disposed) != 0)
+            return;
+        lock (_sync)
+        {
+            _recheck ??= new System.Threading.Timer(OnRecheck, null, Timeout.Infinite, Timeout.Infinite);
+            _recheck.Change(0, Timeout.Infinite);
+        }
+    }
+
+    private void OnRecheck(object? _)
+    {
+        try
+        {
+            if (EvaluateCore() != SystemActivityState.Suspended)
+                return;
+            lock (_sync)
+            {
+                // the polling is back (a hook came up): it takes over from here
+                if (_timer is null && Volatile.Read(ref _disposed) == 0)
+                    _recheck?.Change(RecheckMilliseconds, Timeout.Infinite);
+            }
+        }
+        catch (Exception ex)
+        {
+            try
+            {
+                StartupLog.WriteException("SystemActivityMonitor.OnRecheck", ex);
+            }
+            catch (Exception)
+            {
+                // a pool timer callback must never throw
+            }
+        }
     }
 
     /// <summary>Forca uma avaliacao agora (ex.: antes de abrir o overlay de captura).</summary>
@@ -102,6 +149,11 @@ public sealed class SystemActivityMonitor : IDisposable
             return;
 
         Stop();
+        lock (_sync)
+        {
+            _recheck?.Dispose();
+            _recheck = null;
+        }
 
         // LowLevelHookHost.Shared e um singleton de processo: um monitor descartado
         // nao pode deixar os hooks suspensos para sempre. Devolve o estado normal
@@ -134,7 +186,6 @@ public sealed class SystemActivityMonitor : IDisposable
 
         try
         {
-            MarkTimerThreadEcoOnce();
             EvaluateCore();
         }
         catch (Exception ex)
@@ -154,23 +205,6 @@ public sealed class SystemActivityMonitor : IDisposable
         {
             Volatile.Write(ref _tickInFlight, 0);
         }
-    }
-
-    /// <summary>
-    /// A avaliacao periodica e trabalho de manutencao, vai para os E-cores.
-    /// <para>
-    /// Marcado UMA vez (o flag): a syscall por tick seria desperdicio. O callback do
-    /// timer roda numa thread do pool, entao a marca fica numa thread compartilhada
-    /// pelo resto do processo - aceitavel porque todo o trabalho do Klip fora da UI
-    /// thread e de manutencao (retencao, thumbnails, OCR, IO de log).
-    /// </para>
-    /// </summary>
-    private void MarkTimerThreadEcoOnce()
-    {
-        if (Interlocked.CompareExchange(ref _threadMarkedEco, 1, 0) != 0)
-            return;
-
-        PowerEfficiency.MarkCurrentThreadEco();
     }
 
     private SystemActivityState EvaluateCore()
@@ -236,15 +270,14 @@ public sealed class SystemActivityMonitor : IDisposable
 
         LowLevelHookHost.Shared.ResumeAll();
 
-        // NAO chamar EnterProcessHighQos() aqui. Sair da tela cheia
-        // devolve o app ao tray, ocioso - subir para HighQoS agora manteria o
-        // processo fora do EcoQoS pelo resto da sessao a troco de nada. Quem sobe
-        // para HighQoS e a abertura de janela (flyout, captura, editor), no ponto
-        // em que a latencia de fato importa. Pelo mesmo motivo a prioridade de
-        // memoria continua baixa: o estado de repouso correto do Klip e esse.
+        // back to the normal rest state: memory priority normal and qos handed to the
+        // system (not HighQoS, that one is asked for by the window that opens). staying
+        // low/eco here is what left the first Win+V after a long game paging back in.
+        PowerEfficiency.SetProcessMemoryPriorityNormal();
+        PowerEfficiency.ResetProcessQosToSystem();
         StartupLog.Write(
-            "SystemActivityMonitor: Suspended -> Normal; hooks LL reinstalados " +
-            "(QoS permanece Eco ate a proxima abertura de janela)");
+            "SystemActivityMonitor: Suspended -> Normal; hooks LL reinstalados, " +
+            "QoS do sistema + prioridade de memoria normal");
     }
 
     /// <summary>

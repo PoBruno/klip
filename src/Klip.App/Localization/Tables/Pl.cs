@@ -17,6 +17,7 @@ internal static class Pl
         ["NotifyCaptureCopied"] = "Zrzut skopiowany ({0}x{1})",
         ["NotifyClickToEdit"] = "Kliknij, aby edytować",
         ["NotifyHotkeyConflict"] = "Skrót {0} jest już używany przez inną aplikację",
+        ["NotifyTakeoverLost"] = "{0} znowu otwiera narzędzie Windows. Kliknij, aby odzyskać go w ustawieniach skrótów",
         ["NotifyMemoryLimit"] = "Osiągnięto limit pamięci. Przechwytywanie zakończono automatycznie",
         ["NotifyFramesDiscarded"] = "Część fragmentów została odrzucona. Następnym razem przewijaj wolniej",
 

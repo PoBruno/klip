@@ -103,6 +103,37 @@ public sealed class ClipboardMonitorService : IDisposable
     /// <summary>Recomputes <see cref="ImageState"/> on the clipboard thread (startup, settings change).</summary>
     public void RequestImageStateRefresh() => _clipboardThread.BeginInvoke(RefreshImageState);
 
+    /// <summary>Last clipboard sequence number this instance looked at (handed to the next one on a recycle).</summary>
+    public uint LastProcessedSequence => Volatile.Read(ref _lastProcessedSequence);
+
+    /// <summary>Registers the clipboard listener again and catches a copy it may have missed (resume, unlock).</summary>
+    public void CheckListener(string reason) => _clipboardThread.BeginInvoke(() =>
+    {
+        // after a sleep, a lock or an rdp session the listener can stop getting
+        // WM_CLIPBOARDUPDATE with no error anywhere (Ditto pings for the same reason).
+        // registering again is harmless when it was fine, and a copy that slipped
+        // through in the meantime is caught by comparing the sequence number
+        if (_listenerHandle == nint.Zero)
+            return;
+        NativeMethods.RemoveClipboardFormatListener(_listenerHandle);
+        var ok = NativeMethods.AddClipboardFormatListener(_listenerHandle);
+        var missed = NativeMethods.GetClipboardSequenceNumber() != _lastProcessedSequence;
+        StartupLog.Write($"Clipboard: listener renovado ({reason}){(ok ? "" : " [ERRO ao registrar]")}{(missed ? ", copia perdida recuperada" : "")}");
+        if (missed && !_paused)
+            ProcessClipboard();
+    });
+
+    /// <summary>
+    /// Reads whatever is on the clipboard now, as if it had just changed. For a recycle:
+    /// a copy made in the second between the old instance leaving and this one listening
+    /// would otherwise never reach the history.
+    /// </summary>
+    public void ProcessCurrentClipboard() => _clipboardThread.BeginInvoke(() =>
+    {
+        _lastProcessedSequence = 0; // the current one was taken as seen at startup
+        ProcessClipboard();
+    });
+
     public ClipboardMonitorService(
         ClipboardIngestService ingest,
         ClipboardWriteGuard writeGuard,
@@ -119,6 +150,10 @@ public sealed class ClipboardMonitorService : IDisposable
         // criar aqui fora faria o Tick disparar na UI thread de novo.
         clipboardThread.Invoke(() =>
         {
+            // what is on the clipboard at startup counts as seen: it is not ingested at
+            // startup anyway, and a recycle hands this number to the next instance
+            _lastProcessedSequence = NativeMethods.GetClipboardSequenceNumber();
+
             _debounce = new DispatcherTimer(DispatcherPriority.Send, clipboardThread.Dispatcher)
             {
                 // apps disparam varios WM_CLIPBOARDUPDATE por copia (limpa e

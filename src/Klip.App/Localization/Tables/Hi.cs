@@ -17,6 +17,7 @@ internal static class Hi
         ["NotifyCaptureCopied"] = "कैप्चर कॉपी हो गया ({0}x{1})",
         ["NotifyClickToEdit"] = "संपादित करने के लिए क्लिक करें",
         ["NotifyHotkeyConflict"] = "शॉर्टकट {0} पहले से किसी अन्य ऐप द्वारा उपयोग में है",
+        ["NotifyTakeoverLost"] = "{0} फिर से Windows का टूल खोल रहा है। शॉर्टकट सेटिंग्स में वापस लेने के लिए क्लिक करें",
         ["NotifyMemoryLimit"] = "मेमोरी सीमा पूरी हो गई। कैप्चर अपने आप पूरा कर दिया गया",
         ["NotifyFramesDiscarded"] = "कुछ हिस्से छूट गए। अगली बार धीरे स्क्रॉल करें",
 

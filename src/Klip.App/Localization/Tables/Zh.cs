@@ -17,6 +17,7 @@ internal static class Zh
         ["NotifyCaptureCopied"] = "截图已复制 ({0}x{1})",
         ["NotifyClickToEdit"] = "单击以编辑",
         ["NotifyHotkeyConflict"] = "快捷键 {0} 已被其他应用占用",
+        ["NotifyTakeoverLost"] = "{0} 又开始打开 Windows 自带工具。点击即可在快捷键设置中重新接管",
         ["NotifyMemoryLimit"] = "已达到内存限制。截图已自动完成",
         ["NotifyFramesDiscarded"] = "部分片段已被丢弃。下次请滚动慢一些",
 

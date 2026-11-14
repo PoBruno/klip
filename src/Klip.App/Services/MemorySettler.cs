@@ -11,33 +11,26 @@ namespace Klip.App.Services;
 /// runs, and an idle tray app never allocates, so without this the memory stays
 /// stuck until the next activity. Never periodic: one shot per heavy session.
 /// <para>
-/// The working set trim runs on its own, much longer clock than the GC. Trimming right
-/// after the 2s GC debounce used to mean the very next Win+V or Win+Shift+S (often
-/// seconds later) paid the pages back one fault at a time - the 2-3s freeze people
-/// noticed was this, not the hotkey or the window itself.
+/// No working set trim. It used to run 3 min after a heavy session and push every page
+/// out, so the first hotkey after a while away paid all of it back in page faults
+/// (seconds, not ms). Which pages stay resident is the memory manager's call.
 /// </para>
 /// </summary>
 public sealed class MemorySettler : IDisposable
 {
     private static readonly TimeSpan GcDelay = TimeSpan.FromSeconds(2);
-    private static readonly TimeSpan TrimDelay = TimeSpan.FromMinutes(3);
 
     private readonly Dispatcher _dispatcher;
     private DispatcherTimer? _pendingGc;
-    private DispatcherTimer? _pendingTrim;
+    private int _postponed;
+
+    // a pinned image is a window that can stay up for hours: stop waiting after a minute
+    private const int MaxPostpones = 30;
 
     public MemorySettler(Dispatcher dispatcher)
     {
         _dispatcher = dispatcher;
     }
-
-    /// <summary>
-    /// Raised right after a trim actually ran. A trim quietly undoes whatever the
-    /// startup warm-ups paid for (capture overlay JIT/brushes, flyout layout+query),
-    /// and nothing else repays that - without a listener the next real hotkey eats
-    /// the cost live. Fired on the dispatcher thread.
-    /// </summary>
-    public event Action? Trimmed;
 
     /// <summary>Asks for a settle; several calls in a row collapse into one.</summary>
     public void Schedule()
@@ -55,30 +48,24 @@ public sealed class MemorySettler : IDisposable
         // a raw pool thread, or its finalizer pass can step on native WIC/GDI cleanup
         // in ways that are not safe off the thread that owns those objects.
         _pendingGc?.Stop();
+        _postponed = 0;
         _pendingGc = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = GcDelay };
         _pendingGc.Tick += (_, _) =>
         {
+            // a blocking compacting gc on the ui thread while the user has a window up
+            // (the next capture, the panel) is a visible stall: wait for it to close
+            if (AnyWindowVisible() && ++_postponed < MaxPostpones)
+                return; // ticks again in GcDelay
             _pendingGc?.Stop();
             _pendingGc = null;
             RunGc();
         };
         _pendingGc.Start();
-
-        _pendingTrim?.Stop();
-        _pendingTrim = new DispatcherTimer(DispatcherPriority.Background, _dispatcher) { Interval = TrimDelay };
-        _pendingTrim.Tick += (_, _) =>
-        {
-            _pendingTrim?.Stop();
-            _pendingTrim = null;
-            RunTrim();
-        };
-        _pendingTrim.Start();
     }
 
     public void Dispose()
     {
         _pendingGc?.Stop();
-        _pendingTrim?.Stop();
     }
 
     private static void RunGc()
@@ -87,29 +74,13 @@ public sealed class MemorySettler : IDisposable
         {
             var before = GC.GetTotalMemory(false);
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
-            GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
-            GC.WaitForPendingFinalizers();
-            // second pass picks up what the finalizers just released (InteropBitmap etc)
+            // one blocking pass; the finalizers release the WIC memory on their own thread
+            // and the next ordinary gc takes what they free (a second forced pass here
+            // doubled the pause for little)
             GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
 
             StartupLog.WriteVerbose(
                 $"Memoria: settle {before / 1024 / 1024} -> {GC.GetTotalMemory(false) / 1024 / 1024} MB gerenciado");
-        }
-        catch (Exception ex)
-        {
-            StartupLog.WriteException("MemorySettler", ex);
-        }
-    }
-
-    private void RunTrim()
-    {
-        try
-        {
-            // still nothing on screen 3 min later: this is real idle, not "stepped away a sec"
-            var trimmed = !AnyWindowVisible() && NativeMethods.TrimWorkingSet();
-            StartupLog.WriteVerbose($"Memoria: trim do working set={(trimmed ? "sim" : "nao")}");
-            if (trimmed)
-                Trimmed?.Invoke();
         }
         catch (Exception ex)
         {
