@@ -9,6 +9,12 @@ on:
 permissions:
   contents: write   # necessario para criar a Release e anexar os arquivos
 
+# versoes fixas das ferramentas: o tools/check-release.ps1 confere que a maquina
+# local usa exatamente as mesmas antes de qualquer tag
+env:
+  INNO_VERSION: "6.7.3"
+  INNO_SHA256: "9c73c3bae7ed48d44112a0f48e66742c00090bdb5bef71d9d3c056c66e97b732"
+
 jobs:
   build:
     runs-on: windows-latest
@@ -20,7 +26,7 @@ jobs:
       - name: Setup .NET 10
         uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: "10.0.x"
+          dotnet-version: "10.0.403"
 
       - name: Derivar versao da tag
         id: version
@@ -30,47 +36,22 @@ jobs:
           "version=$version" | Out-File -FilePath $env:GITHUB_OUTPUT -Append
           Write-Host "Versao: $version"
 
-      - name: Restaurar dependencias
-        run: dotnet restore Klip.sln
-
-      - name: Compilar (Release)
-        run: dotnet build Klip.sln -c Release --no-restore
-
-      - name: Testar
-        run: dotnet test Klip.sln -c Release --no-build --verbosity normal
-
-      - name: Publicar executavel standalone
-        shell: pwsh
-        # mesmas flags de tools\build-exe.ps1 (ver os comentarios de la).
-        # R2R corta o JIT do startup; EnableCompressionInSingleFile=false evita
-        # descomprimir dezenas de MB em memoria a cada boot (o app sobe com o Windows).
-        # IncludeNativeLibrariesForSelfExtract fica TRUE de proposito: com false o
-        # publish deixa 6 DLLs nativas soltas ao lado do exe, e tanto o instalador
-        # (installer\Klip.iss copia so publish\Klip.exe) quanto o artefato portable
-        # publicado abaixo passariam a entregar um app que nao inicia.
-        run: |
-          dotnet publish src/Klip.App -c Release -r win-x64 --self-contained true `
-            -p:PublishReadyToRun=true -p:PublishSingleFile=true `
-            -p:EnableCompressionInSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=true `
-            -p:PublishTrimmed=false `
-            -p:Version=${{ steps.version.outputs.version }} -o publish
-          Remove-Item publish\*.pdb -ErrorAction SilentlyContinue
-
+      # instalador oficial do jrsoftware na versao fixa, com o hash conferido
+      # (o pacote do chocolatey anda atrasado e nao tem a mesma versao da maquina local)
       - name: Instalar Inno Setup
-        run: choco install innosetup --no-progress -y
-
-      - name: Compilar instalador
         shell: pwsh
         run: |
-          New-Item -ItemType Directory -Force -Path dist | Out-Null
-          & "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe" `
-            "/DAppVersion=${{ steps.version.outputs.version }}" `
-            installer\Klip.iss
+          $exe = "$env:RUNNER_TEMP\innosetup.exe"
+          $tag = "is-" + $env:INNO_VERSION.Replace(".", "_")
+          Invoke-WebRequest "https://github.com/jrsoftware/issrc/releases/download/$tag/innosetup-$env:INNO_VERSION.exe" -OutFile $exe
+          if ((Get-FileHash $exe -Algorithm SHA256).Hash -ne $env:INNO_SHA256) { throw "hash do Inno Setup nao confere" }
+          Start-Process $exe -ArgumentList "/VERYSILENT", "/SUPPRESSMSGBOXES", "/NORESTART", "/SP-" -Wait
 
-      - name: Renomear o executavel standalone para a release
+      # o mesmo script que roda na maquina local antes da tag: confere versao da tag
+      # contra csproj e iss, actionlint, build, testes, instalador e portable em dist
+      - name: Checar, compilar e empacotar
         shell: pwsh
-        run: |
-          Copy-Item publish\Klip.exe "dist\Klip-${{ steps.version.outputs.version }}-portable.exe"
+        run: ./tools/check-release.ps1 -Version ${{ steps.version.outputs.version }} -SkipGitHub
 
       - name: Criar Release e anexar artefatos
         uses: softprops/action-gh-release@v3

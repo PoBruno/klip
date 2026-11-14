@@ -1,7 +1,10 @@
 # Builds the standalone Klip exe.
 # Output: publish\Klip.exe (single file, self-contained, no .NET install needed).
 #
-# Usage:  .\tools\build-exe.ps1  (roda de qualquer lugar)
+# Usage:  .\tools\build-exe.ps1 [-Version 1.6.0]  (roda de qualquer lugar)
+# without -Version the exe keeps the version from Klip.App.csproj
+
+param([string]$Version)
 
 $ErrorActionPreference = "Stop"
 $repoRoot = Split-Path $PSScriptRoot -Parent  # tools/ fica um nivel abaixo da raiz
@@ -45,7 +48,13 @@ Write-Host "Publicando Klip (self-contained, single-file)..." -ForegroundColor C
 #
 #   PublishTrimmed=false
 #       Obrigatorio: WPF nao suporta trimming (o SDK falha com TrimmingWpfIsNotSupported).
-dotnet publish "$repoRoot\src\Klip.App" -c Release -r win-x64 --self-contained true -p:PublishReadyToRun=true -p:PublishSingleFile=true -p:EnableCompressionInSingleFile=false -p:IncludeNativeLibrariesForSelfExtract=true -p:PublishTrimmed=false -o $publishDir
+$publishArgs = [System.Collections.Generic.List[string]]@(
+    "$repoRoot\src\Klip.App", "-c", "Release", "-r", "win-x64", "--self-contained", "true",
+    "-p:PublishReadyToRun=true", "-p:PublishSingleFile=true", "-p:EnableCompressionInSingleFile=false",
+    "-p:IncludeNativeLibrariesForSelfExtract=true", "-p:PublishTrimmed=false", "-o", $publishDir)
+if ($Version) { $publishArgs.Add("-p:Version=$Version") }
+dotnet publish @publishArgs
+if ($LASTEXITCODE -ne 0) { throw "dotnet publish falhou (codigo $LASTEXITCODE)." }
 
 # drop debug symbols from the final folder
 Remove-Item "$publishDir\*.pdb" -ErrorAction SilentlyContinue
