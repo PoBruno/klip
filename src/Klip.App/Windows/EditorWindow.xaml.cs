@@ -103,7 +103,7 @@ public partial class EditorWindow
         _ocr = ocr;
 
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        ThemeManager.Watch(this);
 
         // auto-copy debounced by 400 ms
         _autoCopyDebounce = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(400) };

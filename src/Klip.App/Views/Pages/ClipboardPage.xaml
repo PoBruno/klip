@@ -4,183 +4,14 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
     xmlns:controls="clr-namespace:Klip.App.Controls"
+    xmlns:views="clr-namespace:Klip.App.Views.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <Page.Resources>
-        <!-- one row of an app list (excluded apps, apps that keep formatting). The remove
-             button has no Click: it bubbles up to the ItemsControl, where one handler
-             reads the DataContext. -->
-        <DataTemplate x:Key="AppRowTemplate">
-            <Border
-                Margin="0,0,0,4"
-                Padding="10,6"
-                Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                CornerRadius="4">
-                <Grid>
-                    <TextBlock VerticalAlignment="Center" Text="{Binding}" />
-                    <Button
-                        HorizontalAlignment="Right"
-                        Padding="6,2"
-                        Background="Transparent"
-                        BorderThickness="0"
-                        Cursor="Hand"
-                        ToolTip="{DynamicResource Loc.RemoveApp}"
-                        AutomationProperties.Name="{DynamicResource Loc.RemoveApp}">
-                        <TextBlock
-                            FontFamily="{StaticResource KlipIconFont}"
-                            FontSize="12"
-                            Text="&#xE74D;" />
-                    </Button>
-                </Grid>
-            </Border>
-        </DataTemplate>
-
-        <Style x:Key="AppListStyle" TargetType="{x:Type ItemsControl}">
-            <Setter Property="Margin" Value="0,8,0,0" />
-            <Setter Property="ItemTemplate" Value="{StaticResource AppRowTemplate}" />
-            <Style.Triggers>
-                <Trigger Property="HasItems" Value="False">
-                    <Setter Property="Visibility" Value="Collapsed" />
-                </Trigger>
-            </Style.Triggers>
-        </Style>
-    </Page.Resources>
-
-    <!-- sem Background (mataria o Mica) e sem ScrollViewer: quem rola e o
-         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
-         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
-    <StackPanel MaxWidth="680">
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionClipboard}" />
 
-        <!-- ================= Retencao ================= -->
-        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.HistorySectionRetention}" />
-
-        <!-- ui:NumberBox stays: clamp, arrow keys, spinner and the range automation pattern
-             come for free, and this page is only built on the first visit.
-             ClearButtonEnabled=False: the "x" would leave the box empty while the setting
-             keeps its old value. -->
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.MaxItemsTitle}"
-            Description="{DynamicResource Loc.MaxItemsCaption}"
-            Icon="&#xE81C;">
-            <ui:NumberBox
-                x:Name="MaxItemsBox"
-                Width="140"
-                Maximum="1000000"
-                Minimum="0"
-                MaxDecimalPlaces="0"
-                ClearButtonEnabled="False"
-                Style="{StaticResource SettingsNumberBox}" />
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.MaxImagesTitle}"
-            Description="{DynamicResource Loc.MaxImagesCaption}"
-            Icon="&#xE91B;">
-            <ui:NumberBox
-                x:Name="MaxImagesBox"
-                Width="140"
-                Maximum="100000"
-                Minimum="0"
-                MaxDecimalPlaces="0"
-                ClearButtonEnabled="False"
-                Style="{StaticResource SettingsNumberBox}" />
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.MaxMediaTitle}"
-            Description="{DynamicResource Loc.MaxMediaCaption}"
-            Icon="&#xEDA2;">
-            <StackPanel Orientation="Horizontal">
-                <ui:NumberBox
-                    x:Name="MaxMediaBox"
-                    Width="140"
-                    Maximum="1024"
-                    Minimum="0"
-                    MaxDecimalPlaces="1"
-                    SmallChange="0.5"
-                    ClearButtonEnabled="False"
-                    Style="{StaticResource SettingsNumberBox}" />
-                <TextBlock
-                    Margin="8,0,0,0"
-                    VerticalAlignment="Center"
-                    Text="{DynamicResource Loc.MaxMediaUnit}" />
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.MaxAgeTitle}"
-            Description="{DynamicResource Loc.MaxAgeCaption}"
-            Icon="&#xE787;">
-            <ui:NumberBox
-                x:Name="MaxAgeBox"
-                Width="140"
-                Maximum="3650"
-                Minimum="0"
-                MaxDecimalPlaces="0"
-                ClearButtonEnabled="False"
-                Style="{StaticResource SettingsNumberBox}" />
-        </controls:SettingsCard>
-
-        <!-- field + button + list go in the Footer: no control on the right of the card -->
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ExcludedAppsTitle}"
-            Description="{DynamicResource Loc.ExcludedAppsCaption}"
-            Icon="&#xE72E;">
-            <controls:SettingsCard.Footer>
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <ui:TextBox
-                            x:Name="ExcludeAppBox"
-                            PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
-                            Style="{StaticResource SettingsTextBox}" />
-                        <ui:Button
-                            x:Name="AddExcludeButton"
-                            Grid.Column="1"
-                            Margin="8,0,0,0"
-                            MinHeight="32"
-                            Content="{DynamicResource Loc.AddApp}" />
-                    </Grid>
-
-                    <!-- real virtualization: a VirtualizingStackPanel measured with infinite
-                         height (what the page scroller gives) realizes everything. So the
-                         ScrollViewer lives INSIDE the template (the panel is its IScrollInfo)
-                         and MaxHeight gives it a finite viewport. The wheel goes back to the
-                         page scroller in OnListPreviewMouseWheel. -->
-                    <ItemsControl
-                        x:Name="ExcludedAppsList"
-                        MaxHeight="216"
-                        Style="{StaticResource AppListStyle}"
-                        VirtualizingPanel.IsVirtualizing="True"
-                        VirtualizingPanel.VirtualizationMode="Recycling"
-                        ScrollViewer.CanContentScroll="True">
-                        <ItemsControl.Template>
-                            <ControlTemplate TargetType="{x:Type ItemsControl}">
-                                <ScrollViewer
-                                    x:Name="PART_ListScroll"
-                                    Focusable="False"
-                                    CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
-                                    HorizontalScrollBarVisibility="Disabled"
-                                    VerticalScrollBarVisibility="Auto">
-                                    <ItemsPresenter />
-                                </ScrollViewer>
-                            </ControlTemplate>
-                        </ItemsControl.Template>
-                        <ItemsControl.ItemsPanel>
-                            <ItemsPanelTemplate>
-                                <VirtualizingStackPanel />
-                            </ItemsPanelTemplate>
-                        </ItemsControl.ItemsPanel>
-                    </ItemsControl>
-                </StackPanel>
-            </controls:SettingsCard.Footer>
-        </controls:SettingsCard>
-
-        <!-- ================= Painel Win+V ================= -->
+        <!-- ================= Painel ================= -->
         <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.HistorySectionFlyout}" />
 
         <controls:SettingsCard
@@ -193,92 +24,184 @@
         <controls:SettingsCard
             Title="{DynamicResource Loc.FlyoutRememberScrollTitle}"
             Description="{DynamicResource Loc.FlyoutRememberScrollCaption}"
-            Icon="&#xE81C;">
+            Icon="&#xE7C5;">
             <ui:ToggleSwitch x:Name="RememberScrollToggle" />
         </controls:SettingsCard>
 
         <controls:SettingsCard
             Title="{DynamicResource Loc.FlyoutEnterActionTitle}"
             Description="{DynamicResource Loc.FlyoutEnterActionCaption}"
-            Icon="&#xE751;">
-            <ComboBox
-                x:Name="EnterActionCombo"
-                Width="160"
-                Style="{StaticResource SettingsComboBox}">
+            Icon="&#xE8FB;">
+            <ComboBox x:Name="EnterActionCombo" MinWidth="240" Style="{StaticResource SettingsComboBox}">
                 <ComboBoxItem Content="{DynamicResource Loc.FlyoutEnterPaste}" Tag="paste" />
                 <ComboBoxItem Content="{DynamicResource Loc.FlyoutEnterCopy}" Tag="copy" />
             </ComboBox>
         </controls:SettingsCard>
 
-        <controls:SettingsCard
+        <controls:SettingsExpander
+            Title="{DynamicResource Loc.FlyoutTabsTitle}"
+            Description="{DynamicResource Loc.FlyoutTabsCaption}"
+            Icon="&#xE8A9;">
+            <StackPanel>
+                <controls:SettingsRow Title="{DynamicResource Loc.ShowEmojiTabTitle}" Description="{DynamicResource Loc.ShowEmojiTabCaption}">
+                    <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" />
+                </controls:SettingsRow>
+                <controls:SettingsRow Title="{DynamicResource Loc.ShowSnippetsTabTitle}" Description="{DynamicResource Loc.ShowSnippetsTabCaption}">
+                    <ui:ToggleSwitch x:Name="ShowSnippetsTabToggle" />
+                </controls:SettingsRow>
+            </StackPanel>
+        </controls:SettingsExpander>
+
+        <!-- ClearButtonEnabled=False: o "x" deixaria a caixa vazia com o valor antigo salvo -->
+        <controls:SettingsExpander
             Title="{DynamicResource Loc.FlyoutSizeTitle}"
             Description="{DynamicResource Loc.FlyoutSizeCaption}"
             Icon="&#xE740;">
+            <StackPanel>
+                <controls:SettingsRow Title="{DynamicResource Loc.FlyoutWidthLabel}">
+                    <ui:NumberBox
+                        x:Name="FlyoutWidthBox"
+                        Width="150"
+                        Maximum="1600"
+                        Minimum="360"
+                        MaxDecimalPlaces="0"
+                        SmallChange="10"
+                        ClearButtonEnabled="False"
+                        Style="{StaticResource SettingsNumberBox}" />
+                </controls:SettingsRow>
+                <controls:SettingsRow Title="{DynamicResource Loc.FlyoutHeightLabel}">
+                    <ui:NumberBox
+                        x:Name="FlyoutHeightBox"
+                        Width="150"
+                        Maximum="1600"
+                        Minimum="460"
+                        MaxDecimalPlaces="0"
+                        SmallChange="10"
+                        ClearButtonEnabled="False"
+                        Style="{StaticResource SettingsNumberBox}" />
+                </controls:SettingsRow>
+                <controls:SettingsRow>
+                    <ui:Button x:Name="FlyoutSizeResetButton" Content="{DynamicResource Loc.FlyoutSizeReset}" />
+                </controls:SettingsRow>
+            </StackPanel>
+        </controls:SettingsExpander>
+
+        <!-- ================= Colar ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionPaste}" />
+
+        <controls:SettingsExpander
+            x:Name="PlainTextExpander"
+            Title="{DynamicResource Loc.AlwaysPlainTextTitle}"
+            Description="{DynamicResource Loc.AlwaysPlainTextCaption}"
+            Icon="&#xE8E9;">
+            <controls:SettingsExpander.Header>
+                <ui:ToggleSwitch x:Name="AlwaysPlainTextToggle" />
+            </controls:SettingsExpander.Header>
+            <controls:SettingsRow
+                x:Name="RichPasteAppsCard"
+                Title="{DynamicResource Loc.RichPasteAppsTitle}"
+                Description="{DynamicResource Loc.RichPasteAppsCaption}">
+                <controls:SettingsRow.Footer>
+                    <StackPanel>
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox
+                                x:Name="RichAppBox"
+                                PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
+                                Style="{StaticResource SettingsTextBox}" />
+                            <ui:Button
+                                x:Name="AddRichAppButton"
+                                Grid.Column="1"
+                                Margin="8,0,0,0"
+                                MinHeight="32"
+                                Content="{DynamicResource Loc.AddApp}" />
+                        </Grid>
+                        <ItemsControl x:Name="RichAppsList" Style="{StaticResource AppListStyle}" />
+                    </StackPanel>
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.RestoreClipboardTitle}"
+            Description="{DynamicResource Loc.RestoreClipboardCaption}"
+            Icon="&#xE7A7;">
+            <ui:ToggleSwitch x:Name="RestoreClipboardToggle" />
+        </controls:SettingsCard>
+
+        <!-- ================= Imagens como arquivo ================= -->
+        <views:PasteAsFileSettings />
+
+        <!-- ================= Limpeza automatica ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.HistorySectionRetention}" />
+        <TextBlock Style="{StaticResource SectionNote}" Text="{DynamicResource Loc.RetentionNote}" />
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxItemsTitle}"
+            Description="{DynamicResource Loc.MaxItemsCaption}"
+            Icon="&#xE8F1;">
+            <ui:NumberBox
+                x:Name="MaxItemsBox"
+                Width="150"
+                Maximum="1000000"
+                Minimum="0"
+                MaxDecimalPlaces="0"
+                SmallChange="100"
+                ClearButtonEnabled="False"
+                Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxImagesTitle}"
+            Description="{DynamicResource Loc.MaxImagesCaption}"
+            Icon="&#xEB9F;">
+            <ui:NumberBox
+                x:Name="MaxImagesBox"
+                Width="150"
+                Maximum="100000"
+                Minimum="0"
+                MaxDecimalPlaces="0"
+                SmallChange="10"
+                ClearButtonEnabled="False"
+                Style="{StaticResource SettingsNumberBox}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.MaxMediaTitle}"
+            Description="{DynamicResource Loc.MaxMediaCaption}"
+            Icon="&#xEDA2;">
             <StackPanel Orientation="Horizontal">
-                <TextBlock
-                    Margin="0,0,8,0"
-                    VerticalAlignment="Center"
-                    Text="{DynamicResource Loc.FlyoutWidthLabel}" />
                 <ui:NumberBox
-                    x:Name="FlyoutWidthBox"
-                    Width="120"
-                    Maximum="1600"
-                    Minimum="360"
-                    MaxDecimalPlaces="0"
-                    SmallChange="10"
+                    x:Name="MaxMediaBox"
+                    Width="150"
+                    Maximum="1024"
+                    Minimum="0"
+                    MaxDecimalPlaces="1"
+                    SmallChange="0.5"
                     ClearButtonEnabled="False"
                     Style="{StaticResource SettingsNumberBox}" />
-                <TextBlock
-                    Margin="16,0,8,0"
-                    VerticalAlignment="Center"
-                    Text="{DynamicResource Loc.FlyoutHeightLabel}" />
-                <ui:NumberBox
-                    x:Name="FlyoutHeightBox"
-                    Width="120"
-                    Maximum="1600"
-                    Minimum="460"
-                    MaxDecimalPlaces="0"
-                    SmallChange="10"
-                    ClearButtonEnabled="False"
-                    Style="{StaticResource SettingsNumberBox}" />
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="{DynamicResource Loc.MaxMediaUnit}" />
             </StackPanel>
         </controls:SettingsCard>
 
         <controls:SettingsCard
-            Title="{DynamicResource Loc.AlwaysPlainTextTitle}"
-            Description="{DynamicResource Loc.AlwaysPlainTextCaption}"
-            Icon="&#xE8E9;">
-            <ui:ToggleSwitch x:Name="AlwaysPlainTextToggle" />
+            Title="{DynamicResource Loc.MaxAgeTitle}"
+            Description="{DynamicResource Loc.MaxAgeCaption}"
+            Icon="&#xE787;">
+            <StackPanel Orientation="Horizontal">
+                <ui:NumberBox
+                    x:Name="MaxAgeBox"
+                    Width="150"
+                    Maximum="3650"
+                    Minimum="0"
+                    MaxDecimalPlaces="0"
+                    ClearButtonEnabled="False"
+                    Style="{StaticResource SettingsNumberBox}" />
+                <TextBlock Margin="8,0,0,0" VerticalAlignment="Center" Text="{DynamicResource Loc.DaysUnit}" />
+            </StackPanel>
         </controls:SettingsCard>
-
-        <controls:SettingsCard
-            x:Name="RichPasteAppsCard"
-            Title="{DynamicResource Loc.RichPasteAppsTitle}"
-            Description="{DynamicResource Loc.RichPasteAppsCaption}"
-            Icon="&#xE8D2;">
-            <controls:SettingsCard.Footer>
-                <StackPanel>
-                    <Grid>
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*" />
-                            <ColumnDefinition Width="Auto" />
-                        </Grid.ColumnDefinitions>
-                        <ui:TextBox
-                            x:Name="RichAppBox"
-                            PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
-                            Style="{StaticResource SettingsTextBox}" />
-                        <ui:Button
-                            x:Name="AddRichAppButton"
-                            Grid.Column="1"
-                            Margin="8,0,0,0"
-                            MinHeight="32"
-                            Content="{DynamicResource Loc.AddApp}" />
-                    </Grid>
-                    <!-- a handful of entries at most: plain ItemsControl -->
-                    <ItemsControl x:Name="RichAppsList" Style="{StaticResource AppListStyle}" />
-                </StackPanel>
-            </controls:SettingsCard.Footer>
-        </controls:SettingsCard>
-        <views:PasteAsFileSettings xmlns:views="clr-namespace:Klip.App.Views.Controls" />
-    </StackPanel>
+    </controls:SettingsPanel>
 </Page>

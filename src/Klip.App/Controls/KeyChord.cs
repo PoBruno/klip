@@ -4,6 +4,17 @@ using System.Windows.Controls;
 
 namespace Klip.App.Controls;
 
+/// <summary>Tamanho e cor das teclas de um <see cref="KeyChord"/>.</summary>
+public enum KeyChordStyle
+{
+    /// <summary>Tecla neutra (referencia, sugestoes).</summary>
+    Neutral,
+    /// <summary>Cor de destaque: atalho configurado.</summary>
+    Accent,
+    /// <summary>Grande, na caixa de captura.</summary>
+    Large,
+}
+
 /// <summary>
 /// Renders a hotkey string like "Ctrl+Shift+V" as Windows 11 style keycaps,
 /// with a small "+" between each key. Set <see cref="Chord"/> to the gesture.
@@ -16,12 +27,19 @@ public sealed class KeyChord : ItemsControl
         var panelFactory = new FrameworkElementFactory(typeof(StackPanel));
         panelFactory.SetValue(StackPanel.OrientationProperty, Orientation.Horizontal);
         ItemsPanel = new ItemsPanelTemplate(panelFactory);
+        Focusable = false;
+        IsTabStop = false;
     }
 
     public static readonly DependencyProperty ChordProperty =
         DependencyProperty.Register(
             nameof(Chord), typeof(string), typeof(KeyChord),
-            new PropertyMetadata(string.Empty, OnChordChanged));
+            new PropertyMetadata(string.Empty, OnChanged));
+
+    public static readonly DependencyProperty KeyStyleProperty =
+        DependencyProperty.Register(
+            nameof(KeyStyle), typeof(KeyChordStyle), typeof(KeyChord),
+            new PropertyMetadata(KeyChordStyle.Neutral, OnChanged));
 
     /// <summary>The gesture text, e.g. "Ctrl+Shift+V" or "Win+V".</summary>
     public string Chord
@@ -30,10 +48,17 @@ public sealed class KeyChord : ItemsControl
         set => SetValue(ChordProperty, value);
     }
 
-    private static void OnChordChanged(DependencyObject d, DependencyPropertyChangedEventArgs e)
+    public KeyChordStyle KeyStyle
     {
-        ((KeyChord)d).Rebuild();
+        get => (KeyChordStyle)GetValue(KeyStyleProperty);
+        set => SetValue(KeyStyleProperty, value);
     }
+
+    /// <summary>Texto usado no lugar de "click" (a tecla do mouse nos atalhos do painel).</summary>
+    public static string ClickLabel { get; set; } = "click";
+
+    private static void OnChanged(DependencyObject d, DependencyPropertyChangedEventArgs e) =>
+        ((KeyChord)d).Rebuild();
 
     private void Rebuild()
     {
@@ -41,8 +66,14 @@ public sealed class KeyChord : ItemsControl
         if (string.IsNullOrWhiteSpace(Chord))
             return;
 
-        var keyCapStyle = TryFindResource("KeyCap") as Style;
-        var keyTextStyle = TryFindResource("KeyCapText") as Style;
+        var (capKey, textKey) = KeyStyle switch
+        {
+            KeyChordStyle.Accent => ("KeyCapAccent", "KeyCapAccentText"),
+            KeyChordStyle.Large => ("KeyCapLarge", "KeyCapLargeText"),
+            _ => ("KeyCap", "KeyCapText"),
+        };
+        var keyCapStyle = TryFindResource(capKey) as Style;
+        var keyTextStyle = TryFindResource(textKey) as Style;
         var plusStyle = TryFindResource("KeyCapPlus") as Style;
 
         var parts = Chord.Split('+', System.StringSplitOptions.RemoveEmptyEntries | System.StringSplitOptions.TrimEntries);
@@ -65,8 +96,13 @@ public sealed class KeyChord : ItemsControl
         ["Windows"] = "Win",
         ["PrintScreen"] = "PrtSc",
         ["Escape"] = "Esc",
+        ["Delete"] = "Del",
     };
 
-    private static string Prettify(string key) =>
-        Labels.TryGetValue(key, out var label) ? label : key;
+    private static string Prettify(string key)
+    {
+        if (string.Equals(key, "click", System.StringComparison.OrdinalIgnoreCase))
+            return ClickLabel;
+        return Labels.TryGetValue(key, out var label) ? label : key;
+    }
 }

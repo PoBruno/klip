@@ -34,10 +34,13 @@ public partial class SettingsShell
     // menu selecionado, nao a instancia da pagina.
     private object? _currentPage;
 
+    // abaixo disso (DIP) o painel de navegacao fica compacto, so com icones
+    private const double CompactBelow = 900;
+
     public SettingsShell(INavigationViewPageProvider pageProvider)
     {
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        ThemeManager.Watch(this);
 
         // na 4.3.0 a interface e INavigationViewPageProvider (Wpf.Ui.Abstractions)
         // e o gancho e SetPageProviderService. IPageService nao existe.
@@ -47,6 +50,8 @@ public partial class SettingsShell
         // a primeira pagina e navegada no Loaded, nao no construtor: assim o custo de
         // construi-la sai do caminho critico de abertura da janela.
         Loaded += OnShellLoaded;
+        // estreita: a navegacao vira so icones (como nas Configuracoes do Windows)
+        SizeChanged += (_, _) => RootNavigation.IsPaneOpen = ActualWidth >= CompactBelow;
 #if DEBUG
         ContentRendered += OnFirstContentRendered;
 #endif

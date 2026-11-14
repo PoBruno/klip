@@ -103,7 +103,7 @@ public partial class MediaEditorWindow
         _export = new MediaEditorExportService(settings);
 
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        ThemeManager.Watch(this);
 
         _gifTimer = new DispatcherTimer(DispatcherPriority.Render);
         _gifTimer.Tick += (_, _) => GifTick();

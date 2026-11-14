@@ -84,6 +84,33 @@ public sealed class SystemHotkeyService(SettingsService settings)
     }
 
     /// <summary>
+    /// Gives ONE letter back to Windows (the shortcut moved off Win+V or Win+Shift+S).
+    /// A letter that was already in DisabledHotkeys before Klip touched it stays: it is
+    /// someone else's. Returns true when the value changed (Explorer needs a restart).
+    /// </summary>
+    public bool RemoveDisabledHotkeyLetter(char letter)
+    {
+        letter = char.ToUpperInvariant(letter);
+        var backup = (settings.Current.RegistryBackupDisabledHotkeys ?? "").ToUpperInvariant();
+        if (backup.Contains(letter))
+            return false;
+
+        using var key = Registry.CurrentUser.CreateSubKey(ExplorerAdvancedKey);
+        var current = (key.GetValue(DisabledHotkeysValue) as string ?? "").ToUpperInvariant();
+        if (!current.Contains(letter))
+            return false;
+
+        WriteJournal($"RemoveDisabledHotkeyLetter:{letter}", started: true);
+        var updated = current.Replace(letter.ToString(), "", StringComparison.Ordinal);
+        if (updated.Length == 0 && settings.Current.RegistryBackupDisabledHotkeys is null)
+            key.DeleteValue(DisabledHotkeysValue, throwOnMissingValue: false);
+        else
+            key.SetValue(DisabledHotkeysValue, updated, RegistryValueKind.String);
+        WriteJournal($"RemoveDisabledHotkeyLetter:{letter}", started: false);
+        return true;
+    }
+
+    /// <summary>
     /// Removes ONLY the letters we added, restoring from the backup
     /// (letters from other apps are kept).
     /// </summary>

@@ -6,118 +6,145 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- no Background (it would kill the Mica) and no ScrollViewer, see SettingsShell.xaml -->
-    <StackPanel MaxWidth="680">
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionMaintenance}" />
 
-        <!-- ===== Bloco 1: Loc.SectionMaintenance (titulo da pagina) ===== -->
+        <!-- ================= Backup ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionBackup}" />
+
         <controls:SettingsCard
-            Title="{DynamicResource Loc.BackupTitle}"
-            Description="{DynamicResource Loc.BackupCaption}"
-            Icon="&#xE74E;">
-            <controls:SettingsCard.Footer>
-                <StackPanel>
-                    <StackPanel Orientation="Horizontal">
-                        <ui:Button x:Name="ExportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ExportHistory}" />
-                        <ui:Button x:Name="ImportButton" Margin="0,0,8,0" Content="{DynamicResource Loc.ImportHistory}" />
-                        <ui:Button x:Name="CompactButton" Margin="0,0,8,0" Content="{DynamicResource Loc.CompactDb}" />
-                        <ui:Button x:Name="OpenDataFolderButton" Content="{DynamicResource Loc.OpenDataFolder}" />
-                    </StackPanel>
-
-                    <!-- indeterminate while export/import/compact run on the pool.
-                         IsIndeterminate follows Visibility so the storyboard doesn't
-                         animate a hidden element -->
-                    <ProgressBar
-                        x:Name="MaintenanceProgress"
-                        Height="3"
-                        Margin="0,10,0,0"
-                        IsIndeterminate="False"
-                        Visibility="Collapsed" />
-
-                    <TextBlock
-                        x:Name="MaintenanceStatus"
-                        Margin="0,8,0,0"
-                        Style="{StaticResource CardCaption}"
-                        TextWrapping="Wrap" />
-                </StackPanel>
-            </controls:SettingsCard.Footer>
+            Title="{DynamicResource Loc.ExportTitle}"
+            Description="{DynamicResource Loc.ExportCaption}"
+            Icon="&#xEDE1;">
+            <ui:Button x:Name="ExportButton" Content="{DynamicResource Loc.ExportHistory}" />
         </controls:SettingsCard>
 
-        <!-- ===== Bloco 2: Loc.SectionDiagnostics =====
-             Sem SectionHeader de proposito: com um unico cartao no bloco, o cabecalho
-             repetiria palavra por palavra o titulo do cartao logo abaixo, sem ganho de
-             navegacao. O bloco continua rotulado por Loc.SectionDiagnostics. -->
         <controls:SettingsCard
-            Title="{DynamicResource Loc.SectionDiagnostics}"
+            Title="{DynamicResource Loc.ImportTitle}"
+            Description="{DynamicResource Loc.ImportCaption}"
+            Icon="&#xE8B5;">
+            <ui:Button x:Name="ImportButton" Content="{DynamicResource Loc.ImportHistory}" />
+        </controls:SettingsCard>
+
+        <!-- ================= Armazenamento ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionStorage}" />
+
+        <!-- contagem e tamanho lidos fora da UI thread (LoadUsage) -->
+        <controls:SettingsCard
+            x:Name="UsageCard"
+            Title="{DynamicResource Loc.UsageTitle}"
+            Icon="&#xEDA2;">
+            <Button x:Name="OpenDataFolderButton" Style="{StaticResource LinkButton}" Content="{DynamicResource Loc.OpenDataFolder}" />
+        </controls:SettingsCard>
+
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.CompactTitle}"
+            Description="{DynamicResource Loc.CompactCaption}"
+            Icon="&#xE7B8;">
+            <ui:Button x:Name="CompactButton" Content="{DynamicResource Loc.CompactDb}" />
+        </controls:SettingsCard>
+
+        <!-- progresso e resultado de exportar, importar e liberar espaco. IsIndeterminate
+             segue a Visibility para o storyboard nao animar algo escondido -->
+        <ProgressBar
+            x:Name="MaintenanceProgress"
+            Height="3"
+            Margin="4,4,4,0"
+            IsIndeterminate="False"
+            Visibility="Collapsed" />
+        <TextBlock
+            x:Name="MaintenanceStatus"
+            Margin="4,4,4,0"
+            TextWrapping="Wrap">
+            <TextBlock.Style>
+                <Style BasedOn="{StaticResource CardCaption}" TargetType="TextBlock">
+                    <Style.Triggers>
+                        <Trigger Property="Text" Value="">
+                            <Setter Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </Style.Triggers>
+                </Style>
+            </TextBlock.Style>
+        </TextBlock>
+
+        <!-- ================= Diagnostico ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionDiagnostics}" />
+
+        <controls:SettingsExpander
+            x:Name="DiagnosticsExpander"
+            Title="{DynamicResource Loc.DiagnosticsTitle}"
             Description="{DynamicResource Loc.DiagnosticsCaption}"
             Icon="&#xE9D9;">
-            <ui:Button x:Name="DiagnosticsButton" Content="{DynamicResource Loc.RunDiagnostics}" />
-            <controls:SettingsCard.Footer>
-                <StackPanel>
-                    <!-- COUNT(*), FileInfo and the registry reads all run off the UI thread -->
-                    <ProgressBar
-                        x:Name="DiagnosticsProgress"
-                        Height="3"
-                        IsIndeterminate="False"
-                        Visibility="Collapsed" />
+            <controls:SettingsExpander.Header>
+                <ui:Button x:Name="DiagnosticsButton" Content="{DynamicResource Loc.RunDiagnostics}" />
+            </controls:SettingsExpander.Header>
+            <controls:SettingsRow>
+                <controls:SettingsRow.Footer>
+                    <StackPanel Margin="0,-12,0,0">
+                        <ProgressBar
+                            x:Name="DiagnosticsProgress"
+                            Height="3"
+                            IsIndeterminate="False"
+                            Visibility="Collapsed" />
 
-                    <!-- the most important line: "teclado=nao, mouse=nao" at idle means
-                         no LL hook installed, so the Raw Input Thread never calls Klip on
-                         every key and mouse move of the system. Hence on top, SemiBold -->
-                    <Border
-                        x:Name="HookHealthBox"
-                        Padding="10,8"
-                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
-                        CornerRadius="4"
-                        Visibility="Collapsed">
+                        <!-- hooks LL: sem nenhum instalado em repouso, a Raw Input Thread nunca
+                             chama o Klip a cada tecla do sistema. Por isso em cima, SemiBold -->
+                        <Border
+                            x:Name="HookHealthBox"
+                            Padding="10,8"
+                            Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="4"
+                            Visibility="Collapsed">
+                            <TextBlock
+                                x:Name="HookHealthText"
+                                FontFamily="Consolas"
+                                FontWeight="SemiBold"
+                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                Style="{StaticResource CardCaption}"
+                                TextWrapping="Wrap" />
+                        </Border>
+
                         <TextBlock
-                            x:Name="HookHealthText"
+                            x:Name="DiagnosticsText"
+                            Margin="0,8,0,0"
                             FontFamily="Consolas"
-                            FontWeight="SemiBold"
-                            Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                             Style="{StaticResource CardCaption}"
                             TextWrapping="Wrap" />
-                    </Border>
 
-                    <TextBlock
-                        x:Name="DiagnosticsText"
-                        Margin="0,8,0,0"
-                        FontFamily="Consolas"
-                        Style="{StaticResource CardCaption}"
-                        TextWrapping="Wrap" />
-
-                    <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
-                        <!-- Comeca desabilitado: sem relatorio gerado nao ha o que copiar. -->
-                        <ui:Button
-                            x:Name="CopyDiagnosticsButton"
-                            Content="{DynamicResource Loc.DiagCopy}"
-                            IsEnabled="False" />
-                        <TextBlock
-                            x:Name="DiagnosticsStatus"
-                            Margin="10,0,0,0"
-                            VerticalAlignment="Center"
-                            FontWeight="SemiBold"
-                            Style="{StaticResource CardCaption}"
-                            TextWrapping="Wrap" />
+                        <StackPanel Margin="0,12,0,0" Orientation="Horizontal">
+                            <ui:Button x:Name="CopyDiagnosticsButton" Content="{DynamicResource Loc.DiagCopy}" IsEnabled="False" />
+                            <TextBlock
+                                x:Name="DiagnosticsStatus"
+                                Margin="10,0,0,0"
+                                VerticalAlignment="Center"
+                                Style="{StaticResource CardCaption}"
+                                TextWrapping="Wrap" />
+                        </StackPanel>
                     </StackPanel>
-                </StackPanel>
-            </controls:SettingsCard.Footer>
-        </controls:SettingsCard>
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
 
-        <!-- what the process costs right now, read only when asked -->
-        <controls:SettingsCard
+        <controls:SettingsExpander
+            x:Name="ResourcesExpander"
             Title="{DynamicResource Loc.ResourcesTitle}"
             Description="{DynamicResource Loc.ResourcesCaption}"
             Icon="&#xE950;">
-            <ui:Button x:Name="ResourcesButton" Content="{DynamicResource Loc.ResourcesRefresh}" />
-            <controls:SettingsCard.Footer>
-                <TextBlock
-                    x:Name="ResourcesText"
-                    FontFamily="Consolas"
-                    Style="{StaticResource CardCaption}"
-                    TextWrapping="Wrap"
-                    Visibility="Collapsed" />
-            </controls:SettingsCard.Footer>
-        </controls:SettingsCard>
-    </StackPanel>
+            <controls:SettingsExpander.Header>
+                <ui:Button x:Name="ResourcesButton" Content="{DynamicResource Loc.ResourcesRefresh}" />
+            </controls:SettingsExpander.Header>
+            <controls:SettingsRow>
+                <controls:SettingsRow.Footer>
+                    <TextBlock
+                        x:Name="ResourcesText"
+                        Margin="0,-12,0,0"
+                        FontFamily="Consolas"
+                        Style="{StaticResource CardCaption}"
+                        TextWrapping="Wrap"
+                        Visibility="Collapsed" />
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
+    </controls:SettingsPanel>
 </Page>

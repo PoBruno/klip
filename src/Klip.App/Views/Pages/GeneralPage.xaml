@@ -6,46 +6,33 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- nenhum Background aqui - qualquer preenchimento opaco mataria o Mica que o shell compoe atras do conteudo. Tambem sem ScrollViewer: quem rola e o DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
-    <StackPanel MaxWidth="680">
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer: quem rola e o DynamicScrollViewer
+         do NavigationViewContentPresenter. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionGeneral}" />
 
-        <!-- os 4 Grid escritos a mao de MainWindow.xaml:234-279 viram 4 SettingsCard. As margens deixam de ser decididas cartao a cartao. -->
-
-        <!-- MainWindow.xaml:234-243. Sem legenda: nenhuma chave existente do Loc
-             descreve o ajuste, e inventar texto exigiria mexer no Loc.cs (fora
-             do escopo desta pagina). -->
-        <controls:SettingsCard Title="{DynamicResource Loc.StartWithWindows}" Icon="&#xE7E8;">
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionStartup}" />
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.StartWithWindows}"
+            Description="{DynamicResource Loc.StartWithWindowsCaption}"
+            Icon="&#xE7E8;">
             <ui:ToggleSwitch x:Name="AutostartToggle" />
         </controls:SettingsCard>
 
-        <!-- MainWindow.xaml:244-256. Os itens sao montados em codigo (a lista de
-             idiomas e dinamica), entao aqui so vem a largura do original. -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionAppearance}" />
+        <controls:SettingsCard
+            Title="{DynamicResource Loc.ThemeTitle}"
+            Description="{DynamicResource Loc.ThemeCaption}"
+            Icon="&#xE790;">
+            <ComboBox x:Name="ThemeCombo" MinWidth="240" Style="{StaticResource SettingsComboBox}" />
+        </controls:SettingsCard>
+
+        <!-- itens montados em codigo (lista de idiomas dinamica) -->
         <controls:SettingsCard
             Title="{DynamicResource Loc.LanguageTitle}"
             Description="{DynamicResource Loc.LanguageCaption}"
             Icon="&#xE774;">
-            <ComboBox x:Name="LanguageCombo" Width="180" Style="{StaticResource SettingsComboBox}" />
+            <ComboBox x:Name="LanguageCombo" MinWidth="240" Style="{StaticResource SettingsComboBox}" />
         </controls:SettingsCard>
-
-        <!-- MainWindow.xaml:257-266 -->
-        <controls:SettingsCard Title="{DynamicResource Loc.ThemeTitle}" Icon="&#xE790;">
-            <ComboBox x:Name="ThemeCombo" Width="180" Style="{StaticResource SettingsComboBox}" />
-        </controls:SettingsCard>
-
-        <!-- MainWindow.xaml:267-279 -->
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShowEmojiTabTitle}"
-            Description="{DynamicResource Loc.ShowEmojiTabCaption}"
-            Icon="&#xE76E;">
-            <ui:ToggleSwitch x:Name="ShowEmojiTabToggle" />
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShowSnippetsTabTitle}"
-            Description="{DynamicResource Loc.ShowSnippetsTabCaption}"
-            Icon="&#xE943;">
-            <ui:ToggleSwitch x:Name="ShowSnippetsTabToggle" />
-        </controls:SettingsCard>
-    </StackPanel>
+    </controls:SettingsPanel>
 </Page>

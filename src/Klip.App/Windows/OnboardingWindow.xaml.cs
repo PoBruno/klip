@@ -1,6 +1,8 @@
 using Klip.Core.Settings;
 using Wpf.Ui.Appearance;
 
+using Klip.App.Services;
+
 namespace Klip.App.Windows;
 
 /// <summary>
@@ -17,7 +19,7 @@ public partial class OnboardingWindow
         _settings = settings;
         _takeWinV = takeWinV;
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        ThemeManager.Watch(this);
 
         TakeWinVButton.Click += async (_, _) =>
         {

@@ -1,13 +1,16 @@
+using System.Collections.ObjectModel;
 using System.Windows;
 using System.Windows.Controls;
+using System.Windows.Controls.Primitives;
+using System.Windows.Input;
 using Klip.App.Localization;
 using Klip.Core.Settings;
 
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// Privacy: skip (or briefly keep) things that look like secrets, clear the history
-/// on exit and restore the clipboard after pasting.
+/// Privacy: skip (or briefly keep) things that look like secrets, apps whose copies are
+/// never saved, and clearing the history on exit.
 /// </summary>
 public partial class PrivacyPage : ISettingsPage
 {
@@ -15,6 +18,7 @@ public partial class PrivacyPage : ISettingsPage
     private static readonly int[] SecretKeepPresets = [0, 30, 60, 120];
 
     private readonly SettingsService _settings;
+    private readonly ObservableCollection<string> _excludedApps = [];
 
     // reentrancy guard, always reset in a finally
     private bool _loading;
@@ -28,11 +32,20 @@ public partial class PrivacyPage : ISettingsPage
         foreach (var seconds in SecretKeepPresets)
             SecretKeepCombo.Items.Add(new ComboBoxItem { Tag = seconds });
 
+        ExcludedAppsList.ItemsSource = _excludedApps;
+
         // handlers in the constructor, never in Loaded (singleton page)
         SkipSecretsToggle.Click += OnSkipSecretsClick;
         SecretKeepCombo.SelectionChanged += OnSecretKeepChanged;
-        RestoreClipboardToggle.Click += OnRestoreClipboardClick;
         ClearOnExitToggle.Click += OnClearOnExitClick;
+
+        AddExcludeButton.Click += (_, _) => AppListEditor.Add(_settings, ExcludeAppBox, _excludedApps, s => s.ExcludedApps);
+        ExcludeAppBox.KeyDown += (_, e) => AppListEditor.OnEnter(e,
+            () => AppListEditor.Add(_settings, ExcludeAppBox, _excludedApps, s => s.ExcludedApps));
+        // one handler for N rows: the remove button Click bubbles up to the list
+        ExcludedAppsList.AddHandler(ButtonBase.ClickEvent,
+            new RoutedEventHandler((_, e) => AppListEditor.Remove(_settings, e, _excludedApps, s => s.ExcludedApps)));
+        ExcludedAppsList.PreviewMouseWheel += OnListPreviewMouseWheel;
 
         RefreshState();
     }
@@ -48,8 +61,11 @@ public partial class PrivacyPage : ISettingsPage
             SecretKeepCard.IsEnabled = s.SkipSecrets;
             RelabelSecretKeep();
             SecretKeepCombo.SelectedItem = FindPreset(s.SecretKeepSeconds) ?? FindPreset(0);
-            RestoreClipboardToggle.IsChecked = s.RestoreClipboardAfterPaste;
             ClearOnExitToggle.IsChecked = s.ClearHistoryOnExit;
+            AppListEditor.Sync(_excludedApps, s.ExcludedApps);
+            IgnoredAppsExpander.Status = s.ExcludedApps.Count > 0
+                ? string.Format(Loc.IgnoredAppsCount, s.ExcludedApps.Count)
+                : null;
         }
         finally
         {
@@ -87,6 +103,8 @@ public partial class PrivacyPage : ISettingsPage
     {
         var on = SkipSecretsToggle.IsChecked == true;
         SecretKeepCard.IsEnabled = on;
+        if (on)
+            SecretsExpander.IsExpanded = true;
         if (_loading)
             return;
 
@@ -101,19 +119,36 @@ public partial class PrivacyPage : ISettingsPage
         _settings.Update(s => s.SecretKeepSeconds = seconds);
     }
 
-    private void OnRestoreClipboardClick(object sender, RoutedEventArgs e)
-    {
-        if (_loading)
-            return;
-
-        _settings.Update(s => s.RestoreClipboardAfterPaste = RestoreClipboardToggle.IsChecked == true);
-    }
-
     private void OnClearOnExitClick(object sender, RoutedEventArgs e)
     {
         if (_loading)
             return;
 
         _settings.Update(s => s.ClearHistoryOnExit = ClearOnExitToggle.IsChecked == true);
+    }
+
+    /// <summary>
+    /// The ignored apps list scrolls on its own (virtualization needs a finite viewport),
+    /// and a WPF ScrollViewer eats the wheel even when it can't move. At either end the
+    /// wheel goes back to the page scroller.
+    /// </summary>
+    private void OnListPreviewMouseWheel(object sender, MouseWheelEventArgs e)
+    {
+        if (sender is not ItemsControl list ||
+            list.Template?.FindName("PART_ListScroll", list) is not ScrollViewer scroll)
+            return;
+
+        var atTop = e.Delta > 0 && scroll.VerticalOffset <= 0;
+        var atBottom = e.Delta < 0 && scroll.VerticalOffset >= scroll.ScrollableHeight;
+        if (!atTop && !atBottom)
+            return;
+
+        e.Handled = true;
+        // MouseWheelEvent only bubbles: the re-raised one goes up to the page scroller
+        list.RaiseEvent(new MouseWheelEventArgs(e.MouseDevice, e.Timestamp, e.Delta)
+        {
+            RoutedEvent = MouseWheelEvent,
+            Source = list,
+        });
     }
 }

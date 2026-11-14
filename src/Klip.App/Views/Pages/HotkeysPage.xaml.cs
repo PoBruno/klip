@@ -1,390 +1,298 @@
 using System.Windows;
 using System.Windows.Controls;
-using System.Windows.Input;
 using Klip.App.Controls;
 using Klip.App.Localization;
 using Klip.App.Services;
 using Klip.Core.Settings;
-using Klip.Interop.SystemIntegration;
 using InfoBarSeverity = Wpf.Ui.Controls.InfoBarSeverity;
 
 namespace Klip.App.Views.Pages;
 
 /// <summary>
-/// Secao "Atalhos" (absorve <c>SectionAppHotkeys</c>,
-/// <c>SectionNativeHotkeys</c> e <c>SectionFlyoutShortcuts</c>): 6 capturadores de
-/// atalho, 4 botoes de takeover de registro, 2 linhas de status de registro e a
-/// tabela de atalhos do painel.
+/// Secao "Atalhos": os 6 atalhos do Klip, restaurar os padroes e a referencia dos
+/// atalhos do painel.
 /// <para>
-/// o resultado do takeover e da captura de atalho vai na linha de status
-/// DESTA pagina (<c>ActionStatus</c>), nunca mais no <c>StatusText</c>
-/// compartilhado - la a mensagem era sobrescrita pela contagem de itens antes de o
-/// usuario conseguir ler.
+/// Um controle so por atalho. Editar abre a <see cref="KeyCaptureDialog"/>; escolher uma
+/// tecla do Windows (Win+V, Win+Shift+S, Print Screen) faz o Klip assumi-la no registro ao
+/// salvar, e sair dela devolve so aquela tecla (<c>App.ChangeShortcutAsync</c>). Antes eram
+/// o campo do atalho e quatro botoes de takeover, que podiam discordar entre si.
 /// </para>
 /// <para>
-/// o guard de reentrancia fica em <c>try/finally</c>; os eventos sao
-/// assinados no CONSTRUTOR (a pagina e singleton, e o <c>Loaded</c>
-/// dispara a cada re-entrada na arvore visual, o que duplicaria as assinaturas).
+/// Eventos assinados no CONSTRUTOR (pagina singleton; o <c>Loaded</c> dispara a cada
+/// re-entrada na arvore visual).
 /// </para>
 /// </summary>
 public partial class HotkeysPage : ISettingsPage
 {
-    // gestos com significado especial para o estado do registro
-    private const string WinVGesture = "Win+V";
-    private const string WinShiftSGesture = "Win+Shift+S";
-    private const string PrintScreenGesture = "PrintScreen";
-
-    // codigos de retorno dos fluxos de takeover do App
     private const string ResultOk = "ok";
     private const string ResultNeedsHklm = "precisa-hklm";
     private const string ResultUacCancelled = "uac-cancelado";
-
-    /// <summary>
-    /// placeholder da terceira linha enquanto a leitura do registro nao
-    /// volta. Reticencia (U+2026) e neutra de idioma - nao existe chave em
-    /// <c>Loc</c> para "verificando..." e esta pagina nao mexe no <c>Loc.cs</c>.
-    /// </summary>
-    private const string LoadingPlaceholder = "\u2026";
+    private const string ResultConflict = "conflito";
 
     private readonly SettingsService _settings;
-    private readonly SystemHotkeyService _systemHotkeys;
     private readonly ITakeoverGateway _takeover;
 
-    /// <summary>guard de reentrancia do <see cref="RefreshState"/>.</summary>
-    private bool _loading;
-
-    /// <summary>Um fluxo de takeover esta em andamento (registro + restart do Explorer).</summary>
+    /// <summary>Uma troca de atalho esta em andamento (registro + restart do Explorer).</summary>
     private bool _busy;
 
-    /// <summary>
-    /// Ultimo estado lido do registro, ou <c>null</c> se a leitura ainda nao voltou
-    /// (ou falhou). Guardado para remontar as duas linhas de status depois de uma
-    /// troca de idioma sem reler o registro.
-    /// </summary>
-    private SystemHotkeyState? _registryState;
-
-    /// <summary>Descarta o resultado de uma leitura de registro que ficou obsoleta.</summary>
-    private int _registryReadToken;
-
-    /// <summary>
-    /// Mensagem atual da linha de status, guardada como fabrica (e nao como string)
-    /// para poder ser remontada no novo idioma sem repetir a acao.
-    /// </summary>
+    /// <summary>Mensagem da InfoBar como fabrica, para ser remontada no novo idioma.</summary>
     private Func<string>? _statusMessage;
 
+    private sealed record Slot(string Id, Func<AppSettings, string> Get, bool Optional, Func<string> Name, string[] Suggestions);
+
+    private readonly Slot[] _slots;
+
     /// <summary>Construtor usado pelo container (<c>AddSingleton</c>).</summary>
-    public HotkeysPage(SettingsService settings, SystemHotkeyService systemHotkeys)
-        : this(settings, systemHotkeys, new ApplicationTakeoverGateway())
+    public HotkeysPage(SettingsService settings)
+        : this(settings, new ApplicationTakeoverGateway())
     {
     }
 
-    /// <summary>
-    /// Costura de teste: so o container enxerga o construtor publico (o
-    /// <c>CallSiteFactory</c> do Microsoft.Extensions.DependencyInjection so
-    /// considera construtores publicos), entao este nao interfere na resolucao.
-    /// </summary>
-    internal HotkeysPage(
-        SettingsService settings,
-        SystemHotkeyService systemHotkeys,
-        ITakeoverGateway takeover)
+    /// <summary>Costura de teste: o container so enxerga o construtor publico.</summary>
+    internal HotkeysPage(SettingsService settings, ITakeoverGateway takeover)
     {
         _settings = settings;
-        _systemHotkeys = systemHotkeys;
         _takeover = takeover;
 
         PageDiagnostics.TrackConstruction(this);
         InitializeComponent();
 
-        WireControls();
+        _slots =
+        [
+            new("history", s => s.HotkeyHistory, false, () => Loc.OpenHistoryHotkey, ["Win+V", "Ctrl+Shift+V", "Ctrl+Alt+V"]),
+            new("capture", s => s.HotkeyCapture, false, () => Loc.NewCaptureHotkey, ["PrintScreen", "Win+Shift+S", "Ctrl+Shift+S"]),
+            new("stop", s => s.StopRecordingHotkey, false, () => Loc.StopRecordingHotkeyTitle, ["Ctrl+Shift+X", "Ctrl+Alt+X"]),
+            new("text", s => s.HotkeyCaptureText, true, () => Loc.HotkeyCaptureTextTitle, ["Ctrl+Shift+T", "Win+Shift+T"]),
+            new("repeat", s => s.HotkeyRepeatRegion, true, () => Loc.HotkeyRepeatRegionTitle, ["Ctrl+Shift+R", "Win+Shift+R"]),
+            new("video", s => s.HotkeyRecordVideo, true, () => Loc.HotkeyRecordVideoTitle, ["Ctrl+Shift+G", "Win+Shift+G"]),
+        ];
+
+        RevertButton.Click += async (_, _) => await OnRestoreDefaultsAsync();
+        Loc.LanguageChanged += OnLanguageChanged;
+
+        BuildPanelShortcuts();
         RefreshState();
     }
 
-    /// <summary>
-    /// assinaturas no CONSTRUTOR, nunca no <c>Loaded</c> - com pagina
-    /// singleton o <c>Loaded</c> dispara a cada re-entrada na arvore visual.
-    /// </summary>
-    private void WireControls()
-    {
-        TakeWinVButton.Click += async (_, _) => await OnTakeWinVAsync();
-        TakePrtScButton.Click += (_, _) => OnTakePrintScreen();
-        TakeWinShiftSButton.Click += async (_, _) => await OnTakeWinShiftSAsync();
-        RevertButton.Click += async (_, _) => await OnRevertAsync();
-
-        foreach (var slot in AllSlots)
-        {
-            // editor de atalho: clique no keycap entra em captura, as teclas
-            // pressionadas aparecem ao vivo, sair do foco cancela
-            var button = ButtonOf(slot);
-            button.Click += (_, _) => BeginCapture(slot);
-            button.PreviewKeyDown += (_, e) => CaptureHotkey(e, slot);
-            button.LostKeyboardFocus += (_, _) => EndCapture(slot);
-
-            if (ClearOf(slot) is { } clear)
-                clear.Click += (_, _) => ClearHotkey(slot);
-        }
-
-        // as duas linhas de status do registro e a linha de status da pagina sao
-        // montadas em codigo: DynamicResource nao alcanca nenhuma delas. A pagina e
-        // singleton e vive o processo inteiro, entao nao ha o que desassinar.
-        Loc.LanguageChanged += OnLanguageChanged;
-    }
-
-    /// <summary>
-    /// recarrega tudo que vem de <c>AppSettings</c> e dispara a releitura
-    /// do registro. NAO toca na linha de status da pagina.
-    /// </summary>
+    /// <summary>Remonta os 6 cartoes a partir de <c>AppSettings</c>.</summary>
     public void RefreshState()
     {
-        // em try/finally. No original o _loading da MainWindow ficava
-        // solto: uma excecao no meio do refresh deixava a tela somente-leitura ate
-        // reiniciar o app.
-        if (_loading)
-            return;
-
-        _loading = true;
-        try
-        {
-            var s = _settings.Current;
-            HistoryHotkeyChord.Chord = s.HotkeyHistory;
-            CaptureHotkeyChord.Chord = s.HotkeyCapture;
-            StopRecHotkeyChord.Chord = s.StopRecordingHotkey;
-            TextHotkeyChord.Chord = s.HotkeyCaptureText;
-            RepeatHotkeyChord.Chord = s.HotkeyRepeatRegion;
-            VideoHotkeyChord.Chord = s.HotkeyRecordVideo;
-            foreach (var slot in AllSlots)
-                RefreshOptionalSlot(slot);
-        }
-        finally
-        {
-            _loading = false;
-        }
-
-        BeginRefreshTakeoverState();
+        foreach (var slot in _slots)
+            BuildCard(slot);
+        RevertButton.IsEnabled = !_busy;
     }
 
     private void OnLanguageChanged()
     {
-        // sem reler o registro: o estado nao mudou, so o idioma dos rotulos
-        if (_registryState is not null)
-            ApplyTakeoverState(_registryState);
+        RefreshState();
+        BuildPanelShortcuts();
         if (_statusMessage is { } message)
             ActionStatus.Message = message();
     }
 
-    // ===================== Estado do registro =====================
+    private SettingsCard CardOf(Slot slot) => slot.Id switch
+    {
+        "history" => HistoryCard,
+        "capture" => CaptureCard,
+        "stop" => StopRecCard,
+        "text" => TextCard,
+        "repeat" => RepeatCard,
+        "video" => VideoCard,
+        _ => throw new ArgumentOutOfRangeException(nameof(slot), slot.Id, null),
+    };
 
     /// <summary>
-    /// o <c>GetState()</c> abre 4 subchaves do registro. No original isso
-    /// rodava sincronamente na UI thread antes de a janela aparecer; aqui vai para
-    /// um <c>Task.Run</c> e volta pelo dispatcher (o <c>await</c> retoma no
-    /// <c>SynchronizationContext</c> da UI), com placeholder nas duas linhas
-    /// enquanto nao volta.
+    /// Teclas em destaque + lapis quando ha atalho; "Definir atalho" quando nao ha. Tecla do
+    /// Windows ganha a linha "Assumido do Windows · Devolver ao Windows".
     /// </summary>
-    private async void BeginRefreshTakeoverState()
+    private void BuildCard(Slot slot)
     {
-        var token = ++_registryReadToken;
-        _registryState = null;
-        WinVCard.Status = LoadingPlaceholder;
-        CaptureKeyCard.Status = LoadingPlaceholder;
-        // o atalho salvo pode ter mudado desde a ultima passagem
-        UpdateTakeoverButtons();
+        var card = CardOf(slot);
+        var gesture = slot.Get(_settings.Current);
 
-        SystemHotkeyState? state = null;
-        try
+        if (string.IsNullOrWhiteSpace(gesture))
         {
-            state = await Task.Run(_systemHotkeys.GetState);
+            var set = new Wpf.Ui.Controls.Button
+            {
+                Content = new StackPanel
+                {
+                    Orientation = Orientation.Horizontal,
+                    Children =
+                    {
+                        new TextBlock { Text = "", FontFamily = (System.Windows.Media.FontFamily)FindResource("KlipIconFont"), FontSize = 12, Margin = new Thickness(0, 1, 8, 0), VerticalAlignment = VerticalAlignment.Center },
+                        new TextBlock { Text = Loc.HotkeySet, VerticalAlignment = VerticalAlignment.Center },
+                    },
+                },
+                IsEnabled = !_busy,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(set, Loc.HotkeySet + " " + slot.Name());
+            set.Click += async (_, _) => await EditAsync(slot);
+            card.Content = set;
         }
-        catch (Exception ex)
+        else
         {
-            StartupLog.WriteException("RefreshTakeoverState", ex);
+            var edit = new Button
+            {
+                Style = (Style)FindResource("EditKeyButton"),
+                ToolTip = Loc.HotkeyEdit,
+                IsEnabled = !_busy,
+            };
+            System.Windows.Automation.AutomationProperties.SetName(edit, Loc.HotkeyEdit + " " + slot.Name());
+            edit.Click += async (_, _) => await EditAsync(slot);
+            card.Content = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Children = { new KeyChord { Chord = gesture, KeyStyle = KeyChordStyle.Accent }, edit },
+            };
         }
 
-        if (token != _registryReadToken)
-            return; // uma leitura mais nova ja saiu na frente
-
-        _registryState = state;
-        ApplyTakeoverState(state);
+        card.Status = KeyCaptureDialog.IsSystemKey(gesture) ? OwnedLine(slot) : null;
     }
 
-    /// <summary>
-    /// Monta as duas linhas de status de uma vez so. No original o aviso de
-    /// politica corporativa entrava com <c>WinVStatus.Text +=</c>, que so nao
-    /// duplicava porque a atribuicao anterior estava tres linhas acima - qualquer
-    /// reordenacao passaria a concatenar sobre o texto anterior.
-    /// </summary>
-    private void ApplyTakeoverState(SystemHotkeyState? state)
+    private StackPanel OwnedLine(Slot slot)
     {
-        if (state is null)
+        var giveBack = new Button
         {
-            // leitura falhou: melhor linha vazia do que estado inventado. Os botoes
-            // continuam habilitados - os proprios fluxos reportam o que der errado.
-            WinVCard.Status = null;
-            CaptureKeyCard.Status = null;
-            return;
-        }
-
-        var s = _settings.Current;
-        var policyWarning = state.HasManagedPolicies ? Loc.ManagedPolicyWarning : string.Empty;
-
-        var winV = s.HotkeyHistory == WinVGesture
-            ? Loc.WinVActive
-            : state.WinVFreed
-                ? Loc.WinVFreedNotBound
-                : Loc.WinVNative;
-        WinVCard.Status = winV + policyWarning;
-
-        CaptureKeyCard.Status = s.HotkeyCapture switch
+            Style = (Style)FindResource("LinkButton"),
+            Content = Loc.HotkeyGiveBack,
+            FontSize = 12,
+            IsEnabled = !_busy,
+        };
+        giveBack.Click += async (_, _) => await GiveBackAsync(slot);
+        return new StackPanel
         {
-            PrintScreenGesture => Loc.PrtScActive,
-            WinShiftSGesture => Loc.WinShiftSActive,
-            _ => state.PrintScreenFreed
-                ? string.Format(Loc.PrtScFreeInfo, s.HotkeyCapture)
-                : string.Format(Loc.PrtScNativeInfo, s.HotkeyCapture),
+            Orientation = Orientation.Horizontal,
+            Children =
+            {
+                new TextBlock
+                {
+                    Text = "",
+                    FontFamily = (System.Windows.Media.FontFamily)FindResource("KlipIconFont"),
+                    FontSize = 12,
+                    Margin = new Thickness(0, 1, 6, 0),
+                    VerticalAlignment = VerticalAlignment.Center,
+                    Foreground = (System.Windows.Media.Brush)FindResource("AccentTextFillColorPrimaryBrush"),
+                },
+                new TextBlock { Text = Loc.HotkeyOwned + " · ", VerticalAlignment = VerticalAlignment.Center, FontSize = 12 },
+                giveBack,
+            },
         };
     }
 
-    /// <summary>
-    /// Dono UNICO do <c>IsEnabled</c> dos 4 botoes de takeover. No original o
-    /// <c>SetBusy</c> e o <c>RefreshTakeoverState</c> escreviam os dois no
-    /// <c>TakeWinVButton</c>, e quem ganhava dependia da ordem das chamadas.
-    /// Nenhum dos 4 depende do estado lido do registro - so do fluxo em andamento
-    /// e (no caso do Win+V) do atalho ja salvo -, entao a leitura assincrona da
-    /// nao pisca os botoes.
-    /// </summary>
-    private void UpdateTakeoverButtons()
-    {
-        // tomar o Win+V so faz sentido enquanto o historico nao estiver nele
-        TakeWinVButton.IsEnabled = !_busy && _settings.Current.HotkeyHistory != WinVGesture;
-        TakePrtScButton.IsEnabled = !_busy;
-        TakeWinShiftSButton.IsEnabled = !_busy;
-        RevertButton.IsEnabled = !_busy;
-    }
+    // ===================== Editar =====================
 
-    // ===================== Fluxos de takeover =====================
-
-    private async Task OnTakeWinVAsync()
-    {
-        if (_busy || !Confirm(Loc.ConfirmWinV, Loc.ConfirmWinVTitle, MessageBoxImage.Question))
-            return;
-
-        SetBusy(true, () => Loc.BusyApplying, InfoBarSeverity.Informational);
-        try
-        {
-            var result = await _takeover.TakeWinVAsync();
-
-            if (result == ResultNeedsHklm)
-            {
-                // fallback do 24H2: desliga o recurso nativo via HKLM (pede elevacao).
-                // Recusar o UAC deixa result em "precisa-hklm" e cai no ResultWinVFail,
-                // igual ao original.
-                if (Confirm(Loc.ConfirmHklm, Loc.ConfirmHklmTitle, MessageBoxImage.Warning))
-                    result = await _takeover.TakeWinVWithHklmFallbackAsync();
-            }
-
-            SetBusy(
-                false,
-                result switch
-                {
-                    ResultOk => () => Loc.ResultWinVOk,
-                    ResultUacCancelled => () => Loc.ResultUacCancelled,
-                    _ => () => Loc.ResultWinVFail,
-                },
-                result switch
-                {
-                    ResultOk => InfoBarSeverity.Success,
-                    ResultUacCancelled => InfoBarSeverity.Warning,
-                    _ => InfoBarSeverity.Error,
-                });
-        }
-        catch (Exception ex)
-        {
-            StartupLog.WriteException("TakeoverWinV", ex);
-            SetBusy(false, () => ex.Message, InfoBarSeverity.Error);
-        }
-
-        RefreshState();
-    }
-
-    private void OnTakePrintScreen()
+    private async Task EditAsync(Slot slot)
     {
         if (_busy)
             return;
 
+        var current = slot.Get(_settings.Current);
+        var others = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var other in _slots)
+        {
+            var g = other.Get(_settings.Current);
+            if (other != slot && !string.IsNullOrWhiteSpace(g))
+                others[g] = other.Name();
+        }
+
+        var dialog = new KeyCaptureDialog(slot.Name(), current, slot.Optional, slot.Suggestions, others)
+        {
+            Owner = Window.GetWindow(this),
+        };
+
+        // os atalhos do Klip ficam suspensos enquanto a caixa escuta: apertar o Win+V atual
+        // tem que chegar na caixa, nao abrir o painel
+        _takeover.SuspendHotkeys();
+        bool? answer;
         try
         {
-            var ok = _takeover.TakePrintScreen() == ResultOk;
-            ShowStatus(
-                ok ? () => Loc.ResultPrtScOk : () => Loc.ResultPrtScConflict,
-                ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
+            answer = dialog.ShowDialog();
+        }
+        finally
+        {
+            _takeover.ApplyHotkeys(_settings);
+        }
+
+        if (answer != true || dialog.Result is not { } chosen)
+            return;
+        await ChangeAsync(slot, chosen);
+    }
+
+    private Task GiveBackAsync(Slot slot) =>
+        // devolver ao Windows = voltar ao atalho padrao do Klip para aquela acao
+        ChangeAsync(slot, slot.Id == "history" ? "Ctrl+Shift+V" : slot.Id == "capture" ? "Ctrl+Shift+S" : "");
+
+    private async Task ChangeAsync(Slot slot, string gesture)
+    {
+        var touchesWindows = KeyCaptureDialog.IsSystemKey(gesture) || KeyCaptureDialog.IsSystemKey(slot.Get(_settings.Current));
+        SetBusy(true);
+        if (touchesWindows)
+            ShowStatus(() => Loc.BusyApplying, InfoBarSeverity.Informational);
+        try
+        {
+            var result = await _takeover.ChangeShortcutAsync(slot.Id, gesture);
+            if (result == ResultNeedsHklm &&
+                Confirm(Loc.ConfirmHklm, Loc.ConfirmHklmTitle, MessageBoxImage.Warning))
+            {
+                result = await _takeover.TakeWinVWithHklmFallbackAsync();
+            }
+
+            switch (result)
+            {
+                case ResultOk:
+                    HideStatus(); // sucesso nao vira faixa: o cartao ja mostra a tecla nova
+                    break;
+                case ResultConflict:
+                    ShowStatus(() => string.Format(Loc.HotkeyConflict, gesture), InfoBarSeverity.Warning);
+                    break;
+                case ResultUacCancelled:
+                    ShowStatus(() => Loc.ResultUacCancelled, InfoBarSeverity.Warning);
+                    break;
+                default:
+                    ShowStatus(() => string.Format(Loc.HotkeyTakeFailed, gesture), InfoBarSeverity.Error);
+                    break;
+            }
         }
         catch (Exception ex)
         {
-            StartupLog.WriteException("TakeoverPrintScreen", ex);
+            StartupLog.WriteException("ChangeShortcut", ex);
             ShowStatus(() => ex.Message, InfoBarSeverity.Error);
         }
-
-        RefreshState();
+        finally
+        {
+            SetBusy(false);
+        }
     }
 
-    private async Task OnTakeWinShiftSAsync()
-    {
-        if (_busy || !Confirm(Loc.ConfirmWinShiftS, Loc.ConfirmWinShiftSTitle, MessageBoxImage.Warning))
-            return;
-
-        SetBusy(true, () => Loc.BusyApplying, InfoBarSeverity.Informational);
-        try
-        {
-            var ok = await _takeover.TakeWinShiftSAsync() == ResultOk;
-            SetBusy(
-                false,
-                ok ? () => Loc.ResultWinShiftSOk : () => Loc.ResultWinShiftSFail,
-                ok ? InfoBarSeverity.Success : InfoBarSeverity.Error);
-        }
-        catch (Exception ex)
-        {
-            StartupLog.WriteException("TakeoverWinShiftS", ex);
-            SetBusy(false, () => ex.Message, InfoBarSeverity.Error);
-        }
-
-        RefreshState();
-    }
-
-    private async Task OnRevertAsync()
+    private async Task OnRestoreDefaultsAsync()
     {
         if (_busy || !Confirm(Loc.ConfirmRevert, Loc.ConfirmRevertTitle, MessageBoxImage.Question))
             return;
 
-        SetBusy(true, () => Loc.BusyReverting, InfoBarSeverity.Informational);
+        SetBusy(true);
+        ShowStatus(() => Loc.BusyReverting, InfoBarSeverity.Informational);
         try
         {
             await _takeover.RevertAsync();
-            SetBusy(false, () => Loc.ResultReverted, InfoBarSeverity.Success);
+            HideStatus();
         }
         catch (Exception ex)
         {
             StartupLog.WriteException("RevertTakeovers", ex);
-            SetBusy(false, () => ex.Message, InfoBarSeverity.Error);
+            ShowStatus(() => ex.Message, InfoBarSeverity.Error);
         }
+        finally
+        {
+            SetBusy(false);
+        }
+    }
 
+    private void SetBusy(bool busy)
+    {
+        _busy = busy;
         RefreshState();
     }
 
-    /// <summary>
-    /// Marca o fluxo em andamento e reporta na linha de status. Quem decide o
-    /// <c>IsEnabled</c> continua sendo o <see cref="UpdateTakeoverButtons"/>.
-    /// </summary>
-    private void SetBusy(bool busy, Func<string> message, InfoBarSeverity severity)
-    {
-        _busy = busy;
-        UpdateTakeoverButtons();
-        ShowStatus(message, severity);
-    }
-
-    /// <summary>
-    /// Confirmacao ancorada na janela dona da pagina. O original passava
-    /// <c>this</c> (a MainWindow); aqui a pagina vive dentro do
-    /// <c>SettingsShell</c>, entao o dono vem do <see cref="Window.GetWindow"/>.
-    /// </summary>
     private bool Confirm(string text, string title, MessageBoxImage icon)
     {
         var owner = Window.GetWindow(this);
@@ -394,13 +302,6 @@ public partial class HotkeysPage : ISettingsPage
         return answer == MessageBoxResult.Yes;
     }
 
-    // ===================== Linha de status =====================
-
-    /// <summary>
-    /// unico ponto que escreve na linha de status. O texto fica na tela
-    /// ate a proxima acao (ou ate o usuario fechar o <c>InfoBar</c>); nenhum
-    /// caminho de refresh de estado passa por aqui.
-    /// </summary>
     private void ShowStatus(Func<string> message, InfoBarSeverity severity)
     {
         _statusMessage = message;
@@ -409,312 +310,91 @@ public partial class HotkeysPage : ISettingsPage
         ActionStatus.IsOpen = true;
     }
 
-    // ===================== Editor de atalhos =====================
-
-    /// <summary>
-    /// Slots do editor de atalhos (o de parar gravacao so e registrado durante a
-    /// sessao de gravacao).
-    /// </summary>
-    private enum HotkeySlot
+    private void HideStatus()
     {
-        History,
-        Capture,
-        StopRecording,
-        CaptureText,
-        RepeatRegion,
-        RecordVideo,
+        _statusMessage = null;
+        ActionStatus.IsOpen = false;
     }
 
-    private static readonly HotkeySlot[] AllSlots =
-    [
-        HotkeySlot.History, HotkeySlot.Capture, HotkeySlot.StopRecording,
-        HotkeySlot.CaptureText, HotkeySlot.RepeatRegion, HotkeySlot.RecordVideo,
-    ];
+    // ===================== Referencia do painel =====================
 
-    // empty by default: these three can be cleared and show "None" when unset
-    private static bool IsOptional(HotkeySlot slot) =>
-        slot is HotkeySlot.CaptureText or HotkeySlot.RepeatRegion or HotkeySlot.RecordVideo;
-
-    private TextBlock? NotSetOf(HotkeySlot slot) => slot switch
+    /// <summary>Os atalhos reais do painel (HistoryFlyoutWindow.OnKeyDown + cliques).</summary>
+    private void BuildPanelShortcuts()
     {
-        HotkeySlot.CaptureText => TextHotkeyNotSet,
-        HotkeySlot.RepeatRegion => RepeatHotkeyNotSet,
-        HotkeySlot.RecordVideo => VideoHotkeyNotSet,
-        _ => null,
-    };
+        KeyChord.ClickLabel = Loc.KeyMouse;
+        (string Chord, string Text)[] rows =
+        [
+            ("click", Loc.ShortcutClickDesc),
+            ("Ctrl+click", Loc.ShortcutCtrlClickDesc),
+            ("Alt+click", Loc.ShortcutAltClickDesc),
+            ("Shift+click", Loc.ShortcutShiftClickDesc),
+            ("Enter", Loc.ShortcutClickDesc),
+            ("Ctrl+Enter", Loc.PanelKeyCopyOnly),
+            ("Alt+Enter", Loc.PanelKeyType),
+            (Loc.KeySpace, Loc.PanelKeyPreview),
+            ("Del", Loc.PanelKeyDelete),
+            ("Ctrl+P", Loc.PanelKeyPin),
+            ("Ctrl+D", Loc.PanelKeyFavorite),
+            ("Ctrl+E", Loc.PanelKeyEditor),
+            ("Ctrl+F", Loc.PanelKeySearch),
+            ("Ctrl+Tab", Loc.PanelKeyTabs),
+        ];
 
-    private Button? ClearOf(HotkeySlot slot) => slot switch
-    {
-        HotkeySlot.CaptureText => TextHotkeyClear,
-        HotkeySlot.RepeatRegion => RepeatHotkeyClear,
-        HotkeySlot.RecordVideo => VideoHotkeyClear,
-        _ => null,
-    };
-
-    /// <summary>Shows "None" or the clear button for an optional slot, depending on whether it has a gesture.</summary>
-    private void RefreshOptionalSlot(HotkeySlot slot)
-    {
-        if (NotSetOf(slot) is not { } notSet || ClearOf(slot) is not { } clear)
-            return;
-        var has = !string.IsNullOrWhiteSpace(SavedGestureOf(slot));
-        var capturing = _capturingSlot == slot;
-        notSet.Visibility = !has && !capturing ? Visibility.Visible : Visibility.Collapsed;
-        clear.Visibility = has ? Visibility.Visible : Visibility.Collapsed;
-    }
-
-    /// <summary>
-    /// Slot em captura, ou <c>null</c>. No original isto era um unico <c>bool</c>
-    /// para os 3 slots e o <c>CaptureHotkey</c> nao testava QUAL slot estava
-    /// capturando: com um slot ativo, tecla pressionada em qualquer um dos outros
-    /// dois botoes era aceita e gravada no botao errado.
-    /// </summary>
-    private HotkeySlot? _capturingSlot;
-
-    // Os 4 mapeamentos abaixo sao switch EXAUSTIVO de proposito. No original o
-    // ramo default era "_ =>", o que fazia um slot novo cair silenciosamente no
-    // "parar gravacao" - o unico slot que nao registra atalho global.
-    private KeyChord ChordOf(HotkeySlot slot) => slot switch
-    {
-        HotkeySlot.History => HistoryHotkeyChord,
-        HotkeySlot.Capture => CaptureHotkeyChord,
-        HotkeySlot.StopRecording => StopRecHotkeyChord,
-        HotkeySlot.CaptureText => TextHotkeyChord,
-        HotkeySlot.RepeatRegion => RepeatHotkeyChord,
-        HotkeySlot.RecordVideo => VideoHotkeyChord,
-        _ => throw UnknownSlot(slot),
-    };
-
-    private TextBlock PromptOf(HotkeySlot slot) => slot switch
-    {
-        HotkeySlot.History => HistoryHotkeyPrompt,
-        HotkeySlot.Capture => CaptureHotkeyPrompt,
-        HotkeySlot.StopRecording => StopRecHotkeyPrompt,
-        HotkeySlot.CaptureText => TextHotkeyPrompt,
-        HotkeySlot.RepeatRegion => RepeatHotkeyPrompt,
-        HotkeySlot.RecordVideo => VideoHotkeyPrompt,
-        _ => throw UnknownSlot(slot),
-    };
-
-    private Button ButtonOf(HotkeySlot slot) => slot switch
-    {
-        HotkeySlot.History => HistoryHotkeyButton,
-        HotkeySlot.Capture => CaptureHotkeyButton,
-        HotkeySlot.StopRecording => StopRecHotkeyButton,
-        HotkeySlot.CaptureText => TextHotkeyButton,
-        HotkeySlot.RepeatRegion => RepeatHotkeyButton,
-        HotkeySlot.RecordVideo => VideoHotkeyButton,
-        _ => throw UnknownSlot(slot),
-    };
-
-    private string SavedGestureOf(HotkeySlot slot) => slot switch
-    {
-        HotkeySlot.History => _settings.Current.HotkeyHistory,
-        HotkeySlot.Capture => _settings.Current.HotkeyCapture,
-        HotkeySlot.StopRecording => _settings.Current.StopRecordingHotkey,
-        HotkeySlot.CaptureText => _settings.Current.HotkeyCaptureText,
-        HotkeySlot.RepeatRegion => _settings.Current.HotkeyRepeatRegion,
-        HotkeySlot.RecordVideo => _settings.Current.HotkeyRecordVideo,
-        _ => throw UnknownSlot(slot),
-    };
-
-    private static ArgumentOutOfRangeException UnknownSlot(HotkeySlot slot) =>
-        new(nameof(slot), slot, "Slot de atalho nao previsto.");
-
-    /// <summary>Entra em modo de captura no slot: troca os keycaps pelo convite.</summary>
-    private void BeginCapture(HotkeySlot slot)
-    {
-        // clicar num capturador com outro ativo: fecha o anterior antes
-        if (_capturingSlot is { } previous && previous != slot)
-            EndCapture(previous);
-
-        _capturingSlot = slot;
-        ChordOf(slot).Visibility = Visibility.Collapsed;
-        PromptOf(slot).Visibility = Visibility.Visible;
-        RefreshOptionalSlot(slot);
-        ButtonOf(slot).Focus();
-    }
-
-    /// <summary>Sai do modo de captura, voltando a mostrar o atalho salvo.</summary>
-    private void EndCapture(HotkeySlot slot)
-    {
-        if (_capturingSlot == slot)
-            _capturingSlot = null;
-
-        var chord = ChordOf(slot);
-        chord.Chord = SavedGestureOf(slot);
-        chord.Visibility = Visibility.Visible;
-        PromptOf(slot).Visibility = Visibility.Collapsed;
-        RefreshOptionalSlot(slot);
-    }
-
-    private void ClearHotkey(HotkeySlot slot)
-    {
-        Action<AppSettings> clear = slot switch
+        var grid = PanelShortcutsGrid;
+        grid.Children.Clear();
+        grid.RowDefinitions.Clear();
+        for (var i = 0; i < rows.Length; i++)
         {
-            HotkeySlot.CaptureText => s => s.HotkeyCaptureText = "",
-            HotkeySlot.RepeatRegion => s => s.HotkeyRepeatRegion = "",
-            HotkeySlot.RecordVideo => s => s.HotkeyRecordVideo = "",
-            _ => throw UnknownSlot(slot),
-        };
-        _settings.Update(clear);
-        _takeover.ApplyHotkeys(_settings);
-        EndCapture(slot);
-        ShowStatus(() => Loc.HotkeyCleared, InfoBarSeverity.Success);
-    }
-
-    private void CaptureHotkey(KeyEventArgs e, HotkeySlot slot)
-    {
-        // so o slot REALMENTE em captura responde
-        if (_capturingSlot != slot)
-            return;
-
-        e.Handled = true;
-        var key = e.Key == Key.System ? e.SystemKey : e.Key;
-
-        // Esc desiste da captura sem mudar nada
-        if (key == Key.Escape)
-        {
-            EndCapture(slot);
-            return;
+            grid.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+            var keys = new KeyChord { Chord = rows[i].Chord, Margin = new Thickness(0, 6, 16, 6), VerticalAlignment = VerticalAlignment.Center };
+            var text = new TextBlock
+            {
+                Text = rows[i].Text,
+                TextWrapping = TextWrapping.Wrap,
+                VerticalAlignment = VerticalAlignment.Center,
+                Foreground = (System.Windows.Media.Brush)FindResource("TextFillColorSecondaryBrush"),
+            };
+            Grid.SetRow(keys, i);
+            Grid.SetRow(text, i);
+            Grid.SetColumn(text, 1);
+            grid.Children.Add(keys);
+            grid.Children.Add(text);
         }
-
-        var parts = new List<string>(4);
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Control)) parts.Add("Ctrl");
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Shift)) parts.Add("Shift");
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Alt)) parts.Add("Alt");
-        if (Keyboard.Modifiers.HasFlag(ModifierKeys.Windows)) parts.Add("Win");
-
-        // so modificadores ate agora: pre-visualiza ao vivo e continua esperando
-        if (IsModifierKey(key))
-        {
-            var live = ChordOf(slot);
-            live.Visibility = Visibility.Visible;
-            PromptOf(slot).Visibility = Visibility.Collapsed;
-            live.Chord = string.Join("+", parts);
-            return;
-        }
-
-        // os dois casos abaixo eram "return" mudo no original - a tecla nao
-        // entrava no atalho e absolutamente nada mudava na tela.
-        if (!TryGetKeyName(key, out var keyName))
-        {
-            RejectCapture(slot); // tecla nao suportada
-            return;
-        }
-
-        if (parts.Count == 0 && keyName != PrintScreenGesture)
-        {
-            RejectCapture(slot); // falta modificador (PrtSc e a unica que vale sozinha)
-            return;
-        }
-
-        parts.Add(keyName);
-        var gesture = string.Join("+", parts);
-
-        // switch exaustivo montado ANTES do Update: slot nao previsto estoura aqui
-        // em vez de gravar no lugar errado
-        Action<AppSettings> assign = slot switch
-        {
-            HotkeySlot.History => s => s.HotkeyHistory = gesture,
-            HotkeySlot.Capture => s => s.HotkeyCapture = gesture,
-            HotkeySlot.StopRecording => s => s.StopRecordingHotkey = gesture,
-            HotkeySlot.CaptureText => s => s.HotkeyCaptureText = gesture,
-            HotkeySlot.RepeatRegion => s => s.HotkeyRepeatRegion = gesture,
-            HotkeySlot.RecordVideo => s => s.HotkeyRecordVideo = gesture,
-            _ => throw UnknownSlot(slot),
-        };
-        _settings.Update(assign);
-
-        // o atalho de parar gravacao so e registrado DURANTE a gravacao -
-        // conflito aparece la, nao aqui. Por isso, de proposito, ele nao passa pelo
-        // ApplyHotkeys (comportamento preservado do original).
-        var ok = slot == HotkeySlot.StopRecording || _takeover.ApplyHotkeys(_settings);
-
-        EndCapture(slot); // volta a mostrar o atalho recem-salvo como keycaps
-        ShowStatus(
-            ok
-                ? () => string.Format(Loc.HotkeyUpdated, gesture)
-                : () => string.Format(Loc.HotkeyConflict, gesture),
-            ok ? InfoBarSeverity.Success : InfoBarSeverity.Warning);
-
-        // trocar o atalho de historico/captura muda o que os cartoes de takeover
-        // dizem (e se o botao Win+V faz sentido). O original nao reavaliava.
-        if (slot != HotkeySlot.StopRecording)
-            BeginRefreshTakeoverState();
-    }
-
-    private static bool IsModifierKey(Key key) =>
-        key is Key.LeftCtrl or Key.RightCtrl or Key.LeftShift or Key.RightShift
-            or Key.LeftAlt or Key.RightAlt or Key.LWin or Key.RWin;
-
-    /// <summary>
-    /// recusa a combinacao e deixa a recusa VISIVEL. O slot continua em
-    /// captura: a pre-visualizacao ao vivo volta para o convite "pressione as
-    /// teclas" (reacao imediata no proprio botao) e a linha de status da pagina diz
-    /// o que se espera. Antes disso os dois casos eram um <c>return</c> mudo.
-    /// </summary>
-    private void RejectCapture(HotkeySlot slot)
-    {
-        ChordOf(slot).Visibility = Visibility.Collapsed;
-        PromptOf(slot).Visibility = Visibility.Visible;
-        ShowStatus(() => Loc.HotkeyHint, InfoBarSeverity.Warning);
-    }
-
-    /// <summary>Nome da tecla no formato que o <c>HotkeyGesture.TryParse</c> entende.</summary>
-    private static bool TryGetKeyName(Key key, out string keyName)
-    {
-        keyName = key switch
-        {
-            >= Key.A and <= Key.Z => key.ToString(),
-            >= Key.D0 and <= Key.D9 => key.ToString()[1..],
-            >= Key.F1 and <= Key.F24 => key.ToString(),
-            Key.Snapshot => PrintScreenGesture,
-            _ => string.Empty,
-        };
-        return keyName.Length > 0;
     }
 
     /// <summary>
-    /// Encaminha para o <see cref="App"/> corrente. Os fluxos moram la porque
-    /// precisam do <c>HotkeyService</c> e do host de DI.
+    /// Encaminha para o <see cref="App"/> corrente. Os fluxos moram la porque precisam do
+    /// <c>HotkeyService</c> e do host de DI.
     /// </summary>
     private sealed class ApplicationTakeoverGateway : ITakeoverGateway
     {
         private static App Current => (App)Application.Current;
 
-        public Task<string> TakeWinVAsync() => Current.TakeoverWinVAsync();
+        public Task<string> ChangeShortcutAsync(string slot, string gesture) => Current.ChangeShortcutAsync(slot, gesture);
 
-        public Task<string> TakeWinVWithHklmFallbackAsync() =>
-            Current.TakeoverWinVWithHklmFallbackAsync();
-
-        public string TakePrintScreen() => Current.TakeoverPrintScreen();
-
-        public Task<string> TakeWinShiftSAsync() => Current.TakeoverWinShiftSAsync();
+        public Task<string> TakeWinVWithHklmFallbackAsync() => Current.TakeoverWinVWithHklmFallbackAsync();
 
         public Task RevertAsync() => Current.RevertTakeoversAsync();
 
         public bool ApplyHotkeys(SettingsService settings) => Current.ApplyHotkeys(settings);
+
+        public void SuspendHotkeys() => Current.SuspendHotkeys();
     }
 }
 
 /// <summary>
-/// Ponto UNICO de contato desta pagina com os fluxos que escrevem no registro do
-/// Windows e reiniciam o Explorer. No original as 4 chamadas
-/// <c>((App)Application.Current).TakeoverXxx(...)</c> ficavam espalhadas pelos
-/// handlers, o que amarrava a pagina ao <c>Application.Current</c> e tornava
-/// qualquer teste impossivel sem mexer no registro da maquina.
+/// Ponto UNICO de contato desta pagina com os fluxos que escrevem no registro do Windows
+/// e reiniciam o Explorer.
 /// </summary>
 internal interface ITakeoverGateway
 {
-    Task<string> TakeWinVAsync();
+    Task<string> ChangeShortcutAsync(string slot, string gesture);
 
     Task<string> TakeWinVWithHklmFallbackAsync();
-
-    string TakePrintScreen();
-
-    Task<string> TakeWinShiftSAsync();
 
     Task RevertAsync();
 
     bool ApplyHotkeys(SettingsService settings);
+
+    void SuspendHotkeys();
 }

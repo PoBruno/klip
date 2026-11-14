@@ -66,8 +66,8 @@ public partial class CapturePage : ISettingsPage
         {
             var s = _settings.Current;
 
-            RememberCaptureModeToggle.IsChecked = s.RememberLastCaptureMode;
-            AlwaysEditorToggle.IsChecked = s.AlwaysOpenEditorAfterCapture;
+            StartModeCombo.SelectedIndex = s.RememberLastCaptureMode ? 1 : 0;
+            AfterCaptureCombo.SelectedIndex = s.AlwaysOpenEditorAfterCapture ? 1 : 0;
             RelabelEditorModifier();
             SelectByTag(EditorModifierCombo, s.EditorModifierKey, CaptureEditorModifier.Control);
 
@@ -75,6 +75,7 @@ public partial class CapturePage : ISettingsPage
             SelectByTag(ColorFormatCombo, ColorFormatter.Normalize(s.ColorPickerFormat), ColorFormatter.Hex);
 
             AutoSaveToggle.IsChecked = s.AutoSaveScreenshots;
+            ScreenshotFolderRow.IsEnabled = s.AutoSaveScreenshots;
             // same default as CaptureController.AutoSave (Pictures\Screenshots)
             _screenshotsFolder = s.ScreenshotsFolder ?? DefaultScreenshotsFolder();
             ScreenshotFolderBox.Text = _screenshotsFolder;
@@ -110,17 +111,18 @@ public partial class CapturePage : ISettingsPage
     /// </summary>
     private void WireEvents()
     {
-        // off = the overlay always opens on rectangle
-        RememberCaptureModeToggle.Click += (_, _) =>
+        // 0 = the overlay always opens on rectangle, 1 = the last mode used
+        StartModeCombo.SelectionChanged += (_, _) =>
         {
-            if (!_loading)
-                _settings.Update(s => s.RememberLastCaptureMode = RememberCaptureModeToggle.IsChecked == true);
+            if (!_loading && StartModeCombo.SelectedIndex >= 0)
+                _settings.Update(s => s.RememberLastCaptureMode = StartModeCombo.SelectedIndex == 1);
         };
 
-        AlwaysEditorToggle.Click += (_, _) =>
+        // 0 = toast, 1 = every still capture opens in the editor
+        AfterCaptureCombo.SelectionChanged += (_, _) =>
         {
-            if (!_loading)
-                _settings.Update(s => s.AlwaysOpenEditorAfterCapture = AlwaysEditorToggle.IsChecked == true);
+            if (!_loading && AfterCaptureCombo.SelectedIndex >= 0)
+                _settings.Update(s => s.AlwaysOpenEditorAfterCapture = AfterCaptureCombo.SelectedIndex == 1);
         };
 
         EditorModifierCombo.SelectionChanged += (_, _) =>
@@ -143,8 +145,12 @@ public partial class CapturePage : ISettingsPage
 
         AutoSaveToggle.Click += (_, _) =>
         {
+            var on = AutoSaveToggle.IsChecked == true;
+            ScreenshotFolderRow.IsEnabled = on;
+            if (on)
+                AutoSaveExpander.IsExpanded = true; // mostra a pasta que vai ser usada
             if (!_loading)
-                _settings.Update(s => s.AutoSaveScreenshots = AutoSaveToggle.IsChecked == true);
+                _settings.Update(s => s.AutoSaveScreenshots = on);
         };
 
         ChooseFolderButton.Click += (_, _) => ChooseScreenshotFolder();
