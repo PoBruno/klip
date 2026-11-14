@@ -8,6 +8,16 @@ updates:
     open-pull-requests-limit: 5
     commit-message:
       prefix: deps
+    # the app targets .NET 10 (LTS), so the runtime packages follow that major.
+    # an 11.x of these pulls the next runtime's libraries into a net10 build.
+    # naudio majors change the resampler api used by the recorder, done by hand
+    ignore:
+      - dependency-name: "Microsoft.Extensions.*"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "Microsoft.Data.Sqlite"
+        update-types: ["version-update:semver-major"]
+      - dependency-name: "NAudio*"
+        update-types: ["version-update:semver-major"]
     # one PR for all nuget bumps instead of one per package
     groups:
       nuget:
