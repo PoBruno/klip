@@ -28,6 +28,12 @@ public sealed class CaptureController(
 {
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private bool _sessionActive;
+
+    // scrolling capture keeps the session open with its own windows, no overlay
+    private bool _scrollingActive;
+
+    // set while we close the overlays ourselves, so their Closed is not taken as an outside close
+    private bool _closingOverlays;
     private CaptureSessionState? _session;
 
     /// <summary>Post-capture tray toast; the App subscribes to this.</summary>
@@ -39,10 +45,11 @@ public sealed class CaptureController(
     /// <summary>Last captured item so the toast can reopen it in the editor.</summary>
     public Core.Storage.ClipboardItem? LastCapturedItem { get; private set; }
 
-    public void StartCapture(CaptureMode? forcedMode = null)
+    /// <summary>Opens the overlay. False when nothing was shown (session already open, or it failed).</summary>
+    public bool StartCapture(CaptureMode? forcedMode = null)
     {
-        if (_sessionActive)
-            return;
+        if (_sessionActive && !RecoverOrphanSession())
+            return false;
         _sessionActive = true;
 
         var sw = StartupLog.VerboseEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
@@ -79,6 +86,7 @@ public sealed class CaptureController(
                     RecordingInteropFactory.CreateAudioDeviceEnumerator,
                     OnRegionSelected,
                     CancelCapture);
+                overlay.Closed += OnOverlayClosed;
                 _overlays.Add(overlay);
             }
 
@@ -87,12 +95,40 @@ public sealed class CaptureController(
 
             if (sw is not null)
                 StartupLog.WriteVerbose($"Captura: overlay visivel em {sw.ElapsedMilliseconds} ms");
+            return true;
         }
         catch (Exception ex)
         {
             StartupLog.WriteException("StartCapture", ex);
             CancelCapture();
+            return false;
         }
+    }
+
+    /// <summary>
+    /// The session flag says busy but nothing of a session is on screen: some path
+    /// ended it without clearing the flag. Without this the capture hotkey stays dead
+    /// until the app restarts. Returns true when it was an orphan and got cleared.
+    /// </summary>
+    private bool RecoverOrphanSession()
+    {
+        if (_scrollingActive || _overlays.Exists(o => o.IsVisible))
+            return false;
+        StartupLog.Write("Captura: sessao orfa encontrada (nenhum overlay aberto), liberando");
+        CancelCapture();
+        return true;
+    }
+
+    /// <summary>An overlay closed by something other than us (Alt+F4, Explorer restart): end the session.</summary>
+    private void OnOverlayClosed(object? sender, EventArgs e)
+    {
+        if (sender is CaptureOverlayWindow overlay)
+            overlay.Closed -= OnOverlayClosed;
+        if (_closingOverlays || sender is not CaptureOverlayWindow closed || !_overlays.Contains(closed))
+            return;
+        StartupLog.Write("Captura: overlay fechado por fora, cancelando a sessao");
+        _overlays.Remove(closed);
+        CancelCapture();
     }
 
     /// <summary>
@@ -102,7 +138,7 @@ public sealed class CaptureController(
     /// </summary>
     public void RepeatLastRegion()
     {
-        if (_sessionActive)
+        if (_sessionActive && !RecoverOrphanSession())
             return;
 
         if (!SavedCaptureRegion.TryParse(settings.Current.LastCaptureRegion, out var saved))
@@ -374,17 +410,16 @@ public sealed class CaptureController(
         var x = source.Monitor.Bounds.left + rect.X;
         var y = source.Monitor.Bounds.top + rect.Y;
 
-        var frame = new RegionFrameWindow();
-        var panel = new ScrollCapturePanel();
+        RegionFrameWindow? frame = null;
+        ScrollCapturePanel? panel = null;
         var completion = new TaskCompletionSource<bool>();
         var limitHit = false;
-        panel.DoneRequested += () => completion.TrySetResult(true);
-        panel.CancelRequested += () => completion.TrySetResult(false);
+        _scrollingActive = true;
 
         void OnProgress(PanoramicCaptureService.Progress p) =>
-            panel.UpdateProgress(p.HeightPx, p.LastDiscarded);
+            panel?.UpdateProgress(p.HeightPx, p.LastDiscarded);
         void OnPreview(BitmapSource preview) =>
-            panel.UpdatePreview(preview);
+            panel?.UpdatePreview(preview);
         void OnLimit()
         {
             // memory near the cap, just finish with whatever we got
@@ -398,6 +433,11 @@ public sealed class CaptureController(
 
         try
         {
+            // built inside the try: a constructor that throws must still end the session
+            frame = new RegionFrameWindow();
+            panel = new ScrollCapturePanel();
+            panel.DoneRequested += () => completion.TrySetResult(true);
+            panel.CancelRequested += () => completion.TrySetResult(false);
             frame.ShowAround(x, y, rect.Width, rect.Height);
             panel.ShowBeside(source.Monitor.Bounds, x, y, rect.Width, rect.Height);
 
@@ -436,8 +476,9 @@ public sealed class CaptureController(
             panoramicCapture.ProgressChanged -= OnProgress;
             panoramicCapture.PreviewUpdated -= OnPreview;
             panoramicCapture.LimitReached -= OnLimit;
-            frame.Close();
-            panel.Close();
+            frame?.Close();
+            panel?.Close();
+            _scrollingActive = false;
             _sessionActive = false;
             memory.Schedule();
         }
@@ -555,8 +596,19 @@ public sealed class CaptureController(
 
     private void CloseOverlays()
     {
-        foreach (var overlay in _overlays)
-            overlay.CloseOverlay();
-        _overlays.Clear();
+        _closingOverlays = true;
+        try
+        {
+            foreach (var overlay in _overlays.ToArray())
+            {
+                overlay.Closed -= OnOverlayClosed;
+                overlay.CloseOverlay();
+            }
+            _overlays.Clear();
+        }
+        finally
+        {
+            _closingOverlays = false;
+        }
     }
 }
