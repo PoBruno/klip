@@ -27,6 +27,15 @@ public static partial class NativeMethods
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool ClientToScreen(nint hWnd, ref POINT lpPoint);
 
+    [LibraryImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    public static partial bool IsHungAppWindow(nint hwnd);
+
+    // the msaa lookup is a cross process call into the foreground app; never more than
+    // this on the ui thread, and never a second one while a stuck one is still out
+    private const int AccessibleCaretTimeoutMs = 50;
+    private static int _accessibleCaretPending;
+
     private const int OBJID_CARET = unchecked((int)0xFFFFFFF8);
     private static readonly Guid IID_IAccessible = new("618736E0-3C3D-11CF-810C-00AA00389B71");
 
@@ -87,7 +96,46 @@ public static partial class NativeMethods
         }
 
         var target = info.hwndFocus != nint.Zero ? info.hwndFocus : foreground;
-        return TryGetAccessibleCaret(target, out screenRect);
+        return TryGetAccessibleCaretBounded(foreground, target, out screenRect);
+    }
+
+    /// <summary>
+    /// AccessibleObjectFromWindow sends WM_GETOBJECT to the app and waits for it with no
+    /// timeout: a hung app in front used to freeze the Win+V panel with it. Runs on its
+    /// own thread with a short cap; on timeout the caller falls back to the mouse.
+    /// </summary>
+    private static bool TryGetAccessibleCaretBounded(nint foreground, nint target, out RECT screenRect)
+    {
+        screenRect = default;
+        if (IsHungAppWindow(foreground))
+            return false;
+        if (Interlocked.CompareExchange(ref _accessibleCaretPending, 1, 0) != 0)
+            return false; // the last one never came back, that app is not answering
+
+        var result = new RECT();
+        var found = false;
+        var thread = new Thread(() =>
+        {
+            try
+            {
+                found = TryGetAccessibleCaret(target, out result);
+            }
+            finally
+            {
+                Volatile.Write(ref _accessibleCaretPending, 0);
+            }
+        })
+        {
+            IsBackground = true,
+            Name = "Klip.CaretLookup",
+        };
+        thread.SetApartmentState(ApartmentState.MTA);
+        thread.Start();
+
+        if (!thread.Join(AccessibleCaretTimeoutMs))
+            return false; // left running: it clears the pending flag whenever the app answers
+        screenRect = result;
+        return found;
     }
 
     private static bool TryGetAccessibleCaret(nint hwnd, out RECT screenRect)
