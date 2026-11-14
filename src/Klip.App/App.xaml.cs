@@ -1,5 +1,6 @@
 using System.Windows;
 using System.Windows.Controls;
+using Microsoft.Win32;
 using Klip.App.Diagnostics;
 using Klip.App.Localization;
 using Klip.App.Services;
@@ -33,6 +34,7 @@ public partial class App : Application
     private TaskbarIcon? _tray;
     private SettingsShell? _settingsWindow;
     private HistoryFlyoutWindow? _flyout;
+    private Windows.SequenceTicketWindow? _sequenceTicket;
     private PasteService? _pasteService;
     private ClipboardMonitorService? _clipboardMonitor;
     private CaptureController? _captureController;
@@ -50,6 +52,16 @@ public partial class App : Application
 
     // one compacting GC after heavy sessions (overlay, editor, recording)
     private MemorySettler? _memory;
+
+    // hidden top-level window: message-only windows don't get broadcasts like TaskbarCreated
+    private System.Windows.Interop.HwndSource? _broadcastWindow;
+    private uint _taskbarCreatedMessage;
+
+    // fresh process after hours untouched or a long sleep, see IdleRecycler
+    private IdleRecycler? _idleRecycler;
+    private bool _recycling;
+    private bool _startedByRecycle;
+    private uint _recycledClipboardSequence;
 
     // tray icon follows the taskbar color (light/dark)
     private bool? _trayIconLight;
@@ -83,10 +95,34 @@ public partial class App : Application
             return;
         }
 
+        // started by a recycle: the old instance is on its way out and still holds the
+        // mutex for a moment, wait for it instead of quitting as a second instance
+        if (IdleRecycle.TryParseArgs(e.Args, out var oldPid, out var oldSequence))
+        {
+            _startedByRecycle = true;
+            _recycledClipboardSequence = oldSequence;
+            WaitForProcessExit(oldPid, TimeSpan.FromSeconds(15));
+        }
+
         // single instance
         _mutex = new Mutex(initiallyOwned: true, MutexName, out var isFirstInstance);
+        if (!isFirstInstance && _startedByRecycle)
+        {
+            // the old one is still finishing (a slow flush): wait for the mutex a bit
+            // longer instead of leaving the user with no Klip at all
+            try
+            {
+                isFirstInstance = _mutex.WaitOne(TimeSpan.FromSeconds(15));
+            }
+            catch (AbandonedMutexException)
+            {
+                isFirstInstance = true; // the old process died holding it: ours now
+            }
+        }
         if (!isFirstInstance)
         {
+            if (_startedByRecycle)
+                StartupLog.Write("Reciclagem: instancia antiga nao saiu a tempo, desistindo");
             Shutdown();
             return;
         }
@@ -106,14 +142,22 @@ public partial class App : Application
         // watchdog running. Off by default: normal use only logs transitions and errors
         StartupLog.VerboseEnabled = e.Args.Contains("--verbose");
         StartupLog.Write("OnStartup: iniciando");
+        // a child inherits IDLE/BELOW_NORMAL from whoever launched it (editor, script);
+        // in idle class the ui thread loses the cpu to any normal load at hotkey time
+        if (PowerEfficiency.NormalizePriorityClass() is { } inherited)
+            StartupLog.Write($"OnStartup: classe de prioridade herdada 0x{inherited:X} corrigida para Normal");
 
-        // o app nasce ocioso na bandeja. EcoQoS pede frequencia eficiente e
-        // agendamento em efficient cores INCLUSIVE na tomada (o nivel Low automatico por
-        // visibilidade so vale na bateria). Prioridade de memoria baixa faz o gerenciador
-        // aparar as NOSSAS paginas antes das dos outros sob pressao - alternativa correta
-        // e nao destrutiva ao EmptyWorkingSet.
-        PowerEfficiency.SetProcessMemoryPriorityLow();
-        PowerEfficiency.EnterProcessEcoQos();
+        // idle in the tray is not the same as background work: the next hotkey has to be
+        // instant. memory priority stays normal and the qos goes back to the system
+        // (which still applies eco on battery for a hidden process). low memory priority
+        // plus eco at rest made windows page us out first, and after an hour or two away
+        // the first Win+V paid seconds of page faults. eco + low now only while a game or
+        // fullscreen app has the machine (SystemActivityMonitor).
+        PowerEfficiency.ResetProcessQosToSystem();
+        // Pisa um piso pequeno que o trimmer nao derruba; escala com a RAM da maquina
+        // e fica em zero em PCs fracos (ver NativeMethods.PinWorkingSetFloor).
+        if (NativeMethods.PinWorkingSetFloor())
+            StartupLog.WriteVerbose("Memoria: piso de working set travado");
         // Defesa contra dependencia que chame timeBeginPeriod: no Win11 o efeito e por
         // processo e some quando estamos ocultos, mas o custo de troca de contexto fica.
         PowerEfficiency.IgnoreTimerResolutionRequests(true);
@@ -152,6 +196,7 @@ public partial class App : Application
         services.AddSingleton<ExplorerPasteService>();
         services.AddSingleton<PasteService>();
         services.AddSingleton<PasteQueueService>();
+        services.AddSingleton<PickPasteService>();
         services.AddSingleton<ScreenCaptureService>();
         services.AddSingleton<PanoramicCaptureService>();
         // recording: concrete interop types only through the factory
@@ -204,6 +249,16 @@ public partial class App : Application
             _uiWatchdog.Start();
         LowLevelHookHost.Shared.ScopeActiveChanged += OnHookScopeActiveChanged;
         _memory = _services.GetRequiredService<MemorySettler>();
+        _idleRecycler = new IdleRecycler(Dispatcher, _services.GetRequiredService<SettingsService>(),
+            IsBusyForRecycle, RecycleProcess);
+        // any window opening or closing counts as using the app (editor, overlay, pinned image...)
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.LoadedEvent,
+            new RoutedEventHandler((_, _) => _idleRecycler?.NoteActivity()));
+        EventManager.RegisterClassHandler(typeof(Window), FrameworkElement.UnloadedEvent,
+            new RoutedEventHandler((_, _) => _idleRecycler?.NoteActivity()));
+        // modern standby/sleep freezes the whole process, and whatever the page cache
+        // had warm is anyone's guess by the time it thaws
+        SystemEvents.PowerModeChanged += OnPowerModeChanged;
 
         var settings = _services.GetRequiredService<SettingsService>();
 
@@ -239,9 +294,21 @@ public partial class App : Application
         // o flyout fecha por varios caminhos (Esc, clique fora, colar,
         // hotkey). Ao inves de espalhar EnterProcessEcoQos por todos eles, reage a
         // visibilidade: sem janela visivel, o app volta ao estado de repouso.
-        _flyout.IsVisibleChanged += (_, _) => ApplyIdleQosIfNoWindowVisible();
+        _flyout.IsVisibleChanged += (_, _) =>
+        {
+            ApplyIdleQosIfNoWindowVisible();
+            ShowSequenceTicket();
+        };
         _clipboardMonitor = _services.GetRequiredService<ClipboardMonitorService>();
         StartupLog.Write("OnStartup: clipboard monitor ativo");
+        if (_startedByRecycle)
+        {
+            // a copy made while the old instance was leaving never got a listener
+            var changed = NativeMethods.GetClipboardSequenceNumber() != _recycledClipboardSequence;
+            if (changed)
+                _clipboardMonitor.ProcessCurrentClipboard();
+            StartupLog.Write($"Reciclagem: instancia nova assumiu (clipboard mudou na troca: {(changed ? "sim" : "nao")})");
+        }
 
         // timed pause and "ignore the next copy" feed the monitor; the one-shot timer lives in HistoryPause
         var monitor = _clipboardMonitor;
@@ -252,19 +319,22 @@ public partial class App : Application
         Views.Controls.PasteAsFileSettings.SettingsSource = settings;
         _services.GetRequiredService<ExplorerPasteService>().Start();
 
-        // indicator for the sequential paste queue
+        // indicator for the sequential paste queue: tray tooltip, plus the ticket by the
+        // caret once the history panel is out of the way
         var pasteQueue = _services.GetRequiredService<PasteQueueService>();
         pasteQueue.QueueProgress += (current, total) =>
             Dispatcher.BeginInvoke(() =>
             {
                 if (_tray is not null)
-                    _tray.ToolTipText = $"Klip - colando {current} de {total}";
+                    _tray.ToolTipText = string.Format(Localization.Loc.QueueTrayProgress, current, total);
+                ShowSequenceTicket();
             });
         pasteQueue.QueueFinished += () =>
             Dispatcher.BeginInvoke(() =>
             {
                 if (_tray is not null)
                     _tray.ToolTipText = "Klip";
+                _sequenceTicket?.Hide();
             });
 
         // capture overlay
@@ -311,9 +381,12 @@ public partial class App : Application
         // editor de midia: registra o gateway para historico/toasts
         MediaEditorGateway.Opener = path => Dispatcher.BeginInvoke(() => OpenMediaEditor(path));
 
-        RegisterHotkeys(settings);
+        // tray first: a hotkey that fails to register warns through it
         CreateTrayIcon();
+        RegisterHotkeys(settings);
         StartupLog.Write("OnStartup: tray e hotkeys prontos");
+        CheckTakeover("startup");
+        WatchSessionEvents();
         // em idle nenhum hook LL pode estar instalado
         StartupLog.Write($"OnStartup: {HookHealth.FormatSummary()}");
 
@@ -421,6 +494,16 @@ public partial class App : Application
 
     private int _historyHotkeyId;
     private int _captureHotkeyId;
+
+    // some configured hotkey did not register; retried on resume, unlock and Explorer restart
+    private bool _hotkeysIncomplete;
+    private bool _quietHotkeyRetry;
+    private readonly HashSet<string> _conflictNotified = new(StringComparer.OrdinalIgnoreCase);
+
+    // a system hotkey we took over (Win+V, PrintScreen) went back to Windows; warned once each
+    private readonly HashSet<string> _takeoverLostNotified = new(StringComparer.OrdinalIgnoreCase);
+    // a balloon click within this window means the takeover warning, not the last capture
+    private DateTime _takeoverToastUtc = DateTime.MinValue;
     // text, repeat region and record video: empty by default, registered only when set
     private readonly List<int> _optionalHotkeyIds = [];
 
@@ -469,6 +552,7 @@ public partial class App : Application
         allOk &= TryRegisterOptional(hotkeys, current.HotkeyRepeatRegion, RepeatLastRegion);
         allOk &= TryRegisterOptional(hotkeys, current.HotkeyRecordVideo, () => StartCaptureIn(CaptureMode.Mp4));
 
+        _hotkeysIncomplete = !allOk;
         return allOk;
     }
 
@@ -553,6 +637,127 @@ public partial class App : Application
         return "falhou";
     }
 
+    /// <summary>
+    /// The one way the settings page changes a shortcut. Picking a key Windows owns
+    /// (Win+V, Win+Shift+S, Print Screen) takes it over in the registry; moving off one
+    /// gives that key alone back. Used to be two controls (the shortcut field and the
+    /// takeover buttons) that could disagree: typing Win+Shift+S in the field saved it
+    /// without freeing it from Windows, and leaving Print Screen kept it freed for nobody.
+    /// Returns "ok", "conflito", "precisa-hklm" (Win+V on 24H2) or "falhou".
+    /// </summary>
+    public async Task<string> ChangeShortcutAsync(string slot, string gesture)
+    {
+        var settings = _services!.GetRequiredService<SettingsService>();
+        var registry = _services!.GetRequiredService<SystemHotkeyService>();
+
+        string Get(AppSettings s) => slot switch
+        {
+            "history" => s.HotkeyHistory,
+            "capture" => s.HotkeyCapture,
+            "stop" => s.StopRecordingHotkey,
+            "text" => s.HotkeyCaptureText,
+            "repeat" => s.HotkeyRepeatRegion,
+            "video" => s.HotkeyRecordVideo,
+            _ => throw new ArgumentOutOfRangeException(nameof(slot), slot, null),
+        };
+        void Set(AppSettings s, string g)
+        {
+            switch (slot)
+            {
+                case "history": s.HotkeyHistory = g; break;
+                case "capture": s.HotkeyCapture = g; break;
+                case "stop": s.StopRecordingHotkey = g; break;
+                case "text": s.HotkeyCaptureText = g; break;
+                case "repeat": s.HotkeyRepeatRegion = g; break;
+                case "video": s.HotkeyRecordVideo = g; break;
+            }
+        }
+
+        var old = Get(settings.Current);
+        if (string.Equals(old, gesture, StringComparison.OrdinalIgnoreCase))
+        {
+            ApplyHotkeys(settings);
+            return "ok";
+        }
+
+        var state = await Task.Run(registry.GetState);
+        var restartExplorer = false;
+
+        // take the new key from Windows when it is one of its own
+        if (SystemKeyLetter(gesture) is { } takeLetter &&
+            !(takeLetter == 'V' ? state.WinVFreed || state.HklmClipboardFeatureOff : state.WinSFreed))
+        {
+            registry.AddDisabledHotkeyLetters(takeLetter.ToString());
+            restartExplorer = true;
+        }
+        if (IsPrintScreen(gesture) && !state.PrintScreenFreed)
+            registry.SetPrintScreenFreed(true);
+
+        settings.UpdateAndFlush(s => Set(s, gesture));
+
+        // give the old key back, unless another action still uses it
+        var stillUsed = UsesGesture(settings.Current, old);
+        if (!stillUsed && SystemKeyLetter(old) is { } giveLetter && registry.RemoveDisabledHotkeyLetter(giveLetter))
+            restartExplorer = true;
+        if (!stillUsed && IsPrintScreen(old))
+            registry.SetPrintScreenFreed(false);
+
+        if (restartExplorer)
+            await SystemHotkeyService.RestartExplorerAsync();
+
+        // the stop recording key is only registered during a recording
+        if (slot == "stop")
+            return "ok";
+
+        // after an Explorer restart the shell may hold the key for a few seconds
+        var deadline = DateTime.UtcNow.AddSeconds(restartExplorer ? 10 : 0);
+        while (true)
+        {
+            if (ApplyHotkeys(settings))
+                return "ok";
+            if (DateTime.UtcNow >= deadline)
+                break;
+            await Task.Delay(400);
+        }
+
+        // Win+V on Windows 11 24H2 only lets go with the feature off in HKLM (elevated)
+        if (slot == "history" && gesture == "Win+V" && !settings.Current.RegistryHklmClipboardOffApplied)
+            return "precisa-hklm";
+        return SystemKeyLetter(gesture) is not null ? "falhou" : "conflito";
+    }
+
+    /// <summary>
+    /// Unregisters every Klip hotkey while the shortcut dialog listens, so pressing
+    /// the current Win+V reaches the dialog instead of opening the panel. ApplyHotkeys
+    /// puts them back.
+    /// </summary>
+    public void SuspendHotkeys()
+    {
+        var hotkeys = _services?.GetService<HotkeyService>();
+        if (hotkeys is null)
+            return;
+        if (_historyHotkeyId != 0) { hotkeys.Unregister(_historyHotkeyId); _historyHotkeyId = 0; }
+        if (_captureHotkeyId != 0) { hotkeys.Unregister(_captureHotkeyId); _captureHotkeyId = 0; }
+        foreach (var id in _optionalHotkeyIds)
+            hotkeys.Unregister(id);
+        _optionalHotkeyIds.Clear();
+    }
+
+    private static char? SystemKeyLetter(string? gesture) => gesture switch
+    {
+        "Win+V" => 'V',
+        "Win+Shift+S" or "Shift+Win+S" => 'S',
+        _ => null,
+    };
+
+    private static bool IsPrintScreen(string? gesture) =>
+        string.Equals(gesture, "PrintScreen", StringComparison.OrdinalIgnoreCase);
+
+    private static bool UsesGesture(AppSettings s, string? gesture) =>
+        !string.IsNullOrEmpty(gesture) &&
+        new[] { s.HotkeyHistory, s.HotkeyCapture, s.HotkeyCaptureText, s.HotkeyRepeatRegion, s.HotkeyRecordVideo, s.StopRecordingHotkey }
+            .Any(g => string.Equals(g, gesture, StringComparison.OrdinalIgnoreCase));
+
     /// <summary>Full rollback of every takeover.</summary>
     public async Task RevertTakeoversAsync()
     {
@@ -625,6 +830,7 @@ public partial class App : Application
 
     private void StartCaptureIn(CaptureMode? mode)
     {
+        var latency = HotkeyLatency.Begin("captura");
         // Aqui NAO ha bloqueio por jogo em tela cheia de proposito. Capturar um jogo ou
         // um video em tela cheia e caso de uso primario de uma ferramenta de captura;
         // recusar a hotkey seria uma regressao muito pior do que o custo de composicao
@@ -633,9 +839,13 @@ public partial class App : Application
         if (_activityMonitor?.State == SystemActivityState.Suspended)
             StartupLog.WriteVerbose("Captura sobre app em tela cheia (a pedido do usuario)");
 
+        _idleRecycler?.NoteActivity();
         _flyout?.HideFlyout(); // overlay cant capture the flyout while its open
         PowerEfficiency.EnterProcessHighQos(); // UI a frente, sai do Eco
-        _captureController?.StartCapture(mode);
+        PowerEfficiency.SetProcessMemoryPriorityNormal();
+        _activityMonitor?.RecheckSoon();
+        if (_captureController?.StartCapture(mode) == true)
+            latency.End();
     }
 
     /// <summary>
@@ -676,12 +886,14 @@ public partial class App : Application
     }
 
     /// <summary>
-    /// Devolve o processo ao EcoQoS quando nenhuma janela do Klip esta
-    /// visivel. Chamado pelas transicoes de visibilidade; e barato e idempotente.
-    /// Nao rebaixa enquanto houver gravacao em andamento nem durante o shutdown.
+    /// Leaves the high qos a window asked for once no Klip window is visible. At rest
+    /// the qos goes back to the system; eco only while a game or fullscreen app is in
+    /// front, same as the activity monitor does. Cheap and idempotent. Not while a
+    /// recording runs or during shutdown.
     /// </summary>
     private void ApplyIdleQosIfNoWindowVisible()
     {
+        _idleRecycler?.NoteActivity();
         if (IsExiting || _recordingController?.IsActive == true)
             return;
         foreach (Window window in Windows)
@@ -689,7 +901,10 @@ public partial class App : Application
             if (window.IsVisible)
                 return;
         }
-        PowerEfficiency.EnterProcessEcoQos();
+        if (_activityMonitor?.State == SystemActivityState.Suspended)
+            PowerEfficiency.EnterProcessEcoQos();
+        else
+            PowerEfficiency.ResetProcessQosToSystem();
     }
 
     /// <summary>Opens the editor with an image from history (or the toast).</summary>
@@ -729,14 +944,19 @@ public partial class App : Application
     /// Abre o editor de midia: uma janela por arquivo; se ja existe
     /// uma para o mesmo caminho, apenas reativa.
     /// </summary>
-    private void OpenMediaEditor(string filePath)
+    private void OpenMediaEditor(string filePath) => OpenMediaEditorWindow(filePath);
+
+    /// <summary>Item da bandeja: editor vazio, pronto para colar/arrastar video (sem gravacao previa).</summary>
+    private void OpenMediaEditorEmpty() => OpenMediaEditorWindow(null);
+
+    private void OpenMediaEditorWindow(string? filePath)
     {
         if (_services is null)
             return;
         try
         {
             PowerEfficiency.EnterProcessHighQos(); // janela a frente
-            if (_mediaEditors.TryGetValue(filePath, out var existing))
+            if (filePath is not null && _mediaEditors.TryGetValue(filePath, out var existing))
             {
                 existing.Show();
                 if (existing.WindowState == WindowState.Minimized)
@@ -751,7 +971,7 @@ public partial class App : Application
             window.ExportCompleted += message => _tray?.ShowNotification("Klip", message);
             window.FileOpened += (w, path) =>
             {
-                // drag-and-drop trocou o arquivo: re-mapeia a janela
+                // drag-and-drop/colar trocou ou definiu o arquivo base: re-mapeia a janela
                 foreach (var stale in _mediaEditors.Where(kv => kv.Value == w).Select(kv => kv.Key).ToList())
                     _mediaEditors.Remove(stale);
                 _mediaEditors[path] = w;
@@ -762,7 +982,8 @@ public partial class App : Application
                     _mediaEditors.Remove(stale);
                 _memory?.Schedule(); // preview frame cache is big
             };
-            window.OpenFile(filePath);
+            if (filePath is not null)
+                window.OpenFile(filePath);
             window.Show();
             window.Activate();
         }
@@ -772,24 +993,42 @@ public partial class App : Application
         }
     }
 
+    /// <summary>The "2/3" ticket shows while a sequence runs and the history panel is closed.</summary>
+    private void ShowSequenceTicket()
+    {
+        var queue = _services?.GetRequiredService<PasteQueueService>();
+        if (queue is null || !queue.IsArmed || _flyout is { IsVisible: true })
+        {
+            _sequenceTicket?.Hide();
+            return;
+        }
+        _sequenceTicket ??= new Windows.SequenceTicketWindow();
+        _sequenceTicket.ShowProgress(queue.Position, queue.Count);
+    }
+
     /// <summary>Grabs the target app before showing the flyout.</summary>
     private void ToggleHistoryFlyout()
     {
         if (_flyout is null)
             return;
-        // opening history cancels a paste queue that is running
-        _services?.GetRequiredService<PasteQueueService>().Cancel();
+        _idleRecycler?.NoteActivity();
         if (_flyout.IsVisible)
         {
-            _flyout.HideFlyout();
-            PowerEfficiency.EnterProcessEcoQos(); // sem UI visivel, volta ao Eco
+            // closing with the hotkey keeps a pick, same as a click outside
+            _flyout.HideFlyout(); // IsVisibleChanged puts the qos back to rest
             return;
         }
+        // opening history cancels a paste queue that is running
+        _services?.GetRequiredService<PasteQueueService>().Cancel();
+        var latency = HotkeyLatency.Begin("historico");
         // HighQoS ANTES de montar/mostrar a janela, senao o primeiro layout
         // e a composicao Mica rodam num efficient core e o painel abre devagar.
         PowerEfficiency.EnterProcessHighQos();
+        PowerEfficiency.SetProcessMemoryPriorityNormal();
+        _activityMonitor?.RecheckSoon();
         _pasteService?.CaptureForegroundTarget(_flyout.Hwnd);
         _flyout.ShowFlyout();
+        latency.End();
     }
 
     /// <summary>
@@ -870,7 +1109,12 @@ public partial class App : Application
         {
             if (IsExiting)
                 return;
-            if (_recordingToastFile is { } file)
+            if (DateTime.UtcNow - _takeoverToastUtc < TimeSpan.FromSeconds(30))
+            {
+                _takeoverToastUtc = DateTime.MinValue;
+                ShowMainWindow();
+            }
+            else if (_recordingToastFile is { } file)
             {
                 _recordingToastFile = null;
                 MediaEditorGateway.Open(file);
@@ -885,7 +1129,11 @@ public partial class App : Application
                 OpenEditor(lastCapture);
             }
         };
-        _tray.ForceCreate();
+        // ForceCreate() defaults to enablesEfficiencyMode: true, which puts the WHOLE
+        // process in EcoQoS and IDLE priority class (the Task Manager "efficiency mode").
+        // that is what left Klip at idle priority after startup: any normal load on the
+        // machine then took the cpu from the ui thread right when a hotkey came in
+        _tray.ForceCreate(enablesEfficiencyMode: false);
 
         // switching language rebuilds the menu right away
         Loc.LanguageChanged += BuildTrayMenu;
@@ -922,6 +1170,7 @@ public partial class App : Application
         menu.Items.Add(CreateMenuItem(Loc.TrayOpenHistory, "\uE81C", (_, _) => ToggleHistoryFlyout()));
         menu.Items.Add(CreateMenuItem(Loc.TrayCapture, "\uE722", (_, _) => StartCapture()));
         menu.Items.Add(CreateMenuItem(Loc.TrayRepeatRegion, "\uE72C", (_, _) => RepeatLastRegion()));
+        menu.Items.Add(CreateMenuItem(Loc.TrayMediaEditor, "\uE714", (_, _) => OpenMediaEditorEmpty()));
         menu.Items.Add(BuildPinnedMenuItem());
         menu.Items.Add(CreateMenuItem(Loc.TraySettings, "\uE713", (_, _) => ShowMainWindow()));
         menu.Items.Add(new Separator());
@@ -1030,7 +1279,81 @@ public partial class App : Application
 
     private void NotifyHotkeyConflict(HotkeyGesture gesture)
     {
+        var error = _services?.GetService<HotkeyService>()?.LastError ?? 0;
+        StartupLog.Write($"Atalho {gesture}: RegisterHotKey falhou (erro {error})");
+        // once per gesture per session: the retries below would otherwise repeat it on every unlock
+        if (_quietHotkeyRetry || !_conflictNotified.Add(gesture.ToString()))
+            return;
         _tray?.ShowNotification("Klip", string.Format(Loc.NotifyHotkeyConflict, gesture));
+    }
+
+    /// <summary>
+    /// A Windows update can put PrintScreen back on the snipping tool or drop a letter
+    /// from DisabledHotkeys. RegisterHotKey still succeeds, but the key opens the system
+    /// tool. Reads the registry off the ui thread and warns once per key per session;
+    /// it never writes (taking it back is the user's call in the settings).
+    /// </summary>
+    private void CheckTakeover(string reason)
+    {
+        if (IsExiting || _services is null)
+            return;
+        var current = _services.GetRequiredService<SettingsService>().Current;
+        var configured = new List<HotkeyGesture>();
+        foreach (var text in new[] { current.HotkeyHistory, current.HotkeyCapture, current.HotkeyCaptureText,
+                     current.HotkeyRepeatRegion, current.HotkeyRecordVideo })
+        {
+            if (HotkeyGesture.TryParse(text, out var g))
+                configured.Add(g);
+        }
+        // nothing configured depends on a registry takeover: no need to read it
+        if (TakeoverCheck.Lost(configured, false, false, false).Count == 0)
+            return;
+
+        var registry = _services.GetRequiredService<SystemHotkeyService>();
+        _ = Task.Run(() =>
+        {
+            try
+            {
+                var state = registry.GetState();
+                var lost = TakeoverCheck.Lost(configured,
+                    state.WinVFreed || state.HklmClipboardFeatureOff, state.WinSFreed, state.PrintScreenFreed);
+                if (lost.Count == 0)
+                    return;
+                StartupLog.Write($"Atalhos: takeover perdido ({reason}): {string.Join(", ", lost)}");
+                Dispatcher.BeginInvoke(() =>
+                {
+                    var fresh = lost.Where(_takeoverLostNotified.Add).ToList();
+                    if (fresh.Count == 0 || IsExiting)
+                        return;
+                    _takeoverToastUtc = DateTime.UtcNow;
+                    _tray?.ShowNotification("Klip", string.Format(Loc.NotifyTakeoverLost, string.Join(", ", fresh)));
+                });
+            }
+            catch (Exception ex)
+            {
+                StartupLog.WriteException("CheckTakeover", ex);
+            }
+        });
+    }
+
+    /// <summary>
+    /// Registers again when some hotkey failed earlier (another app held it, Explorer
+    /// was restarting). Called on resume, unlock and when the taskbar comes back.
+    /// </summary>
+    private void RetryFailedHotkeys(string reason)
+    {
+        if (!_hotkeysIncomplete || IsExiting || _services is null)
+            return;
+        _quietHotkeyRetry = true;
+        try
+        {
+            var ok = ApplyHotkeys(_services.GetRequiredService<SettingsService>());
+            StartupLog.Write($"Atalhos: nova tentativa ({reason}) {(ok ? "registrou todos" : "ainda falta algum")}");
+        }
+        finally
+        {
+            _quietHotkeyRetry = false;
+        }
     }
 
     /// <summary>
@@ -1067,6 +1390,205 @@ public partial class App : Application
                 _captureController?.WarmUp();
         };
         captureWarm.Start();
+    }
+
+    /// <summary>
+    /// Resume from sleep/modern standby: the whole process was frozen, and whatever
+    /// the warm-ups paid for is gone or uncertain by the time it thaws. A small delay
+    /// before re-warming because the display/GPU driver is often still settling right
+    /// at the resume event itself.
+    /// </summary>
+    private void OnPowerModeChanged(object sender, PowerModeChangedEventArgs e)
+    {
+        if (e.Mode == PowerModes.Suspend)
+        {
+            Dispatcher.BeginInvoke(() => _idleRecycler?.OnSuspend());
+            return;
+        }
+        if (e.Mode != PowerModes.Resume)
+            return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            StartupLog.WriteVerbose("Energia: resume detectado");
+            RewarmSoon();
+            _idleRecycler?.OnResume();
+            RecoverAfterAway("resume");
+        });
+    }
+
+    /// <summary>
+    /// Lock/unlock, remote session and display changes. Before, only sleep was handled,
+    /// and "it got slow after I locked the screen" had nothing listening for it.
+    /// </summary>
+    private void WatchSessionEvents()
+    {
+        SystemEvents.SessionSwitch += OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged += OnDisplaySettingsChanged;
+
+        _taskbarCreatedMessage = NativeMethods.RegisterWindowMessage("TaskbarCreated");
+        _broadcastWindow = new System.Windows.Interop.HwndSource(
+            new System.Windows.Interop.HwndSourceParameters("KlipBroadcastWindow")
+            {
+                WindowStyle = 0, // WS_OVERLAPPED, never shown
+                Width = 0,
+                Height = 0,
+            });
+        _broadcastWindow.AddHook(BroadcastWndProc);
+    }
+
+    private nint BroadcastWndProc(nint hwnd, int msg, nint wParam, nint lParam, ref bool handled)
+    {
+        // Explorer came back (crash, restart, the takeover flow): it reads DisabledHotkeys
+        // again and a hotkey it held during the restart may now be free for us
+        if (_taskbarCreatedMessage != 0 && (uint)msg == _taskbarCreatedMessage)
+        {
+            StartupLog.Write("Sessao: Explorer reiniciado (TaskbarCreated)");
+            Dispatcher.BeginInvoke(() =>
+            {
+                RetryFailedHotkeys("Explorer");
+                CheckTakeover("Explorer");
+            });
+        }
+        return nint.Zero;
+    }
+
+    private void OnSessionSwitch(object? sender, SessionSwitchEventArgs e)
+    {
+        // runs on the SystemEvents thread: only hand over to the dispatcher
+        var reason = e.Reason switch
+        {
+            SessionSwitchReason.SessionUnlock => "desbloqueio",
+            SessionSwitchReason.ConsoleConnect => "console conectado",
+            SessionSwitchReason.RemoteConnect => "sessao remota",
+            SessionSwitchReason.SessionLogon => "logon",
+            _ => null,
+        };
+        if (e.Reason is SessionSwitchReason.SessionLock)
+            StartupLog.Write("Sessao: tela bloqueada");
+        if (reason is null)
+            return;
+        Dispatcher.BeginInvoke(() =>
+        {
+            StartupLog.Write($"Sessao: {reason}");
+            RewarmSoon();
+            RecoverAfterAway(reason);
+        });
+    }
+
+    private void OnDisplaySettingsChanged(object? sender, EventArgs e)
+    {
+        Dispatcher.BeginInvoke(() =>
+        {
+            StartupLog.Write($"Sessao: monitores mudaram ({NativeMethods.GetMonitors().Count} agora)");
+            RewarmSoon();
+        });
+    }
+
+    /// <summary>
+    /// What to check when the user comes back (resume, unlock, remote connect): the
+    /// fullscreen state may be stale, a hotkey may be free again, the takeover may have
+    /// been undone by an update, and the clipboard listener may have gone deaf.
+    /// </summary>
+    private void RecoverAfterAway(string reason)
+    {
+        if (IsExiting)
+            return;
+        _activityMonitor?.RecheckSoon();
+        RetryFailedHotkeys(reason);
+        CheckTakeover(reason);
+        _clipboardMonitor?.CheckListener(reason);
+    }
+
+    /// <summary>Anything going on that a recycle would cut short.</summary>
+    private bool IsBusyForRecycle()
+    {
+        if (IsExiting || _recordingController?.IsActive == true)
+            return true;
+        // a game or fullscreen app has the machine: starting a whole wpf process now
+        // would steal from it, and the recycle can wait for the next stretch
+        if (_activityMonitor?.State == SystemActivityState.Suspended)
+            return true;
+        if (_services?.GetService<PasteQueueService>()?.IsArmed == true)
+            return true;
+        foreach (Window window in Windows)
+        {
+            if (window.IsVisible)
+                return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Starts a fresh instance and leaves. The new one waits for this process to exit
+    /// before taking the single instance mutex, then reads the clipboard once if it
+    /// changed in between. If the new process can't be started, this one just stays.
+    /// </summary>
+    private void RecycleProcess(string reason)
+    {
+        if (IsExiting || Environment.ProcessPath is not { } exe)
+            return;
+        try
+        {
+            var startInfo = new System.Diagnostics.ProcessStartInfo(exe) { UseShellExecute = false };
+            var sequence = _clipboardMonitor?.LastProcessedSequence ?? 0;
+            foreach (var arg in IdleRecycle.BuildArgs(Environment.ProcessId, sequence, StartupLog.VerboseEnabled))
+                startInfo.ArgumentList.Add(arg);
+            StartupLog.Write($"Reciclagem: {reason}, trocando por um processo novo");
+            System.Diagnostics.Process.Start(startInfo)?.Dispose();
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("Reciclagem", ex);
+            return;
+        }
+        _recycling = true;
+        ExitApplication();
+    }
+
+    private static void WaitForProcessExit(int pid, TimeSpan timeout)
+    {
+        try
+        {
+            using var old = System.Diagnostics.Process.GetProcessById(pid);
+            old.WaitForExit(timeout);
+        }
+        catch (ArgumentException)
+        {
+            // already gone
+        }
+        catch (Exception ex)
+        {
+            StartupLog.WriteException("ReciclagemEspera", ex);
+        }
+    }
+
+    /// <summary>
+    /// Re-pays the flyout and capture warm-ups a few seconds after a sleep/resume cycle
+    /// may have undone them. Skipped if a window is already open - there's nothing to
+    /// warm and showing one would be a visible glitch.
+    /// </summary>
+    private void RewarmSoon()
+    {
+        if (IsExiting)
+            return;
+        // Background, not ApplicationIdle: the latter only runs once the dispatcher
+        // queue is truly empty, and a fullscreen game (or just normal clipboard/hook
+        // traffic) can keep that from ever happening for hours - which is exactly how
+        // this recovery step itself went silent for 9+ hours in one real session.
+        var timer = new System.Windows.Threading.DispatcherTimer(
+            System.Windows.Threading.DispatcherPriority.Background, Dispatcher)
+        {
+            Interval = TimeSpan.FromSeconds(3),
+        };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            if (IsExiting)
+                return;
+            _flyout?.Rewarm();
+            _captureController?.WarmUp();
+        };
+        timer.Start();
     }
 
     /// <summary>
@@ -1241,10 +1763,17 @@ public partial class App : Application
         _tray?.Dispose();
 
         // stop the timers before the container goes away
+        SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+        // static events: a handler left here keeps the app alive and fires during shutdown
+        SystemEvents.SessionSwitch -= OnSessionSwitch;
+        SystemEvents.DisplaySettingsChanged -= OnDisplaySettingsChanged;
+        _broadcastWindow?.Dispose();
         LowLevelHookHost.Shared.ScopeActiveChanged -= OnHookScopeActiveChanged;
         _retentionTimer?.Dispose();
         _activityMonitor?.Dispose();
         _uiWatchdog?.Dispose();
+        _memory?.Dispose();
+        _idleRecycler?.Dispose();
 
         _clipboardMonitor?.Dispose();
         PurgePendingSecrets();
@@ -1254,7 +1783,8 @@ public partial class App : Application
             try
             {
                 var settings = _services.GetService<SettingsService>();
-                if (settings?.Current.ClearHistoryOnExit == true)
+                // a recycle is not the user leaving: the history stays
+                if (settings?.Current.ClearHistoryOnExit == true && !_recycling)
                 {
                     var repo = _services.GetService<ClipboardItemRepository>();
                     repo?.ClearAll();

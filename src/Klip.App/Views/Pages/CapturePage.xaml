@@ -6,38 +6,44 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- no Background (it would kill the Mica) and no ScrollViewer: the
-         NavigationViewContentPresenter template already scrolls, and the 24 px
-         padding comes from NavigationView.Padding. See SettingsShell.xaml. -->
-    <StackPanel MaxWidth="680">
-
-        <!-- the "new capture" hotkey card lives on the hotkeys page, and every
-             recording setting (folders, GIF, MP4, ffmpeg) on the recording page -->
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionCapture}" />
 
+        <!-- ================= Ao capturar ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionOnCapture}" />
+
+        <!-- os dois combos gravam os mesmos bools de antes (RememberLastCaptureMode e
+             AlwaysOpenEditorAfterCapture); escolha explicita le melhor que um interruptor -->
         <controls:SettingsCard
-            Title="{DynamicResource Loc.RememberCaptureModeTitle}"
-            Description="{DynamicResource Loc.RememberCaptureModeCaption}"
-            Icon="&#xE81C;">
-            <ui:ToggleSwitch x:Name="RememberCaptureModeToggle" />
+            Title="{DynamicResource Loc.StartModeTitle}"
+            Description="{DynamicResource Loc.StartModeCaption}"
+            Icon="&#xF407;">
+            <ComboBox x:Name="StartModeCombo" MinWidth="240" Style="{StaticResource SettingsComboBox}">
+                <ComboBoxItem Content="{DynamicResource Loc.StartModeRectangle}" />
+                <ComboBoxItem Content="{DynamicResource Loc.StartModeLast}" />
+            </ComboBox>
         </controls:SettingsCard>
 
         <controls:SettingsCard
-            Title="{DynamicResource Loc.AlwaysEditorTitle}"
-            Description="{DynamicResource Loc.AlwaysEditorCaption}"
+            Title="{DynamicResource Loc.AfterCaptureTitle}"
+            Description="{DynamicResource Loc.AfterCaptureCaption}"
             Icon="&#xE70F;">
-            <ui:ToggleSwitch x:Name="AlwaysEditorToggle" />
+            <ComboBox x:Name="AfterCaptureCombo" MinWidth="240" Style="{StaticResource SettingsComboBox}">
+                <ComboBoxItem Content="{DynamicResource Loc.AfterCaptureToast}" />
+                <ComboBoxItem Content="{DynamicResource Loc.AfterCaptureEditor}" />
+            </ComboBox>
         </controls:SettingsCard>
 
         <controls:SettingsCard
             Title="{DynamicResource Loc.EditorModifierTitle}"
             Description="{DynamicResource Loc.EditorModifierCaption}"
             Icon="&#xE765;">
-            <ComboBox
-                x:Name="EditorModifierCombo"
-                Width="140"
-                Style="{StaticResource SettingsComboBox}" />
+            <ComboBox x:Name="EditorModifierCombo" MinWidth="160" Style="{StaticResource SettingsComboBox}" />
         </controls:SettingsCard>
+
+        <!-- ================= Selecao ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionSelection}" />
 
         <controls:SettingsCard
             Title="{DynamicResource Loc.MagnifierTitle}"
@@ -50,67 +56,67 @@
             Title="{DynamicResource Loc.ColorFormatTitle}"
             Description="{DynamicResource Loc.ColorFormatCaption}"
             Icon="&#xE790;">
-            <ComboBox
-                x:Name="ColorFormatCombo"
-                Width="140"
-                Style="{StaticResource SettingsComboBox}" />
+            <ComboBox x:Name="ColorFormatCombo" MinWidth="160" Style="{StaticResource SettingsComboBox}" />
         </controls:SettingsCard>
 
-        <controls:SettingsCard
+        <!-- ================= Salvar ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionSaving}" />
+
+        <controls:SettingsExpander
+            x:Name="AutoSaveExpander"
             Title="{DynamicResource Loc.AutoSaveTitle}"
             Description="{DynamicResource Loc.AutoSaveCaption}"
             Icon="&#xE74E;">
-            <ui:ToggleSwitch x:Name="AutoSaveToggle" />
-        </controls:SettingsCard>
+            <controls:SettingsExpander.Header>
+                <ui:ToggleSwitch x:Name="AutoSaveToggle" />
+            </controls:SettingsExpander.Header>
+            <controls:SettingsRow
+                x:Name="ScreenshotFolderRow"
+                Title="{DynamicResource Loc.ScreenshotFolderTitle}"
+                Description="{DynamicResource Loc.ScreenshotFolderCaption}">
+                <controls:SettingsRow.Footer>
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
+                        <ui:TextBox x:Name="ScreenshotFolderBox" IsReadOnly="True" Style="{StaticResource SettingsTextBox}" />
+                        <ui:Button
+                            x:Name="ChooseFolderButton"
+                            Grid.Column="1"
+                            Margin="8,0,0,0"
+                            MinHeight="32"
+                            Content="{DynamicResource Loc.ChooseFolder}" />
+                    </Grid>
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
 
-        <!-- stacked card: the box and the button go in the footer -->
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ScreenshotFolderTitle}"
-            Description="{DynamicResource Loc.ScreenshotFolderCaption}"
-            Icon="&#xE8B7;">
-            <controls:SettingsCard.Footer>
-                <Grid>
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
-                    <!-- read only: the dialog edits, the real path lives in code-behind -->
-                    <ui:TextBox
-                        x:Name="ScreenshotFolderBox"
-                        IsReadOnly="True"
-                        Style="{StaticResource SettingsTextBox}" />
-                    <ui:Button
-                        x:Name="ChooseFolderButton"
-                        Grid.Column="1"
-                        Margin="8,0,0,0"
-                        Content="{DynamicResource Loc.ChooseFolder}" />
-                </Grid>
-            </controls:SettingsCard.Footer>
-        </controls:SettingsCard>
+        <!-- ================= Captura com rolagem ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionScrolling}" />
 
         <controls:SettingsCard
             Title="{DynamicResource Loc.CadenceTitle}"
             Description="{DynamicResource Loc.CadenceCaption}"
-            Icon="&#xE916;">
+            Icon="&#xE8CB;">
             <StackPanel Orientation="Horizontal" VerticalAlignment="Center">
                 <Slider
                     x:Name="ScrollDelaySlider"
-                    Width="140"
+                    Width="180"
                     VerticalAlignment="Center"
                     IsSnapToTickEnabled="True"
                     Maximum="2000"
                     Minimum="100"
                     TickFrequency="100" />
-                <!-- MinWidth holds the worst case ("2000 ms") so the slider doesn't
-                     slide around while the label changes width during the drag -->
+                <!-- MinWidth segura o pior caso ("2000 ms") para o slider nao andar -->
                 <TextBlock
                     x:Name="ScrollDelayLabel"
-                    MinWidth="52"
-                    Margin="8,0,0,0"
+                    MinWidth="60"
+                    Margin="10,0,0,0"
                     VerticalAlignment="Center"
-                    FontSize="12"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                     TextAlignment="Right" />
             </StackPanel>
         </controls:SettingsCard>
-    </StackPanel>
+    </controls:SettingsPanel>
 </Page>

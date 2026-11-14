@@ -3,9 +3,11 @@ using System.IO;
 using System.Text;
 using System.Windows;
 using System.Windows.Interop;
+using System.Windows.Media;
 using System.Windows.Media.Imaging;
 using System.Windows.Threading;
 using Klip.Core.Clipboard;
+using Klip.Core.Imaging;
 using Klip.Core.Settings;
 using Klip.Interop;
 using Klip.Interop.Clipboard;
@@ -101,6 +103,37 @@ public sealed class ClipboardMonitorService : IDisposable
     /// <summary>Recomputes <see cref="ImageState"/> on the clipboard thread (startup, settings change).</summary>
     public void RequestImageStateRefresh() => _clipboardThread.BeginInvoke(RefreshImageState);
 
+    /// <summary>Last clipboard sequence number this instance looked at (handed to the next one on a recycle).</summary>
+    public uint LastProcessedSequence => Volatile.Read(ref _lastProcessedSequence);
+
+    /// <summary>Registers the clipboard listener again and catches a copy it may have missed (resume, unlock).</summary>
+    public void CheckListener(string reason) => _clipboardThread.BeginInvoke(() =>
+    {
+        // after a sleep, a lock or an rdp session the listener can stop getting
+        // WM_CLIPBOARDUPDATE with no error anywhere (Ditto pings for the same reason).
+        // registering again is harmless when it was fine, and a copy that slipped
+        // through in the meantime is caught by comparing the sequence number
+        if (_listenerHandle == nint.Zero)
+            return;
+        NativeMethods.RemoveClipboardFormatListener(_listenerHandle);
+        var ok = NativeMethods.AddClipboardFormatListener(_listenerHandle);
+        var missed = NativeMethods.GetClipboardSequenceNumber() != _lastProcessedSequence;
+        StartupLog.Write($"Clipboard: listener renovado ({reason}){(ok ? "" : " [ERRO ao registrar]")}{(missed ? ", copia perdida recuperada" : "")}");
+        if (missed && !_paused)
+            ProcessClipboard();
+    });
+
+    /// <summary>
+    /// Reads whatever is on the clipboard now, as if it had just changed. For a recycle:
+    /// a copy made in the second between the old instance leaving and this one listening
+    /// would otherwise never reach the history.
+    /// </summary>
+    public void ProcessCurrentClipboard() => _clipboardThread.BeginInvoke(() =>
+    {
+        _lastProcessedSequence = 0; // the current one was taken as seen at startup
+        ProcessClipboard();
+    });
+
     public ClipboardMonitorService(
         ClipboardIngestService ingest,
         ClipboardWriteGuard writeGuard,
@@ -117,6 +150,10 @@ public sealed class ClipboardMonitorService : IDisposable
         // criar aqui fora faria o Tick disparar na UI thread de novo.
         clipboardThread.Invoke(() =>
         {
+            // what is on the clipboard at startup counts as seen: it is not ingested at
+            // startup anyway, and a recycle hands this number to the next instance
+            _lastProcessedSequence = NativeMethods.GetClipboardSequenceNumber();
+
             _debounce = new DispatcherTimer(DispatcherPriority.Send, clipboardThread.Dispatcher)
             {
                 // apps disparam varios WM_CLIPBOARDUPDATE por copia (limpa e
@@ -374,6 +411,7 @@ public sealed class ClipboardMonitorService : IDisposable
         {
             // CF_DIB como fallback: decodifica e reencoda em PNG. Continua caro,
             // mas agora e a thread do clipboard que paga, nao a UI.
+            image = IgnoreUnfilledAlpha(image);
             image.Freeze();
             var encoder = new PngBitmapEncoder();
             encoder.Frames.Add(BitmapFrame.Create(image));
@@ -399,6 +437,31 @@ public sealed class ClipboardMonitorService : IDisposable
             SourceApp = sourceApp,
             SourceTitle = sourceTitle,
         };
+    }
+
+    /// <summary>
+    /// WeChat 4.x puts 32 bpp bitmaps on the clipboard with good colors and alpha 0 on
+    /// every pixel. Saved as is, the png is fully transparent and the dark panel shows a
+    /// black square. When nothing in the alpha is set, read the same bytes as Bgr32 so
+    /// the alpha is dropped. The pixels are copied raw on purpose: converting a Pbgra32
+    /// source to Bgra32 divides by the alpha and would wipe the colors too.
+    /// </summary>
+    private static BitmapSource IgnoreUnfilledAlpha(BitmapSource image)
+    {
+        if (image.Format != PixelFormats.Bgra32 && image.Format != PixelFormats.Pbgra32)
+            return image;
+
+        var width = image.PixelWidth;
+        var height = image.PixelHeight;
+        var stride = width * 4;
+        var pixels = new byte[stride * height];
+        image.CopyPixels(pixels, stride, 0);
+
+        if (!AlphaChannel.IsFullyTransparent(pixels))
+            return image;
+
+        return BitmapSource.Create(width, height, image.DpiX, image.DpiY,
+            PixelFormats.Bgr32, null, pixels, stride);
     }
 
     /// <summary>

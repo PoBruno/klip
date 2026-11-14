@@ -81,114 +81,314 @@
         <Setter Property="Padding" Value="10,3,10,4" />
     </Style>
 
-    <!-- ===================== SettingsCard ===================== -->
+    <!-- ===================== Layout da pagina ===================== -->
 
-    <!-- Estilo implicito: as paginas so escrevem <controls:SettingsCard ... />.
-         9 elementos visuais no template; os opcionais colapsam por Trigger sobre a
-         propria DP (nada de converter, que alocaria uma instancia por card). -->
-    <Style TargetType="{x:Type controls:SettingsCard}">
-        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
-        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
-        <Setter Property="BorderThickness" Value="1" />
-        <Setter Property="Padding" Value="16,12" />
-        <Setter Property="Margin" Value="0,0,0,6" />
-        <Setter Property="HorizontalContentAlignment" Value="Right" />
-        <Setter Property="VerticalContentAlignment" Value="Center" />
-        <Setter Property="Focusable" Value="False" />
+    <!-- alinhado a esquerda com teto de 1000, como nas Configuracoes do Windows. Antes era
+         uma coluna de 680 centralizada que deixava metade da janela maximizada vazia. -->
+    <Style x:Key="SettingsContent" TargetType="controls:SettingsPanel">
+        <Setter Property="MaxWidth" Value="1000" />
+        <Setter Property="HorizontalAlignment" Value="Left" />
+        <Setter Property="Margin" Value="12,0,12,0" />
+    </Style>
+
+    <!-- frase curta logo abaixo do titulo de secao -->
+    <Style x:Key="SectionNote" TargetType="TextBlock" BasedOn="{StaticResource CaptionTextBlockStyle}">
+        <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+        <Setter Property="TextWrapping" Value="Wrap" />
+        <Setter Property="Margin" Value="4,-4,0,8" />
+    </Style>
+
+    <!-- link em linha (abrir pasta, devolver ao Windows) -->
+    <Style x:Key="LinkButton" TargetType="Button">
+        <Setter Property="Cursor" Value="Hand" />
+        <Setter Property="Foreground" Value="{DynamicResource AccentTextFillColorPrimaryBrush}" />
         <Setter Property="Template">
             <Setter.Value>
-                <ControlTemplate TargetType="{x:Type controls:SettingsCard}">
-                    <Border
-                        Background="{TemplateBinding Background}"
-                        BorderBrush="{TemplateBinding BorderBrush}"
-                        BorderThickness="{TemplateBinding BorderThickness}"
-                        Padding="{TemplateBinding Padding}"
-                        CornerRadius="6"
-                        SnapsToDevicePixels="True">
-                        <Grid>
-                            <Grid.ColumnDefinitions>
-                                <ColumnDefinition Width="Auto" />
-                                <ColumnDefinition Width="*" />
-                                <ColumnDefinition Width="Auto" />
-                            </Grid.ColumnDefinitions>
-                            <Grid.RowDefinitions>
-                                <RowDefinition Height="Auto" />
-                                <RowDefinition Height="Auto" />
-                            </Grid.RowDefinitions>
-
-                            <TextBlock
-                                x:Name="PART_Icon"
-                                Grid.Row="0"
-                                Grid.Column="0"
-                                Margin="0,0,14,0"
-                                VerticalAlignment="Center"
-                                FontFamily="{StaticResource KlipIconFont}"
-                                FontSize="16"
-                                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                Text="{TemplateBinding Icon}" />
-
-                            <StackPanel
-                                Grid.Row="0"
-                                Grid.Column="1"
-                                Margin="0,0,12,0"
-                                VerticalAlignment="Center">
-                                <TextBlock
-                                    x:Name="PART_Title"
-                                    Style="{StaticResource CardTitle}"
-                                    Text="{TemplateBinding Title}" />
-                                <TextBlock
-                                    x:Name="PART_Description"
-                                    Style="{StaticResource CardCaption}"
-                                    Text="{TemplateBinding Description}" />
-                                <TextBlock
-                                    x:Name="PART_Status"
-                                    Margin="0,6,0,0"
-                                    FontWeight="SemiBold"
-                                    Style="{StaticResource CardCaption}"
-                                    Text="{TemplateBinding Status}" />
-                            </StackPanel>
-
-                            <ContentPresenter
-                                Grid.Row="0"
-                                Grid.Column="2"
-                                HorizontalAlignment="{TemplateBinding HorizontalContentAlignment}"
-                                VerticalAlignment="{TemplateBinding VerticalContentAlignment}" />
-
-                            <ContentPresenter
-                                x:Name="PART_Footer"
-                                Grid.Row="1"
-                                Grid.Column="0"
-                                Grid.ColumnSpan="3"
-                                Margin="0,10,0,0"
-                                Content="{TemplateBinding Footer}" />
-                        </Grid>
-                    </Border>
+                <ControlTemplate TargetType="Button">
+                    <TextBlock x:Name="T" Text="{TemplateBinding Content}" Foreground="{TemplateBinding Foreground}" FontSize="{TemplateBinding FontSize}" />
                     <ControlTemplate.Triggers>
-                        <Trigger Property="Icon" Value="{x:Null}">
-                            <Setter TargetName="PART_Icon" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Icon" Value="">
-                            <Setter TargetName="PART_Icon" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Description" Value="{x:Null}">
-                            <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Description" Value="">
-                            <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Status" Value="{x:Null}">
-                            <Setter TargetName="PART_Status" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Status" Value="">
-                            <Setter TargetName="PART_Status" Property="Visibility" Value="Collapsed" />
-                        </Trigger>
-                        <Trigger Property="Footer" Value="{x:Null}">
-                            <Setter TargetName="PART_Footer" Property="Visibility" Value="Collapsed" />
+                        <Trigger Property="IsMouseOver" Value="True">
+                            <Setter TargetName="T" Property="TextDecorations" Value="Underline" />
                         </Trigger>
                     </ControlTemplate.Triggers>
                 </ControlTemplate>
             </Setter.Value>
         </Setter>
+    </Style>
+
+    <!-- ===================== SettingsCard ===================== -->
+
+    <!-- Estilo implicito: as paginas so escrevem <controls:SettingsCard ... />.
+         Coluna do icone sempre reservada (titulos alinham). Em IsNarrow o controle desce
+         para baixo do texto. -->
+    <ControlTemplate x:Key="SettingsCardTemplate" TargetType="{x:Type controls:SettingsCard}">
+        <Border
+            Background="{TemplateBinding Background}"
+            BorderBrush="{TemplateBinding BorderBrush}"
+            BorderThickness="{TemplateBinding BorderThickness}"
+            Padding="{TemplateBinding Padding}"
+            CornerRadius="{Binding Tag, RelativeSource={RelativeSource TemplatedParent}}"
+            MinHeight="{TemplateBinding MinHeight}"
+            SnapsToDevicePixels="True">
+            <Grid VerticalAlignment="Center">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="20" />
+                    <ColumnDefinition Width="16" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <Grid.RowDefinitions>
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                    <RowDefinition Height="Auto" />
+                </Grid.RowDefinitions>
+
+                <TextBlock
+                    x:Name="PART_Icon"
+                    Grid.Column="0"
+                    VerticalAlignment="Center"
+                    FontFamily="{StaticResource KlipIconFont}"
+                    FontSize="20"
+                    Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                    Text="{TemplateBinding Icon}" />
+
+                <StackPanel Grid.Column="2" Margin="0,0,16,0" VerticalAlignment="Center">
+                    <TextBlock x:Name="PART_Title" TextWrapping="Wrap" Text="{TemplateBinding Title}" />
+                    <TextBlock x:Name="PART_Description" Style="{StaticResource CardCaption}" Margin="0,1,0,0" Text="{TemplateBinding Description}" />
+                    <ContentPresenter x:Name="PART_Status" Margin="0,4,0,0" Content="{TemplateBinding Status}">
+                        <ContentPresenter.Resources>
+                            <Style TargetType="TextBlock" BasedOn="{StaticResource CardCaption}" />
+                        </ContentPresenter.Resources>
+                    </ContentPresenter>
+                </StackPanel>
+
+                <ContentPresenter
+                    x:Name="PART_Content"
+                    Grid.Column="3"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center" />
+
+                <ContentPresenter
+                    x:Name="PART_Footer"
+                    Grid.Row="2"
+                    Grid.Column="2"
+                    Grid.ColumnSpan="2"
+                    Margin="0,12,0,0"
+                    Content="{TemplateBinding Footer}" />
+            </Grid>
+        </Border>
+        <ControlTemplate.Triggers>
+            <Trigger Property="IsNarrow" Value="True">
+                <Setter TargetName="PART_Content" Property="Grid.Row" Value="1" />
+                <Setter TargetName="PART_Content" Property="Grid.Column" Value="2" />
+                <Setter TargetName="PART_Content" Property="HorizontalAlignment" Value="Left" />
+                <Setter TargetName="PART_Content" Property="Margin" Value="0,10,0,0" />
+            </Trigger>
+            <Trigger Property="Content" Value="{x:Null}">
+                <Setter TargetName="PART_Content" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Icon" Value="{x:Null}">
+                <Setter TargetName="PART_Icon" Property="Visibility" Value="Hidden" />
+            </Trigger>
+            <Trigger Property="Description" Value="{x:Null}">
+                <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Description" Value="">
+                <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Status" Value="{x:Null}">
+                <Setter TargetName="PART_Status" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Status" Value="">
+                <Setter TargetName="PART_Status" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="Footer" Value="{x:Null}">
+                <Setter TargetName="PART_Footer" Property="Visibility" Value="Collapsed" />
+            </Trigger>
+            <Trigger Property="IsEnabled" Value="False">
+                <Setter TargetName="PART_Title" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                <Setter TargetName="PART_Description" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                <Setter TargetName="PART_Icon" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+            </Trigger>
+        </ControlTemplate.Triggers>
+    </ControlTemplate>
+
+    <Style TargetType="{x:Type controls:SettingsCard}">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="MinHeight" Value="68" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Tag"><Setter.Value><CornerRadius>4</CornerRadius></Setter.Value></Setter>
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template" Value="{StaticResource SettingsCardTemplate}" />
+    </Style>
+
+    <!-- linha dentro de um expansor: sem borda propria, fundo secundario, divisoria em cima -->
+    <Style TargetType="{x:Type controls:SettingsRow}">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorSecondaryBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource DividerStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="0,1,0,0" />
+        <Setter Property="Padding" Value="16,10" />
+        <Setter Property="MinHeight" Value="52" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template" Value="{StaticResource SettingsCardTemplate}" />
+    </Style>
+
+    <!-- ===================== SettingsExpander ===================== -->
+    <Style TargetType="{x:Type controls:SettingsExpander}">
+        <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+        <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+        <Setter Property="BorderThickness" Value="1" />
+        <Setter Property="Padding" Value="16,12" />
+        <Setter Property="MinHeight" Value="68" />
+        <Setter Property="Margin" Value="0,0,0,4" />
+        <Setter Property="Focusable" Value="False" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="{x:Type controls:SettingsExpander}">
+                    <Border
+                        Background="{TemplateBinding Background}"
+                        BorderBrush="{TemplateBinding BorderBrush}"
+                        BorderThickness="{TemplateBinding BorderThickness}"
+                        CornerRadius="4"
+                        SnapsToDevicePixels="True">
+                        <StackPanel>
+                            <Border x:Name="PART_HeaderArea" Background="Transparent" Padding="{TemplateBinding Padding}" MinHeight="{TemplateBinding MinHeight}" Cursor="Hand">
+                                <Grid VerticalAlignment="Center">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="16" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
+                                    <TextBlock
+                                        x:Name="PART_Icon"
+                                        VerticalAlignment="Center"
+                                        FontFamily="{StaticResource KlipIconFont}"
+                                        FontSize="20"
+                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                        Text="{TemplateBinding Icon}" />
+                                    <StackPanel Grid.Column="2" Margin="0,0,16,0" VerticalAlignment="Center">
+                                        <TextBlock x:Name="PART_Title" TextWrapping="Wrap" Text="{TemplateBinding Title}" />
+                                        <TextBlock x:Name="PART_Description" Style="{StaticResource CardCaption}" Margin="0,1,0,0" Text="{TemplateBinding Description}" />
+                                        <ContentPresenter x:Name="PART_Status" Margin="0,4,0,0" Content="{TemplateBinding Status}" />
+                                    </StackPanel>
+                                    <ContentPresenter
+                                        x:Name="PART_HeaderContent"
+                                        Grid.Column="3"
+                                        Margin="0,0,8,0"
+                                        VerticalAlignment="Center"
+                                        Content="{TemplateBinding Header}" />
+                                    <ToggleButton
+                                        x:Name="PART_Chevron"
+                                        Grid.Column="4"
+                                        Width="32"
+                                        Height="32"
+                                        VerticalAlignment="Center"
+                                        Cursor="Hand"
+                                        Focusable="True"
+                                        IsChecked="{Binding IsExpanded, RelativeSource={RelativeSource TemplatedParent}, Mode=TwoWay}">
+                                        <ToggleButton.Template>
+                                            <ControlTemplate TargetType="ToggleButton">
+                                                <Border x:Name="B" Background="Transparent" CornerRadius="4">
+                                                    <TextBlock
+                                                        x:Name="G"
+                                                        HorizontalAlignment="Center"
+                                                        VerticalAlignment="Center"
+                                                        FontFamily="{StaticResource KlipIconFont}"
+                                                        FontSize="12"
+                                                        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                        Text="&#xE70D;" />
+                                                </Border>
+                                                <ControlTemplate.Triggers>
+                                                    <Trigger Property="IsMouseOver" Value="True">
+                                                        <Setter TargetName="B" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                                                    </Trigger>
+                                                    <Trigger Property="IsChecked" Value="True">
+                                                        <Setter TargetName="G" Property="Text" Value="&#xE70E;" />
+                                                    </Trigger>
+                                                </ControlTemplate.Triggers>
+                                            </ControlTemplate>
+                                        </ToggleButton.Template>
+                                    </ToggleButton>
+                                </Grid>
+                            </Border>
+                            <ContentPresenter x:Name="PART_Body" Visibility="Collapsed" />
+                        </StackPanel>
+                    </Border>
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="IsExpanded" Value="True">
+                            <Setter TargetName="PART_Body" Property="Visibility" Value="Visible" />
+                        </Trigger>
+                        <Trigger Property="IsNarrow" Value="True">
+                            <Setter TargetName="PART_HeaderContent" Property="Grid.Row" Value="1" />
+                            <Setter TargetName="PART_HeaderContent" Property="Grid.Column" Value="2" />
+                            <Setter TargetName="PART_HeaderContent" Property="HorizontalAlignment" Value="Left" />
+                            <Setter TargetName="PART_HeaderContent" Property="Margin" Value="0,10,0,0" />
+                        </Trigger>
+                        <Trigger Property="Icon" Value="{x:Null}">
+                            <Setter TargetName="PART_Icon" Property="Visibility" Value="Hidden" />
+                        </Trigger>
+                        <Trigger Property="Description" Value="{x:Null}">
+                            <Setter TargetName="PART_Description" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Status" Value="{x:Null}">
+                            <Setter TargetName="PART_Status" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                        <Trigger Property="Header" Value="{x:Null}">
+                            <Setter TargetName="PART_HeaderContent" Property="Visibility" Value="Collapsed" />
+                        </Trigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
+    <!-- ===================== Icone do Klip (pixel 16x16) ===================== -->
+    <!-- a tecla em pixel art como geometria: nitida em qualquer DPI e pintada com a cor do
+         texto, entao segue o tema (branco no escuro, preto no claro). Mesmo desenho dos .ico. -->
+    <Geometry x:Key="KlipPixelInk">M3,1h1v1h-1z M4,1h1v1h-1z M5,1h1v1h-1z M6,1h1v1h-1z M7,1h1v1h-1z M8,1h1v1h-1z M9,1h1v1h-1z M10,1h1v1h-1z M11,1h1v1h-1z M12,1h1v1h-1z M2,2h1v1h-1z M13,2h1v1h-1z M1,3h1v1h-1z M14,3h1v1h-1z M1,4h1v1h-1z M5,4h1v1h-1z M6,4h1v1h-1z M9,4h1v1h-1z M10,4h1v1h-1z M14,4h1v1h-1z M1,5h1v1h-1z M5,5h1v1h-1z M6,5h1v1h-1z M8,5h1v1h-1z M9,5h1v1h-1z M14,5h1v1h-1z M1,6h1v1h-1z M5,6h1v1h-1z M6,6h1v1h-1z M7,6h1v1h-1z M8,6h1v1h-1z M14,6h1v1h-1z M1,7h1v1h-1z M5,7h1v1h-1z M6,7h1v1h-1z M7,7h1v1h-1z M14,7h1v1h-1z M1,8h1v1h-1z M5,8h1v1h-1z M6,8h1v1h-1z M7,8h1v1h-1z M8,8h1v1h-1z M14,8h1v1h-1z M1,9h1v1h-1z M5,9h1v1h-1z M6,9h1v1h-1z M8,9h1v1h-1z M9,9h1v1h-1z M14,9h1v1h-1z M1,10h1v1h-1z M5,10h1v1h-1z M6,10h1v1h-1z M9,10h1v1h-1z M10,10h1v1h-1z M14,10h1v1h-1z M1,11h1v1h-1z M14,11h1v1h-1z M1,12h1v1h-1z M14,12h1v1h-1z M2,13h1v1h-1z M13,13h1v1h-1z M3,14h1v1h-1z M4,14h1v1h-1z M5,14h1v1h-1z M6,14h1v1h-1z M7,14h1v1h-1z M8,14h1v1h-1z M9,14h1v1h-1z M10,14h1v1h-1z M11,14h1v1h-1z M12,14h1v1h-1z</Geometry>
+    <Geometry x:Key="KlipPixelEdge">M4,12h1v1h-1z M5,12h1v1h-1z M6,12h1v1h-1z M7,12h1v1h-1z M8,12h1v1h-1z M9,12h1v1h-1z M10,12h1v1h-1z M11,12h1v1h-1z</Geometry>
+
+    <!-- ===================== Listas de apps (apps ignorados, apps que mantem formatacao) ===================== -->
+    <!-- o botao de remover nao tem Click: sobe ate o ItemsControl, onde um handler le o DataContext -->
+    <DataTemplate x:Key="AppRowTemplate">
+        <Border
+            Margin="0,0,0,4"
+            Padding="12,6,6,6"
+            Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+            CornerRadius="4">
+            <Grid>
+                <TextBlock VerticalAlignment="Center" Text="{Binding}" />
+                <Button
+                    HorizontalAlignment="Right"
+                    Padding="8,4"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Cursor="Hand"
+                    ToolTip="{DynamicResource Loc.RemoveApp}"
+                    AutomationProperties.Name="{DynamicResource Loc.RemoveApp}">
+                    <TextBlock FontFamily="{StaticResource KlipIconFont}" FontSize="12" Text="&#xE74D;" />
+                </Button>
+            </Grid>
+        </Border>
+    </DataTemplate>
+
+    <Style x:Key="AppListStyle" TargetType="{x:Type ItemsControl}">
+        <Setter Property="Margin" Value="0,8,0,0" />
+        <Setter Property="ItemTemplate" Value="{StaticResource AppRowTemplate}" />
+        <Style.Triggers>
+            <Trigger Property="HasItems" Value="False">
+                <Setter Property="Visibility" Value="Collapsed" />
+            </Trigger>
+        </Style.Triggers>
     </Style>
 
 </ResourceDictionary>

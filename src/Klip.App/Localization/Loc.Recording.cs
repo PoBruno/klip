@@ -35,7 +35,7 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> PtRecording = new()
     {
-        [nameof(SectionRecordingPage)] = "Gravação",
+        [nameof(SectionRecordingPage)] = "Gravação de tela",
         [nameof(RecordingVideoHeader)] = "Vídeo MP4",
         [nameof(RecordingGifHeader)] = "GIF",
         [nameof(Mp4FpsTitle)] = "Quadros por segundo",
@@ -68,7 +68,7 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> EnRecording = new()
     {
-        [nameof(SectionRecordingPage)] = "Recording",
+        [nameof(SectionRecordingPage)] = "Screen recording",
         [nameof(RecordingVideoHeader)] = "MP4 video",
         [nameof(RecordingGifHeader)] = "GIF",
         [nameof(Mp4FpsTitle)] = "Frames per second",

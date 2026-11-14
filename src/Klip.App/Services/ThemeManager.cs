@@ -26,6 +26,7 @@ public static class ThemeManager
     /// </summary>
     public static void ApplyAtStartup(string theme)
     {
+        _mode = theme;
         var wanted = theme is "light" or "dark" ? Resolve(theme) : FromSystem(ApplicationThemeManager.GetSystemTheme());
         if (wanted == StartupTheme && !SystemParameters.HighContrast && wanted != ApplicationTheme.Unknown)
         {
@@ -35,9 +36,50 @@ public static class ThemeManager
         Apply(theme);
     }
 
+    private static string? _mode;
+
+    private static bool FollowsSystem => (_mode ??= PeekSavedTheme()) is not ("light" or "dark");
+
+    /// <summary>
+    /// Use instead of SystemThemeWatcher.Watch. The watcher re-applies the Windows theme
+    /// when the window loads, which overrode a fixed Light/Dark choice, so it only runs
+    /// while the setting is "system".
+    /// </summary>
+    public static void Watch(Window window)
+    {
+        if (FollowsSystem)
+            SystemThemeWatcher.Watch(window);
+    }
+
+    private static void RewatchOpenWindows()
+    {
+        if (Application.Current is not { } app)
+            return;
+        foreach (Window window in app.Windows)
+        {
+            if (!window.IsLoaded)
+                continue;
+            try
+            {
+                SystemThemeWatcher.UnWatch(window);
+                if (FollowsSystem)
+                    SystemThemeWatcher.Watch(window);
+            }
+            catch (Exception)
+            {
+                // a window being closed can refuse the hook; it goes away anyway
+            }
+        }
+    }
+
     /// <param name="theme">"system" | "light" | "dark"</param>
     public static void Apply(string theme)
     {
+        var changedMode = _mode != theme;
+        _mode = theme;
+        if (changedMode)
+            RewatchOpenWindows();
+
         switch (theme)
         {
             case "light":

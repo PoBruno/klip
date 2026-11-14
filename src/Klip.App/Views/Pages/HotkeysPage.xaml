@@ -6,334 +6,83 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o
-         DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio
-         template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
-    <StackPanel MaxWidth="680">
+    <Page.Resources>
+        <!-- lapis "editar" ao lado das teclas -->
+        <Style x:Key="EditKeyButton" TargetType="Button">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="34" />
+            <Setter Property="Margin" Value="8,0,0,0" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" Background="Transparent" CornerRadius="4">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontFamily="{StaticResource KlipIconFont}"
+                                FontSize="14"
+                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                Text="&#xE70F;" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                            <Trigger Property="IsKeyboardFocused" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionHotkeys}" />
 
-        <!-- linha de status PROPRIA da pagina. As 10 mensagens de
-             resultado (takeover e captura de atalho) iam para o StatusText
-             compartilhado da MainWindow e eram apagadas pelo RefreshStatus() da
-             linha seguinte antes de o usuario ler qualquer uma delas. Aqui nada
-             do refresh de estado toca nesta linha: ela so muda quando ha uma
-             nova acao, ou quando o usuario a fecha. Fica colapsada (IsOpen) ate
-             a primeira acao, entao nao ocupa espaco na abertura da pagina. -->
-        <ui:InfoBar
-            x:Name="ActionStatus"
-            Margin="0,4,0,0"
-            IsClosable="True"
-            IsOpen="False" />
+        <!-- so aparece quando algo deu errado ou ha algo a fazer; sucesso nao vira faixa -->
+        <ui:InfoBar x:Name="ActionStatus" Margin="0,4,0,0" IsClosable="True" IsOpen="False" />
 
-        <!-- ==================== Atalhos do Klip ==================== -->
+        <!-- ================= Atalhos do Klip ================= -->
         <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionAppHotkeys}" />
 
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.OpenHistoryHotkey}"
-            Description="{DynamicResource Loc.HotkeyHint}"
-            Icon="&#xE81C;">
-            <!-- botao-capturador: os atributos ficam inline (e nao num Style com
-                 chave) para o estilo IMPLICITO do WPF-UI continuar valendo - um
-                 Style com chave desliga a busca implicita e derrubaria o template
-                 do botao para o default do tema. -->
-            <Button
-                x:Name="HistoryHotkeyButton"
-                MinWidth="140"
-                Padding="8,6"
-                Background="{DynamicResource ControlFillColorDefaultBrush}"
-                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                BorderThickness="1"
-                Cursor="Hand"
-                Focusable="True">
-                <Grid>
-                    <controls:KeyChord x:Name="HistoryHotkeyChord" HorizontalAlignment="Center" />
-                    <TextBlock
-                        x:Name="HistoryHotkeyPrompt"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                        Text="{DynamicResource Loc.HotkeyPressKeys}"
-                        Visibility="Collapsed" />
-                </Grid>
-            </Button>
-        </controls:SettingsCard>
+        <!-- o conteudo de cada cartao (teclas + lapis, ou "Definir atalho") e o "Assumido do
+             Windows" sao montados em codigo: HotkeysPage.BuildCard -->
+        <controls:SettingsCard x:Name="HistoryCard" Title="{DynamicResource Loc.OpenHistoryHotkey}" Description="{DynamicResource Loc.HotkeyHistoryCaption}" Icon="&#xE81C;" />
+        <controls:SettingsCard x:Name="CaptureCard" Title="{DynamicResource Loc.NewCaptureHotkey}" Description="{DynamicResource Loc.HotkeyCaptureCaption}" Icon="&#xE722;" />
+        <controls:SettingsCard x:Name="StopRecCard" Title="{DynamicResource Loc.StopRecordingHotkeyTitle}" Description="{DynamicResource Loc.HotkeyStopCaption}" Icon="&#xE71A;" />
+        <controls:SettingsCard x:Name="TextCard" Title="{DynamicResource Loc.HotkeyCaptureTextTitle}" Description="{DynamicResource Loc.HotkeyTextCaption}" Icon="&#xE8D2;" />
+        <controls:SettingsCard x:Name="RepeatCard" Title="{DynamicResource Loc.HotkeyRepeatRegionTitle}" Description="{DynamicResource Loc.HotkeyRepeatCaption}" Icon="&#xE72C;" />
+        <controls:SettingsCard x:Name="VideoCard" Title="{DynamicResource Loc.HotkeyRecordVideoTitle}" Description="{DynamicResource Loc.HotkeyVideoCaption}" Icon="&#xE714;" />
 
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.NewCaptureHotkey}"
-            Description="{DynamicResource Loc.HotkeyHint}"
-            Icon="&#xE722;">
-            <Button
-                x:Name="CaptureHotkeyButton"
-                MinWidth="140"
-                Padding="8,6"
-                Background="{DynamicResource ControlFillColorDefaultBrush}"
-                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                BorderThickness="1"
-                Cursor="Hand"
-                Focusable="True">
-                <Grid>
-                    <controls:KeyChord x:Name="CaptureHotkeyChord" HorizontalAlignment="Center" />
-                    <TextBlock
-                        x:Name="CaptureHotkeyPrompt"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                        Text="{DynamicResource Loc.HotkeyPressKeys}"
-                        Visibility="Collapsed" />
-                </Grid>
-            </Button>
-        </controls:SettingsCard>
-
-        <!-- este atalho so e registrado DURANTE a gravacao, entao
-             salva-lo nao chama ApplyHotkeys (ver HotkeysPage.xaml.cs). -->
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.StopRecordingHotkeyTitle}"
-            Description="{DynamicResource Loc.HotkeyHint}"
-            Icon="&#xE71A;">
-            <Button
-                x:Name="StopRecHotkeyButton"
-                MinWidth="140"
-                Padding="8,6"
-                Background="{DynamicResource ControlFillColorDefaultBrush}"
-                BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                BorderThickness="1"
-                Cursor="Hand"
-                Focusable="True">
-                <Grid>
-                    <controls:KeyChord x:Name="StopRecHotkeyChord" HorizontalAlignment="Center" />
-                    <TextBlock
-                        x:Name="StopRecHotkeyPrompt"
-                        HorizontalAlignment="Center"
-                        VerticalAlignment="Center"
-                        FontSize="12"
-                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                        Text="{DynamicResource Loc.HotkeyPressKeys}"
-                        Visibility="Collapsed" />
-                </Grid>
-            </Button>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.HotkeyCaptureTextTitle}"
-            Description="{DynamicResource Loc.HotkeyOptionalHint}"
-            Icon="&#xE8D2;">
-            <StackPanel Orientation="Horizontal">
-                <Button
-                    x:Name="TextHotkeyButton"
-                    MinWidth="140"
-                    Padding="8,6"
-                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                    BorderThickness="1"
-                    Cursor="Hand"
-                    Focusable="True">
-                    <Grid>
-                        <controls:KeyChord x:Name="TextHotkeyChord" HorizontalAlignment="Center" />
-                        <TextBlock
-                            x:Name="TextHotkeyNotSet"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyNotSet}" />
-                        <TextBlock
-                            x:Name="TextHotkeyPrompt"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyPressKeys}"
-                            Visibility="Collapsed" />
-                    </Grid>
-                </Button>
-                <Button
-                    x:Name="TextHotkeyClear"
-                    Margin="6,0,0,0"
-                    Padding="8,6"
-                    ToolTip="{DynamicResource Loc.HotkeyClear}"
-                    Visibility="Collapsed">
-                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
-                </Button>
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.HotkeyRepeatRegionTitle}"
-            Description="{DynamicResource Loc.HotkeyOptionalHint}"
-            Icon="&#xE72C;">
-            <StackPanel Orientation="Horizontal">
-                <Button
-                    x:Name="RepeatHotkeyButton"
-                    MinWidth="140"
-                    Padding="8,6"
-                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                    BorderThickness="1"
-                    Cursor="Hand"
-                    Focusable="True">
-                    <Grid>
-                        <controls:KeyChord x:Name="RepeatHotkeyChord" HorizontalAlignment="Center" />
-                        <TextBlock
-                            x:Name="RepeatHotkeyNotSet"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyNotSet}" />
-                        <TextBlock
-                            x:Name="RepeatHotkeyPrompt"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyPressKeys}"
-                            Visibility="Collapsed" />
-                    </Grid>
-                </Button>
-                <Button
-                    x:Name="RepeatHotkeyClear"
-                    Margin="6,0,0,0"
-                    Padding="8,6"
-                    ToolTip="{DynamicResource Loc.HotkeyClear}"
-                    Visibility="Collapsed">
-                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
-                </Button>
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.HotkeyRecordVideoTitle}"
-            Description="{DynamicResource Loc.HotkeyOptionalHint}"
-            Icon="&#xE714;">
-            <StackPanel Orientation="Horizontal">
-                <Button
-                    x:Name="VideoHotkeyButton"
-                    MinWidth="140"
-                    Padding="8,6"
-                    Background="{DynamicResource ControlFillColorDefaultBrush}"
-                    BorderBrush="{DynamicResource ControlElevationBorderBrush}"
-                    BorderThickness="1"
-                    Cursor="Hand"
-                    Focusable="True">
-                    <Grid>
-                        <controls:KeyChord x:Name="VideoHotkeyChord" HorizontalAlignment="Center" />
-                        <TextBlock
-                            x:Name="VideoHotkeyNotSet"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyNotSet}" />
-                        <TextBlock
-                            x:Name="VideoHotkeyPrompt"
-                            HorizontalAlignment="Center"
-                            VerticalAlignment="Center"
-                            FontSize="12"
-                            Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
-                            Text="{DynamicResource Loc.HotkeyPressKeys}"
-                            Visibility="Collapsed" />
-                    </Grid>
-                </Button>
-                <Button
-                    x:Name="VideoHotkeyClear"
-                    Margin="6,0,0,0"
-                    Padding="8,6"
-                    ToolTip="{DynamicResource Loc.HotkeyClear}"
-                    Visibility="Collapsed">
-                    <TextBlock FontFamily="Segoe Fluent Icons" FontSize="14" Text="&#xE711;" />
-                </Button>
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <!-- ============ Atalhos nativos do Windows (registro) ============ -->
-        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionNativeHotkeys}" />
-
-        <!-- a terceira linha (Status) e preenchida em codigo, depois de
-             uma leitura do registro em Task.Run - nunca sincronamente na
-             abertura da pagina. Ate a leitura voltar mostra o placeholder. -->
-        <controls:SettingsCard
-            x:Name="WinVCard"
-            Title="{DynamicResource Loc.CardWinVTitle}"
-            Description="{DynamicResource Loc.CardWinVCaption}"
-            Icon="&#xE77F;">
-            <ui:Button
-                x:Name="TakeWinVButton"
-                Appearance="Primary"
-                Content="{DynamicResource Loc.TakeWinV}" />
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            x:Name="CaptureKeyCard"
-            Title="{DynamicResource Loc.CardCaptureKeyTitle}"
-            Description="{DynamicResource Loc.CardCaptureKeyCaption}"
-            Icon="&#xE765;">
-            <StackPanel>
-                <ui:Button
-                    x:Name="TakePrtScButton"
-                    Margin="0,0,0,6"
-                    Appearance="Primary"
-                    Content="{DynamicResource Loc.UsePrintScreen}" />
-                <ui:Button
-                    x:Name="TakeWinShiftSButton"
-                    Content="{DynamicResource Loc.UseWinShiftS}" />
-            </StackPanel>
-        </controls:SettingsCard>
-
+        <!-- ================= Padroes ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionDefaults}" />
         <controls:SettingsCard
             Title="{DynamicResource Loc.CardRevertTitle}"
             Description="{DynamicResource Loc.CardRevertCaption}"
-            Icon="&#xE7A7;">
+            Icon="&#xE777;">
             <ui:Button x:Name="RevertButton" Content="{DynamicResource Loc.Revert}" />
         </controls:SettingsCard>
 
-        <!-- ============ Atalhos do painel (so referencia) ============ -->
-        <!-- Loc.ShortcutClick/CtrlClick/AltClick/ShiftClick estavam declaradas e sem uso porque a tabela antiga (2 colunas: keycaps | descricao) nao tinha onde por o rotulo. No formato de cartao elas sao exatamente o Title que faltava, com a frase indo para o Description e os keycaps no lugar do controle. -->
-        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionFlyoutShortcuts}" />
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShortcutClick}"
-            Description="{DynamicResource Loc.ShortcutClickDesc}">
-            <Border Style="{StaticResource KeyCap}">
-                <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
-            </Border>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShortcutCtrlClick}"
-            Description="{DynamicResource Loc.ShortcutCtrlClickDesc}">
-            <StackPanel Orientation="Horizontal">
-                <controls:KeyChord Chord="Ctrl" />
-                <TextBlock Style="{StaticResource KeyCapPlus}" />
-                <Border Style="{StaticResource KeyCap}">
-                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
-                </Border>
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShortcutAltClick}"
-            Description="{DynamicResource Loc.ShortcutAltClickDesc}">
-            <StackPanel Orientation="Horizontal">
-                <controls:KeyChord Chord="Alt" />
-                <TextBlock Style="{StaticResource KeyCapPlus}" />
-                <Border Style="{StaticResource KeyCap}">
-                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
-                </Border>
-            </StackPanel>
-        </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.ShortcutShiftClick}"
-            Description="{DynamicResource Loc.ShortcutShiftClickDesc}">
-            <StackPanel Orientation="Horizontal">
-                <controls:KeyChord Chord="Shift" />
-                <TextBlock Style="{StaticResource KeyCapPlus}" />
-                <Border Style="{StaticResource KeyCap}">
-                    <TextBlock Style="{StaticResource KeyCapText}" Text="{DynamicResource Loc.KeyMouse}" />
-                </Border>
-            </StackPanel>
-        </controls:SettingsCard>
-    </StackPanel>
+        <!-- ================= Atalhos do painel (so referencia) ================= -->
+        <controls:SettingsExpander
+            Margin="0,20,0,4"
+            Title="{DynamicResource Loc.SectionFlyoutShortcuts}"
+            Description="{DynamicResource Loc.FlyoutShortcutsCaption}"
+            Icon="&#xE8A1;">
+            <controls:SettingsRow>
+                <controls:SettingsRow.Footer>
+                    <Grid x:Name="PanelShortcutsGrid" Margin="0,-12,0,0">
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="Auto" MinWidth="170" />
+                            <ColumnDefinition Width="*" />
+                        </Grid.ColumnDefinitions>
+                    </Grid>
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
+    </controls:SettingsPanel>
 </Page>

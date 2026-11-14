@@ -128,27 +128,62 @@
                 <ContentControl x:Name="PreviewHost" HorizontalAlignment="Stretch" VerticalAlignment="Stretch" />
                 <!-- overlay preto exibido enquanto o playhead esta num gap (MP4) -->
                 <Border x:Name="GapOverlay" Background="Black" CornerRadius="6" Visibility="Collapsed" />
+                <!-- estado vazio: editor aberto pela bandeja, sem gravacao previa -->
+                <StackPanel x:Name="EmptyStateHint" HorizontalAlignment="Center" VerticalAlignment="Center">
+                    <TextBlock FontSize="13" HorizontalAlignment="Center" TextAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.MediaEmptyHint}" />
+                </StackPanel>
+                <!-- host invisivel (Hidden, nao Collapsed: precisa ficar no layout para o MediaElement realmente abrir) para sondar a duracao de uma trilha nova antes de inseri-la -->
+                <Grid x:Name="ProbeHost" Width="0" Height="0" Visibility="Hidden" />
             </Grid>
         </Border>
 
-        <!-- Painel de audio (so MP4 com audio,) -->
-        <Border x:Name="AudioPanel" Grid.Row="3" Margin="12,0,12,8" Padding="10,6"
-                CornerRadius="6" Visibility="Collapsed"
-                Background="{DynamicResource ControlFillColorDefaultBrush}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Style="{StaticResource Glyph}" Text="&#xE767;" VerticalAlignment="Center" />
-                <TextBlock Margin="8,0,12,0" VerticalAlignment="Center" FontSize="12"
-                           Text="{DynamicResource Loc.MediaAudioTrack}" />
-                <ToggleButton x:Name="MuteToggleButton" Style="{StaticResource MuteToggle}"
-                              ToolTip="{DynamicResource Loc.MediaMuteTooltip}">
-                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE74F;" FontSize="14" />
-                </ToggleButton>
-                <Slider x:Name="VolumeSlider" Width="160" Margin="12,0,8,0" VerticalAlignment="Center"
-                        Minimum="0" Maximum="200" Value="100" SmallChange="5" LargeChange="25" />
-                <TextBlock x:Name="VolumeLabel" Width="44" VerticalAlignment="Center" FontSize="12"
-                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />
-            </StackPanel>
-        </Border>
+        <!-- Painel de audio e trilhas extras -->
+        <StackPanel Grid.Row="3" Margin="12,0,12,8">
+            <Border x:Name="AudioPanel" Padding="10,6" CornerRadius="6" Visibility="Collapsed"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock Style="{StaticResource Glyph}" Text="&#xE767;" VerticalAlignment="Center" />
+                    <TextBlock Margin="8,0,12,0" VerticalAlignment="Center" FontSize="12"
+                               Text="{DynamicResource Loc.MediaAudioTrack}" />
+                    <ToggleButton x:Name="MuteToggleButton" Style="{StaticResource MuteToggle}"
+                                  ToolTip="{DynamicResource Loc.MediaMuteTooltip}">
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE74F;" FontSize="14" />
+                    </ToggleButton>
+                    <Slider x:Name="VolumeSlider" Width="160" Margin="12,0,8,0" VerticalAlignment="Center"
+                            Minimum="0" Maximum="200" Value="100" SmallChange="5" LargeChange="25" />
+                    <TextBlock x:Name="VolumeLabel" Width="44" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />
+                </StackPanel>
+            </Border>
+            <!-- propriedades do CLIPE selecionado (so trilhas extras - a trilha do preview ao vivo usa o AudioPanel acima); substitui a lista fixa de linhas por trilha, que confundia (escala/canto/percentual sem contexto nenhum) -->
+            <Border x:Name="ClipPropertiesPanel" Padding="10,6" Margin="0,6,0,0" CornerRadius="6" Visibility="Collapsed"
+                    Background="{DynamicResource ControlFillColorDefaultBrush}">
+                <StackPanel Orientation="Horizontal">
+                    <TextBlock x:Name="ClipPropertiesLabel" FontSize="12" VerticalAlignment="Center" Width="150"
+                               TextTrimming="CharacterEllipsis" />
+                    <TextBlock Margin="12,0,6,0" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.MediaClipVolume}" />
+                    <Slider x:Name="ClipVolumeSlider" Width="100" Margin="0,0,6,0" VerticalAlignment="Center"
+                            Minimum="0" Maximum="100" Value="100" SmallChange="5" LargeChange="25" />
+                    <TextBlock x:Name="ClipVolumeLabel" Width="36" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />
+                    <TextBlock Margin="12,0,6,0" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               Text="{DynamicResource Loc.MediaClipOpacity}" />
+                    <Slider x:Name="ClipOpacitySlider" Width="100" Margin="0,0,6,0" VerticalAlignment="Center"
+                            Minimum="0" Maximum="100" Value="100" SmallChange="5" LargeChange="25" />
+                    <TextBlock x:Name="ClipOpacityLabel" Width="36" VerticalAlignment="Center" FontSize="12"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" Text="100%" />
+                    <Button x:Name="ClipRemoveTrackButton" Style="{StaticResource ActionButton}" Margin="12,0,0,0"
+                            ToolTip="{DynamicResource Loc.MediaRemoveTrack}">
+                        <TextBlock Style="{StaticResource Glyph}" Text="&#xE74D;" />
+                    </Button>
+                </StackPanel>
+            </Border>
+        </StackPanel>
 
         <!-- Barra de transporte: play/step/tempo + corte/exclusao, junto da timeline (pedido do dono) -->
         <Grid Grid.Row="4" Margin="12,0,12,2">

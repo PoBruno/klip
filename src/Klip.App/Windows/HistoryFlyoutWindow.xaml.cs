@@ -9,6 +9,8 @@ using Klip.Interop;
 using Klip.Interop.Input;
 using Wpf.Ui.Appearance;
 
+using Klip.App.Services;
+
 namespace Klip.App.Windows;
 
 /// <summary>
@@ -48,7 +50,7 @@ public partial class HistoryFlyoutWindow
         Resources["BoolToVisibility"] = new BooleanToVisibilityConverter();
         Resources["InverseBoolToVisibility"] = new InverseBooleanToVisibilityConverter();
         InitializeComponent();
-        SystemThemeWatcher.Watch(this);
+        ThemeManager.Watch(this);
 
         ItemsList.SetBinding(ItemsControl.ItemsSourceProperty,
             new Binding(nameof(HistoryFlyoutViewModel.Items)));
@@ -56,12 +58,16 @@ public partial class HistoryFlyoutWindow
 
         WireTabs();
         BuildDateFilterMenu();
-        BuildMultiSelectMenu();
         WireFeatures();
 
         viewModel.CloseRequested += HideFlyout;
         viewModel.GroupingChanged += SyncTabState;
         viewModel.ListReloaded += OnListReloaded;
+        viewModel.PickChanged += () =>
+        {
+            UpdateSwallowMasks();
+            RefreshShortcutBadges();
+        };
         ItemsList.PreviewMouseLeftButtonUp += OnListClick;
 
         // os hooks vivem no host, numa thread dedicada com message
@@ -76,8 +82,6 @@ public partial class HistoryFlyoutWindow
         {
             DateFilterMenu.Items.Clear();
             BuildDateFilterMenu();
-            MultiSelectMenu.Items.Clear();
-            RebuildMultiSelectItems();
         };
 
         // a page appended by the scroll can't leave the list with nothing selected
@@ -175,16 +179,16 @@ public partial class HistoryFlyoutWindow
         // and the paste flow restores its focus afterwards.
         if (msg == NativeMethods.WM_MOUSEACTIVATE)
         {
-            // a plain left click on a card (or an emoji) pastes right away, so don't take
-            // the foreground for it. Stealing it makes the target app restore focus to
-            // its field before our Ctrl+V lands, and apps like TeamViewer or a browser
-            // login form are often not ready in time, so the paste just vanishes.
-            // The keyboard keeps coming through the hook.
+            // a left click on a card (or an emoji) pastes right away, or picks it with
+            // Shift/Ctrl, so don't take the foreground for it. Stealing it makes the target
+            // app restore focus to its field before our Ctrl+V lands, and apps like
+            // TeamViewer or a browser login form are often not ready in time, so the paste
+            // just vanishes. A pick also needs the target to keep its caret for the user's
+            // own Ctrl+V. The keyboard keeps coming through the hook.
             const int WM_LBUTTONDOWN = 0x0201;
             var mouseMessage = (int)((lParam >> 16) & 0xFFFF);
             if (mouseMessage == WM_LBUTTONDOWN
                 && !System.Threading.Volatile.Read(ref _hasFocus)
-                && Keyboard.Modifiers == ModifierKeys.None
                 && IsPasteClickTarget())
             {
                 handled = true;
@@ -478,33 +482,6 @@ public partial class HistoryFlyoutWindow
 
     private bool _dateButtonWired;
 
-    /// <summary>1 to 5 menu on the multi-select button.</summary>
-    private void BuildMultiSelectMenu()
-    {
-        RebuildMultiSelectItems();
-        MultiSelectButton.Click += (_, _) =>
-        {
-            MultiSelectMenu.PlacementTarget = MultiSelectButton;
-            MultiSelectMenu.IsOpen = true;
-        };
-    }
-
-    private void RebuildMultiSelectItems()
-    {
-        for (var i = 1; i <= 5; i++)
-        {
-            var count = i;
-            var item = new MenuItem
-            {
-                Header = count == 1
-                    ? Localization.Loc.MultiPasteItem
-                    : string.Format(Localization.Loc.MultiPasteItems, count),
-            };
-            item.Click += (_, _) => _viewModel.StartMultiSelectCommand.Execute(count);
-            MultiSelectMenu.Items.Add(item);
-        }
-    }
-
     // ----- Tab state -----
 
     private void SyncTabState()
@@ -523,6 +500,8 @@ public partial class HistoryFlyoutWindow
     /// </summary>
     public void ShowFlyout()
     {
+        var sw = Services.StartupLog.VerboseEnabled ? System.Diagnostics.Stopwatch.StartNew() : null;
+
         // if the idle warm-up didn't get to run yet (user hit Win+V right after
         // launch), pay it now so the very first open still comes up prepared
         // instead of flashing an empty dark window
@@ -538,19 +517,20 @@ public partial class HistoryFlyoutWindow
         var onSnippets = _viewModel.SelectedTab == HistoryTab.Snippets;
         if (onSnippets && _viewModel.SnippetsStale)
             _ = _viewModel.ReloadSnippetsAsync();
-        if (!onEmoji && !onSnippets && _viewModel.IsStale)
+
+        // Used to call LoadFirstPage() right here, synchronously: fine when the sqlite
+        // page cache is warm (~1 ms), but after the app sits untouched for a while the
+        // os can have let that cache go cold, and the same query turns into real disk
+        // io on the UI thread a frame before the panel even appears - that is the
+        // "freeze if I don't touch it for a bit" people kept seeing after the memory
+        // settle fix. Whatever is already on screen (even stale) shows immediately;
+        // the reload runs off-thread and swaps the list in when it lands.
+        var reloading = !onEmoji && !onSnippets && _viewModel.IsStale;
+        if (reloading)
         {
             var anchor = remember ? _hiddenAnchor : null;
             _suppressReloadReset = remember;
-            try
-            {
-                _viewModel.LoadFirstPage();
-            }
-            finally
-            {
-                _suppressReloadReset = false;
-            }
-            _pendingAnchor = anchor;
+            _ = ReloadThenRestore(anchor, remember);
         }
         UpdatePanels();
         SyncTabButtons(); // keep the tab strip in sync with the active tab
@@ -573,25 +553,19 @@ public partial class HistoryFlyoutWindow
 
         System.Threading.Volatile.Write(ref _hasFocus, false); // opens no-activate; a click will set this
         Show();
+        if (sw is not null)
+            Services.StartupLog.WriteVerbose($"Flyout: visivel em {sw.ElapsedMilliseconds} ms");
 
-        // the layout of a rebuilt list only settles after Show; finish the job once it has
+        // the layout of whatever is on screen right now only settles after Show; a
+        // stale reload (if any) redoes this same settling itself once it lands
         Dispatcher.BeginInvoke(System.Windows.Threading.DispatcherPriority.Loaded, () =>
         {
             if (!IsVisible)
                 return;
-            if (_pendingAnchor is { } a)
-            {
-                _pendingAnchor = null;
-                RestoreScrollAnchor(a);
-            }
-            else if (!remember)
-            {
+            if (!remember)
                 ResetListToTop();
-            }
             else
-            {
                 SelectFirstVisibleIfSelectionOffscreen();
-            }
         });
 
         // the hooks go in AFTER Show() on purpose: Acquire waits for the pump to confirm
@@ -607,10 +581,36 @@ public partial class HistoryFlyoutWindow
         Diagnostics.StartupLogHookTrace.Trace("flyout aberto");
     }
 
+    /// <summary>
+    /// Runs the reload the panel skipped at Show() time and settles the scroll position
+    /// once it lands. The generic Loaded-priority block right after Show() already ran
+    /// against whatever was on screen before this finishes; this redoes the same
+    /// settling against the fresh list, which is what actually matters.
+    /// </summary>
+    private async Task ReloadThenRestore(ScrollAnchor? anchor, bool remember)
+    {
+        try
+        {
+            await _viewModel.ReloadAsync();
+        }
+        finally
+        {
+            _suppressReloadReset = false;
+        }
+
+        if (!IsVisible)
+            return;
+        if (anchor is { } a)
+            RestoreScrollAnchor(a);
+        else if (!remember)
+            ResetListToTop();
+        else
+            SelectFirstVisibleIfSelectionOffscreen();
+    }
+
     // ----- Scroll position -----
 
     private ScrollViewer? _listScroll;
-    private ScrollAnchor? _pendingAnchor;
 
     // taken right before hiding: a hidden window has no visible containers to measure
     private ScrollAnchor? _hiddenAnchor;
@@ -848,17 +848,14 @@ public partial class HistoryFlyoutWindow
         // aqui os dois precisam voltar a "nao" - se aparecer "sim", o escopo vazou
         Diagnostics.StartupLogHookTrace.Trace("flyout fechado");
 
-        // if we're still in multi-select here, the flyout is closing with a
-        // pending selection (click outside, alt-tab, etc). that arms the queue,
-        // same as pressing Enter. only Esc cancels (it clears the mode first).
-        if (_viewModel.IsMultiSelectMode)
-            _viewModel.ConfirmMultiSelectCommand.Execute(null);
+        // closing with a pick (click outside, alt-tab, the user's own Ctrl+V) keeps the
+        // clipboard ready for it. only Esc cancels, and it clears the pick first.
+        _viewModel.CommitPick();
 
         // transient views do not survive a hide: preview, snippet editor, badges, picked cards
         ShowShortcutBadges(false);
         _viewModel.ClosePreview();
         _viewModel.CancelSnippetEditCommand.Execute(null);
-        _viewModel.ClearChecks();
 
         // if we grabbed focus (search box click), hand it back to the app the
         // user came from, so their caret returns where it was. skip this when a
@@ -902,6 +899,28 @@ public partial class HistoryFlyoutWindow
         // only pays off once; a second call (idle timer after a manual open) is a no-op
         if (_warmedUp)
             return;
+        PayWarmUpCost();
+        _warmedUp = true;
+    }
+
+    /// <summary>
+    /// Pays the same cost as <see cref="WarmUp"/> again after a sleep or modern standby
+    /// cycle: the startup warm-up only runs once, and a long freeze of the whole process
+    /// can leave those pages cold. Skipped while the panel is actually open: there is
+    /// nothing to warm, and showing it again would steal the view from whatever is on
+    /// screen.
+    /// </summary>
+    public void Rewarm()
+    {
+        if (!_warmedUp || IsVisible)
+            return;
+        // after a sleep the disk and the sqlite cache are cold: the query must not
+        // block the ui thread here, it is the moment the user is coming back
+        PayWarmUpCost(syncQuery: false);
+    }
+
+    private void PayWarmUpCost(bool syncQuery = true)
+    {
         try
         {
             _warmingUp = true;
@@ -915,7 +934,10 @@ public partial class HistoryFlyoutWindow
             Show();
             // warm the sqlite side too: first query pays connection + plan + page
             // cache, so we take that hit here instead of on the first real Win+V
-            _viewModel.LoadFirstPage();
+            if (syncQuery)
+                _viewModel.LoadFirstPage();
+            else
+                _ = _viewModel.ReloadAsync();
             UpdateLayout();
             Hide();
         }
@@ -926,7 +948,6 @@ public partial class HistoryFlyoutWindow
         finally
         {
             _warmingUp = false;
-            _warmedUp = true;
         }
     }
 
@@ -963,6 +984,7 @@ public partial class HistoryFlyoutWindow
     private const int VK_SPACE = 0x20;
     private const int VK_PRIOR = 0x21;
     private const int VK_NEXT = 0x22;
+    private const int VK_V = 0x56;
     // Ctrl and Alt themselves (left/right): they only drive the number badges
     private const int VK_LCONTROL = 0xA2;
     private const int VK_RMENU = 0xA5;
@@ -971,6 +993,8 @@ public partial class HistoryFlyoutWindow
     // UpdateSwallowMasks nao aloque nada a cada troca de estado.
     private static readonly int[] SwallowAlways = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN, VK_DELETE, VK_SPACE];
     private static readonly int[] SwallowWithCtrl = [VK_TAB, VK_P, VK_D, VK_E, VK_F, .. DigitKeys];
+    // a join with images or files can't sit on the clipboard: the panel pastes it itself
+    private static readonly int[] SwallowWithCtrlCatchV = [.. SwallowWithCtrl, VK_V];
     private static readonly int[] SwallowWithAlt = [.. DigitKeys];
     private static readonly int[] SwallowAlwaysOnEmoji = [VK_ESCAPE, VK_UP, VK_DOWN];
     private static readonly int[] SwallowOnSnippets = [VK_ESCAPE, VK_RETURN, VK_UP, VK_DOWN];
@@ -983,7 +1007,7 @@ public partial class HistoryFlyoutWindow
 
     /// <summary>Superconjunto das mascaras: teclas que <see cref="ExecuteHookedKey"/> trata em algum estado.</summary>
     private static bool IsHookedKey(int vk) => vk is VK_ESCAPE or VK_RETURN or VK_UP or VK_DOWN
-        or VK_DELETE or VK_TAB or VK_P or VK_D or VK_E or VK_F or VK_SPACE or VK_PRIOR or VK_NEXT
+        or VK_DELETE or VK_TAB or VK_P or VK_D or VK_E or VK_F or VK_SPACE or VK_PRIOR or VK_NEXT or VK_V
         || vk is >= VK_LCONTROL and <= VK_RMENU
         || PreviewFormat.ShortcutNumber(vk) > 0;
 
@@ -1018,6 +1042,16 @@ public partial class HistoryFlyoutWindow
             case NativeMethods.WM_LBUTTONDOWN:
             case NativeMethods.WM_RBUTTONDOWN:
             case NativeMethods.WM_MBUTTONDOWN:
+                // modifiers as they are at the click itself. the UI thread may handle the
+                // mouse-down later (a list reload), when a quick Shift is already up
+                if (ev.Message == NativeMethods.WM_LBUTTONDOWN)
+                {
+                    var mods = (NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL) ? 1 : 0)
+                        | (NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT) ? 2 : 0)
+                        | (NativeMethods.IsKeyDown(NativeMethods.VK_MENU) ? 4 : 0);
+                    System.Threading.Volatile.Write(ref _hookClickMods, mods);
+                    System.Threading.Volatile.Write(ref _hookClickTick, Environment.TickCount64);
+                }
                 // ponto de tela em pixels fisicos, como o MSLLHOOKSTRUCT entrega
                 int x = ev.A;
                 int y = ev.B;
@@ -1075,7 +1109,7 @@ public partial class HistoryFlyoutWindow
         else
         {
             HookPolicy.SetSwallowKeys(SwallowAlways);
-            HookPolicy.SetSwallowKeysWithCtrl(SwallowWithCtrl);
+            HookPolicy.SetSwallowKeysWithCtrl(_viewModel.PickCatchesCtrlV ? SwallowWithCtrlCatchV : SwallowWithCtrl);
             HookPolicy.SetSwallowKeysWithAlt(SwallowWithAlt);
         }
 
@@ -1151,7 +1185,17 @@ public partial class HistoryFlyoutWindow
             // Alt+Enter types the item as keystrokes. Alt is still down and the Enter never
             // reaches the app: tap a dummy key so it does not read a lone Alt as "open the
             // menu bar" (or run its own Alt+Enter, like Properties in Explorer)
-            case VK_RETURN when alt && !ctrl && !shift && !onSnippets && !_viewModel.IsMultiSelectMode:
+            // Ctrl+V with a pick: a text join or a sequence already went through to the app
+            // (the clipboard was ready), so the panel just closes. a join with images was
+            // caught by the hook and gets pasted here, step by step
+            case VK_V when ctrl && _viewModel.HasPick && !onSnippets:
+                if (_viewModel.PickCatchesCtrlV)
+                    _viewModel.PastePickNow();
+                else
+                    HideFlyout(restoreFocus: false);
+                return;
+
+            case VK_RETURN when alt && !ctrl && !shift && !onSnippets && !_viewModel.HasPick:
                 NativeMethods.SendMaskKey();
                 _viewModel.TypeTextCommand.Execute(ItemsList.SelectedItem);
                 return;
@@ -1271,11 +1315,16 @@ public partial class HistoryFlyoutWindow
                 HandleEscape();
                 e.Handled = true;
                 return;
-            case Key.Enter when !_viewModel.IsMultiSelectMode && mods == ModifierKeys.Control && !onSnippets:
+            // with the panel focused (search box) the target app never sees this Ctrl+V
+            case Key.V when mods == ModifierKeys.Control && _viewModel.HasPick && !onSnippets:
+                _viewModel.PastePickNow();
+                e.Handled = true;
+                return;
+            case Key.Enter when !_viewModel.HasPick && mods == ModifierKeys.Control && !onSnippets:
                 _viewModel.CopyOnlyCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
-            case Key.Enter when !_viewModel.IsMultiSelectMode && mods == ModifierKeys.Alt && !onSnippets:
+            case Key.Enter when !_viewModel.HasPick && mods == ModifierKeys.Alt && !onSnippets:
                 _viewModel.TypeTextCommand.Execute(ItemsList.SelectedItem);
                 e.Handled = true;
                 return;
@@ -1335,13 +1384,11 @@ public partial class HistoryFlyoutWindow
         base.OnPreviewKeyUp(e);
     }
 
-    // Esc peels one layer at a time: picked cards, multi-select, search, then the flyout
+    // Esc peels one layer at a time: the pick, search, then the flyout
     private void HandleEscape()
     {
-        if (_viewModel.HasChecks)
-            _viewModel.ClearChecks();
-        else if (_viewModel.IsMultiSelectMode)
-            _viewModel.CancelMultiSelectCommand.Execute(null);
+        if (_viewModel.HasPick)
+            _viewModel.ClearPick();
         else if (SearchBox.Text.Length > 0)
             SearchBox.Text = "";
         else
@@ -1356,8 +1403,9 @@ public partial class HistoryFlyoutWindow
             return;
         }
         var selected = ItemsList.SelectedItem as HistoryItemViewModel;
-        if (_viewModel.IsMultiSelectMode)
-            _viewModel.ConfirmMultiSelectCommand.Execute(null); // arm the built series
+        // with a pick, Enter pastes it whatever modifier is still held from the clicks
+        if (_viewModel.HasPick)
+            _viewModel.PastePickNow();
         else if (ctrl)
             _viewModel.CopyOnlyCommand.Execute(selected);
         else if (shift)
@@ -1366,15 +1414,15 @@ public partial class HistoryFlyoutWindow
             _viewModel.ChooseCurrent(selected);
     }
 
-    // Shift+arrow also picks the cards it walks over, for "paste together"
+    // Shift+arrow joins the cards it walks over, like Shift+click
     private void HandleArrow(int delta, bool shift)
     {
         if (shift && _viewModel.SelectedTab != HistoryTab.Snippets && ItemsList.SelectedItem is HistoryItemViewModel current)
         {
-            _viewModel.SetCheck(current, true);
+            _viewModel.IncludeInJoin(current);
             MoveSelection(delta);
             if (ItemsList.SelectedItem is HistoryItemViewModel next)
-                _viewModel.SetCheck(next, true);
+                _viewModel.IncludeInJoin(next);
             return;
         }
         MoveSelection(delta);
@@ -1433,6 +1481,16 @@ public partial class HistoryFlyoutWindow
 
     // ----- Mouse -----
 
+    // modifiers held when the mouse went down on a card
+    private bool _clickCtrl;
+    private bool _clickShift;
+    private bool _clickAlt;
+
+    // same, read by the mouse hook worker at the real moment of the click (bit 1 Ctrl,
+    // 2 Shift, 4 Alt) and when it was read
+    private int _hookClickMods;
+    private long _hookClickTick;
+
     private void OnListClick(object sender, MouseButtonEventArgs e)
     {
         // the mouse-up that ends a drag is not a click
@@ -1448,33 +1506,42 @@ public partial class HistoryFlyoutWindow
             IsInsideButton(source))
             return;
 
-        var mods = Keyboard.Modifiers;
+        // the panel opens without focus, so WPF's Keyboard.Modifiers is not reliable
+        // here: the real key state was read at the press (OnListMouseDown), either key
+        // still down now counts too
+        var ctrl = _clickCtrl || NativeMethods.IsKeyDown(NativeMethods.VK_CONTROL);
+        var shift = _clickShift || NativeMethods.IsKeyDown(NativeMethods.VK_SHIFT);
+        var alt = _clickAlt || NativeMethods.IsKeyDown(NativeMethods.VK_MENU);
+        _clickCtrl = _clickShift = _clickAlt = false;
 
         // Alt+click on an image jumps straight into the editor
-        if (mods == ModifierKeys.Alt && item.IsImage)
+        if (alt && !ctrl && !shift && item.IsImage)
         {
             _viewModel.OpenInEditorCommand.Execute(item);
             return;
         }
 
-        // Shift+click builds the sequential paste queue: the first one arms
-        // multi-select on its own, and each click adds in the order clicked
-        if (mods == ModifierKeys.Shift)
+        // Shift+click: paste together. Ctrl+click: paste in sequence. The other gesture
+        // converts the whole pick, so the two never mix.
+        if (shift && !ctrl && !alt)
         {
-            if (!_viewModel.IsMultiSelectMode)
-                _viewModel.StartMultiSelectCommand.Execute(5);
-            _viewModel.PasteCommand.Execute(item); // routes to queue while in multi-select
+            _viewModel.Pick(item, PickMode.Join);
+            return;
+        }
+        if (ctrl && !shift && !alt)
+        {
+            _viewModel.Pick(item, PickMode.Sequence);
             return;
         }
 
-        // Ctrl+click picks the card for "paste together" (Ctrl+Enter still copies)
-        if (mods == ModifierKeys.Control && !_viewModel.IsMultiSelectMode)
+        // a plain click with a pick going adds to it instead of pasting one card
+        if (_viewModel.HasPick)
         {
-            _viewModel.ToggleCheck(item);
+            _viewModel.PickInCurrentMode(item);
             return;
         }
 
-        // plain click pastes or copies (setting), or queues if multi-select is active
+        // plain click pastes or copies (setting)
         _viewModel.ChooseCommand.Execute(item);
     }
 

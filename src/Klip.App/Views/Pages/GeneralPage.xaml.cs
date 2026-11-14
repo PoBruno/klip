@@ -57,8 +57,6 @@ public partial class GeneralPage : ISettingsPage
         AutostartToggle.Click += OnAutostartClick;
         LanguageCombo.SelectionChanged += OnLanguageSelectionChanged;
         ThemeCombo.SelectionChanged += OnThemeSelectionChanged;
-        ShowEmojiTabToggle.Click += OnShowEmojiTabClick;
-        ShowSnippetsTabToggle.Click += OnShowSnippetsTabClick;
 
         RefreshState();
     }
@@ -80,8 +78,6 @@ public partial class GeneralPage : ISettingsPage
             AutostartToggle.IsChecked = s.StartWithWindows;
 
             // MainWindow.xaml.cs:425
-            ShowEmojiTabToggle.IsChecked = s.ShowEmojiTab;
-            ShowSnippetsTabToggle.IsChecked = s.ShowSnippetsTab;
 
             // MainWindow.xaml.cs:463-478: o original re-rotulava e selecionava o tema
             // por indice literal (Items[0], Items[1], Items[2]). Aqui os dois combos
@@ -148,24 +144,6 @@ public partial class GeneralPage : ISettingsPage
 
         _settings.Update(s => s.Theme = theme);
         ThemeManager.Apply(theme);
-    }
-
-    /// <summary>MainWindow.xaml.cs:208. Vale na proxima abertura do painel.</summary>
-    private void OnShowEmojiTabClick(object sender, RoutedEventArgs e)
-    {
-        if (_loading)
-            return;
-
-        _settings.Update(s => s.ShowEmojiTab = ShowEmojiTabToggle.IsChecked == true);
-    }
-
-    /// <summary>Same as the emoji tab: the flyout reacts to the change right away.</summary>
-    private void OnShowSnippetsTabClick(object sender, RoutedEventArgs e)
-    {
-        if (_loading)
-            return;
-
-        _settings.Update(s => s.ShowSnippetsTab = ShowSnippetsTabToggle.IsChecked == true);
     }
 
     // ----- Itens dos combos -----

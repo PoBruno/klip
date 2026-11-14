@@ -63,7 +63,7 @@ public static partial class Loc
     // folded into the main tables here, after every static field is initialized
     static Loc()
     {
-        foreach (var (pt, en) in new[] { (PtHistory, EnHistory), (PtFlyout, EnFlyout), (PtCapture, EnCapture), (PtRecording, EnRecording), (PtClipboard, EnClipboard), (PtSystem, EnSystem) })
+        foreach (var (pt, en) in new[] { (PtHistory, EnHistory), (PtFlyout, EnFlyout), (PtCapture, EnCapture), (PtRecording, EnRecording), (PtClipboard, EnClipboard), (PtSystem, EnSystem), (PtSettings, EnSettings) })
         {
             foreach (var kv in pt) Pt[kv.Key] = kv.Value;
             foreach (var kv in en) En[kv.Key] = kv.Value;
@@ -102,6 +102,7 @@ public static partial class Loc
     // ----- Tray -----
     public static string TrayOpenHistory => Get(nameof(TrayOpenHistory));
     public static string TrayCapture => Get(nameof(TrayCapture));
+    public static string TrayMediaEditor => Get(nameof(TrayMediaEditor));
     public static string TraySettings => Get(nameof(TraySettings));
     public static string TrayExit => Get(nameof(TrayExit));
     public static string TrayPauseHistory => Get(nameof(TrayPauseHistory));
@@ -112,6 +113,7 @@ public static partial class Loc
     public static string NotifyCaptureCopied => Get(nameof(NotifyCaptureCopied));
     public static string NotifyClickToEdit => Get(nameof(NotifyClickToEdit));
     public static string NotifyHotkeyConflict => Get(nameof(NotifyHotkeyConflict));
+    public static string NotifyTakeoverLost => Get(nameof(NotifyTakeoverLost));
     public static string NotifyMemoryLimit => Get(nameof(NotifyMemoryLimit));
     public static string NotifyFramesDiscarded => Get(nameof(NotifyFramesDiscarded));
     public static string PasteFailedToast => Get(nameof(PasteFailedToast));
@@ -152,11 +154,6 @@ public static partial class Loc
     public static string MenuDelete => Get(nameof(MenuDelete));
     public static string GroupPinned => Get(nameof(GroupPinned));
     public static string GroupRecent => Get(nameof(GroupRecent));
-    public static string MultiPasteTooltip => Get(nameof(MultiPasteTooltip));
-    public static string MultiPasteOrder => Get(nameof(MultiPasteOrder));
-    public static string MultiPasteConfirm => Get(nameof(MultiPasteConfirm));
-    public static string MultiPasteItem => Get(nameof(MultiPasteItem));
-    public static string MultiPasteItems => Get(nameof(MultiPasteItems));
     public static string ItemImage => Get(nameof(ItemImage));
     public static string TimeNow => Get(nameof(TimeNow));
     public static string TimeYesterday => Get(nameof(TimeYesterday));
@@ -254,6 +251,7 @@ public static partial class Loc
     public static string ToolUndo => Get(nameof(ToolUndo));
     public static string ToolRedo => Get(nameof(ToolRedo));
     public static string ToolAutoCopy => Get(nameof(ToolAutoCopy));
+    public static string ToolCopyNow => Get(nameof(ToolCopyNow));
     public static string ToolSaveAs => Get(nameof(ToolSaveAs));
     public static string Thickness => Get(nameof(Thickness));
     public static string Zoom => Get(nameof(Zoom));
@@ -440,6 +438,11 @@ public static partial class Loc
     public static string MediaFpsOriginal => Get(nameof(MediaFpsOriginal));
     public static string MediaAudioTrack => Get(nameof(MediaAudioTrack));
     public static string MediaMuteTooltip => Get(nameof(MediaMuteTooltip));
+    public static string MediaEmptyHint => Get(nameof(MediaEmptyHint));
+    public static string MediaRemoveTrack => Get(nameof(MediaRemoveTrack));
+    public static string MediaDuplicateSegment => Get(nameof(MediaDuplicateSegment));
+    public static string MediaClipVolume => Get(nameof(MediaClipVolume));
+    public static string MediaClipOpacity => Get(nameof(MediaClipOpacity));
     public static string MediaExporting => Get(nameof(MediaExporting));
     public static string MediaExportDone => Get(nameof(MediaExportDone));
     public static string MediaExportFailed => Get(nameof(MediaExportFailed));
@@ -463,6 +466,7 @@ public static partial class Loc
     {
         [nameof(TrayOpenHistory)] = "Abrir histórico",
         [nameof(TrayCapture)] = "Capturar tela",
+        [nameof(TrayMediaEditor)] = "Editor de vídeo",
         [nameof(TraySettings)] = "Configurações",
         [nameof(TrayExit)] = "Sair",
         [nameof(TrayPauseHistory)] = "Pausar histórico de clipboard",
@@ -472,6 +476,7 @@ public static partial class Loc
         [nameof(NotifyCaptureCopied)] = "Captura copiada ({0}x{1})",
         [nameof(NotifyClickToEdit)] = "Clique para editar",
         [nameof(NotifyHotkeyConflict)] = "O atalho {0} já está em uso por outro aplicativo",
+        [nameof(NotifyTakeoverLost)] = "{0} voltou a abrir a ferramenta do Windows. Clique para retomar nas configurações de atalhos",
         [nameof(NotifyMemoryLimit)] = "Limite de memória atingido. A captura foi concluída automaticamente",
         [nameof(NotifyFramesDiscarded)] = "Alguns trechos foram descartados. Role mais devagar na próxima",
         [nameof(PasteFailedToast)] = "Item copiado. Cole com Ctrl+V (não foi possível colar automaticamente).",
@@ -511,11 +516,6 @@ public static partial class Loc
         [nameof(MenuDelete)] = "Excluir",
         [nameof(GroupPinned)] = "Fixados",
         [nameof(GroupRecent)] = "Recentes",
-        [nameof(MultiPasteTooltip)] = "Colar vários em sequência",
-        [nameof(MultiPasteOrder)] = "Selecione a ordem de colagem",
-        [nameof(MultiPasteConfirm)] = "Selecionar",
-        [nameof(MultiPasteItem)] = "1 item",
-        [nameof(MultiPasteItems)] = "{0} itens",
         [nameof(ItemImage)] = "Imagem",
         [nameof(TimeNow)] = "agora",
         [nameof(TimeYesterday)] = "ontem",
@@ -607,6 +607,7 @@ public static partial class Loc
         [nameof(ToolUndo)] = "Desfazer (Ctrl+Z)",
         [nameof(ToolRedo)] = "Refazer (Ctrl+Y)",
         [nameof(ToolAutoCopy)] = "Copiar automaticamente a cada edição",
+        [nameof(ToolCopyNow)] = "Copiar agora",
         [nameof(ToolSaveAs)] = "Salvar como... (Ctrl+S)",
         [nameof(Thickness)] = "Espessura",
         [nameof(Zoom)] = "Zoom",
@@ -633,15 +634,15 @@ public static partial class Loc
         [nameof(CardCaptureKeyCaption)] = "Print Screen (recomendado): libera a tecla PrtSc do Snipping Tool nativo, sem efeitos colaterais. Win+Shift+S: também desativa o Win+S (Pesquisa do Windows), limitação do Windows.",
         [nameof(UsePrintScreen)] = "Usar Print Screen",
         [nameof(UseWinShiftS)] = "Usar Win+Shift+S",
-        [nameof(CardRevertTitle)] = "Reverter tudo",
-        [nameof(CardRevertCaption)] = "Restaura os atalhos nativos do Windows exatamente como estavam (backup automático) e volta o Klip para Ctrl+Shift+V / Ctrl+Shift+S.",
-        [nameof(Revert)] = "Reverter",
+        [nameof(CardRevertTitle)] = "Restaurar atalhos padrão",
+        [nameof(CardRevertCaption)] = "Volta para Ctrl+Shift+V e Ctrl+Shift+S e devolve ao Windows as teclas que o Klip assumiu.",
+        [nameof(Revert)] = "Restaurar",
         [nameof(SectionAppHotkeys)] = "Atalhos do Klip",
-        [nameof(OpenHistoryHotkey)] = "Abrir histórico",
-        [nameof(NewCaptureHotkey)] = "Nova captura",
+        [nameof(OpenHistoryHotkey)] = "Abrir o histórico",
+        [nameof(NewCaptureHotkey)] = "Capturar a tela",
         [nameof(HotkeyHint)] = "Clique nas teclas e pressione a nova combinação",
         [nameof(HotkeyPressKeys)] = "pressione as teclas",
-        [nameof(SectionFlyoutShortcuts)] = "Atalhos do painel (Win+V)",
+        [nameof(SectionFlyoutShortcuts)] = "Dentro do painel do histórico",
         [nameof(KeyMouse)] = "clique",
         [nameof(ShortcutClick)] = "Clique",
         [nameof(ShortcutClickDesc)] = "Cola o item no app de onde você veio.",
@@ -665,17 +666,17 @@ public static partial class Loc
         [nameof(ExcludedAppsCaption)] = "Nada copiado a partir destes aplicativos é salvo no histórico. Informe o nome do processo (ex.: keepass.exe).",
         [nameof(AddApp)] = "Adicionar",
         [nameof(RemoveApp)] = "Remover",
-        [nameof(SectionClipboard)] = "Histórico",
+        [nameof(SectionClipboard)] = "Área de transferência",
         [nameof(MaxItemsTitle)] = "Máximo de itens",
         [nameof(MaxItemsCaption)] = "Fixados e favoritos nunca são removidos. 0 = ilimitado.",
-        [nameof(MaxAgeTitle)] = "Apagar apos (dias)",
-        [nameof(MaxAgeCaption)] = "Remove itens mais velhos que isso. 0 = sem limite. Fixados e favoritos ficam.",
+        [nameof(MaxAgeTitle)] = "Apagar itens com mais de",
+        [nameof(MaxAgeCaption)] = "0 = nunca apagar por idade.",
         [nameof(ScreenshotFolderTitle)] = "Pasta das capturas",
         [nameof(ScreenshotFolderCaption)] = "Onde as capturas salvam quando o auto-salvar esta ligado.",
         [nameof(ChooseFolder)] = "Escolher",
         [nameof(SectionCapture)] = "Captura de tela",
         [nameof(AutoSaveTitle)] = "Salvar capturas automaticamente",
-        [nameof(AutoSaveCaption)] = "Pasta Imagens\\Screenshots, padrão do Windows",
+        [nameof(AutoSaveCaption)] = "Além de copiar, grava um PNG em uma pasta.",
         [nameof(CadenceTitle)] = "Cadência da captura com rolagem",
         [nameof(CadenceCaption)] = "Intervalo entre quadros enquanto você rola (padrão 150 ms; aumente se a máquina engasgar)",
         [nameof(EditorModifierTitle)] = "Tecla para abrir no editor",
@@ -699,7 +700,7 @@ public static partial class Loc
         [nameof(BackupCaption)] = "Exporte todo o histórico (itens e imagens) para um arquivo, ou importe de volta em outra máquina.",
         [nameof(ExportHistory)] = "Exportar",
         [nameof(ImportHistory)] = "Importar",
-        [nameof(CompactDb)] = "Compactar banco",
+        [nameof(CompactDb)] = "Liberar espaço",
         [nameof(OpenDataFolder)] = "Abrir pasta de dados",
         [nameof(DiagnosticsCaption)] = "Estado do sistema: atalhos registrados, chaves de registro e tamanho do banco.",
         [nameof(RunDiagnostics)] = "Verificar estado do sistema",
@@ -785,6 +786,11 @@ public static partial class Loc
         [nameof(MediaFpsOriginal)] = "Original",
         [nameof(MediaAudioTrack)] = "Áudio",
         [nameof(MediaMuteTooltip)] = "Mudo (aplicado na exportação)",
+        [nameof(MediaEmptyHint)] = "Arraste um vídeo (.mp4) ou cole com Ctrl+V",
+        [nameof(MediaRemoveTrack)] = "Remover trilha",
+        [nameof(MediaDuplicateSegment)] = "Duplicar em trilha nova (Ctrl+D)",
+        [nameof(MediaClipVolume)] = "Volume",
+        [nameof(MediaClipOpacity)] = "Opacidade",
         [nameof(MediaExporting)] = "Exportando...",
         [nameof(MediaExportDone)] = "Exportação concluída: {0}",
         [nameof(MediaExportFailed)] = "A exportação falhou: {0}",
@@ -807,6 +813,7 @@ public static partial class Loc
     {
         [nameof(TrayOpenHistory)] = "Open history",
         [nameof(TrayCapture)] = "Capture screen",
+        [nameof(TrayMediaEditor)] = "Video editor",
         [nameof(TraySettings)] = "Settings",
         [nameof(TrayExit)] = "Exit",
         [nameof(TrayPauseHistory)] = "Pause clipboard history",
@@ -816,6 +823,7 @@ public static partial class Loc
         [nameof(NotifyCaptureCopied)] = "Capture copied ({0}x{1})",
         [nameof(NotifyClickToEdit)] = "Click to edit",
         [nameof(NotifyHotkeyConflict)] = "The shortcut {0} is already in use by another app",
+        [nameof(NotifyTakeoverLost)] = "{0} opens the Windows tool again. Click to take it back in the shortcut settings",
         [nameof(NotifyMemoryLimit)] = "Memory limit reached. The capture was finished automatically",
         [nameof(NotifyFramesDiscarded)] = "Some sections were discarded. Scroll slower next time",
         [nameof(PasteFailedToast)] = "Item copied. Paste with Ctrl+V (could not paste automatically).",
@@ -855,11 +863,6 @@ public static partial class Loc
         [nameof(MenuDelete)] = "Delete",
         [nameof(GroupPinned)] = "Pinned",
         [nameof(GroupRecent)] = "Recent",
-        [nameof(MultiPasteTooltip)] = "Paste several in sequence",
-        [nameof(MultiPasteOrder)] = "Choose the paste order",
-        [nameof(MultiPasteConfirm)] = "Select",
-        [nameof(MultiPasteItem)] = "1 item",
-        [nameof(MultiPasteItems)] = "{0} items",
         [nameof(ItemImage)] = "Image",
         [nameof(TimeNow)] = "now",
         [nameof(TimeYesterday)] = "yesterday",
@@ -951,6 +954,7 @@ public static partial class Loc
         [nameof(ToolUndo)] = "Undo (Ctrl+Z)",
         [nameof(ToolRedo)] = "Redo (Ctrl+Y)",
         [nameof(ToolAutoCopy)] = "Copy automatically on every edit",
+        [nameof(ToolCopyNow)] = "Copy now",
         [nameof(ToolSaveAs)] = "Save as... (Ctrl+S)",
         [nameof(Thickness)] = "Thickness",
         [nameof(Zoom)] = "Zoom",
@@ -977,15 +981,15 @@ public static partial class Loc
         [nameof(CardCaptureKeyCaption)] = "Print Screen (recommended): frees the PrtSc key from the native Snipping Tool, no side effects. Win+Shift+S: also disables Win+S (Windows Search), a Windows limitation.",
         [nameof(UsePrintScreen)] = "Use Print Screen",
         [nameof(UseWinShiftS)] = "Use Win+Shift+S",
-        [nameof(CardRevertTitle)] = "Revert everything",
-        [nameof(CardRevertCaption)] = "Restores the native Windows shortcuts exactly as they were (automatic backup) and returns Klip to Ctrl+Shift+V / Ctrl+Shift+S.",
-        [nameof(Revert)] = "Revert",
+        [nameof(CardRevertTitle)] = "Restore default shortcuts",
+        [nameof(CardRevertCaption)] = "Goes back to Ctrl+Shift+V and Ctrl+Shift+S and gives back to Windows the keys Klip took over.",
+        [nameof(Revert)] = "Restore",
         [nameof(SectionAppHotkeys)] = "Klip shortcuts",
         [nameof(OpenHistoryHotkey)] = "Open history",
-        [nameof(NewCaptureHotkey)] = "New capture",
+        [nameof(NewCaptureHotkey)] = "Capture the screen",
         [nameof(HotkeyHint)] = "Click the keys and press the new combination",
         [nameof(HotkeyPressKeys)] = "press the keys",
-        [nameof(SectionFlyoutShortcuts)] = "Panel shortcuts (Win+V)",
+        [nameof(SectionFlyoutShortcuts)] = "Inside the history panel",
         [nameof(KeyMouse)] = "click",
         [nameof(ShortcutClick)] = "Click",
         [nameof(ShortcutClickDesc)] = "Pastes the item into the app you came from.",
@@ -1009,17 +1013,17 @@ public static partial class Loc
         [nameof(ExcludedAppsCaption)] = "Nothing copied from these apps is saved to history. Enter the process name (e.g. keepass.exe).",
         [nameof(AddApp)] = "Add",
         [nameof(RemoveApp)] = "Remove",
-        [nameof(SectionClipboard)] = "History",
+        [nameof(SectionClipboard)] = "Clipboard",
         [nameof(MaxItemsTitle)] = "Maximum items",
         [nameof(MaxItemsCaption)] = "Pinned and favorited items are never removed. 0 = unlimited.",
-        [nameof(MaxAgeTitle)] = "Delete after (days)",
-        [nameof(MaxAgeCaption)] = "Removes items older than this. 0 = no limit. Pinned and favorites stay.",
+        [nameof(MaxAgeTitle)] = "Delete items older than",
+        [nameof(MaxAgeCaption)] = "0 = never delete by age.",
         [nameof(ScreenshotFolderTitle)] = "Screenshots folder",
         [nameof(ScreenshotFolderCaption)] = "Where captures are saved when auto-save is on.",
         [nameof(ChooseFolder)] = "Choose",
         [nameof(SectionCapture)] = "Screen capture",
         [nameof(AutoSaveTitle)] = "Save captures automatically",
-        [nameof(AutoSaveCaption)] = "Pictures\\Screenshots folder, the Windows default",
+        [nameof(AutoSaveCaption)] = "Besides copying, saves a PNG to a folder.",
         [nameof(CadenceTitle)] = "Scrolling capture cadence",
         [nameof(CadenceCaption)] = "Interval between frames while you scroll (default 150 ms; increase if your machine stutters)",
         [nameof(EditorModifierTitle)] = "Key to open in the editor",
@@ -1043,7 +1047,7 @@ public static partial class Loc
         [nameof(BackupCaption)] = "Export the whole history (items and images) to a file, or import it back on another machine.",
         [nameof(ExportHistory)] = "Export",
         [nameof(ImportHistory)] = "Import",
-        [nameof(CompactDb)] = "Compact database",
+        [nameof(CompactDb)] = "Free up space",
         [nameof(OpenDataFolder)] = "Open data folder",
         [nameof(DiagnosticsCaption)] = "System state: registered shortcuts, registry keys and database size.",
         [nameof(RunDiagnostics)] = "Check system state",
@@ -1129,6 +1133,11 @@ public static partial class Loc
         [nameof(MediaFpsOriginal)] = "Original",
         [nameof(MediaAudioTrack)] = "Audio",
         [nameof(MediaMuteTooltip)] = "Mute (applied on export)",
+        [nameof(MediaEmptyHint)] = "Drag a video (.mp4) in or paste with Ctrl+V",
+        [nameof(MediaRemoveTrack)] = "Remove track",
+        [nameof(MediaDuplicateSegment)] = "Duplicate to new track (Ctrl+D)",
+        [nameof(MediaClipVolume)] = "Volume",
+        [nameof(MediaClipOpacity)] = "Opacity",
         [nameof(MediaExporting)] = "Exporting...",
         [nameof(MediaExportDone)] = "Export finished: {0}",
         [nameof(MediaExportFailed)] = "The export failed: {0}",

@@ -6,41 +6,96 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- no Background (it would kill the Mica) and no ScrollViewer, see SettingsShell.xaml -->
-    <StackPanel MaxWidth="680">
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionPrivacy}" />
 
-        <controls:SettingsCard
+        <!-- ================= Dados sensiveis ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionSensitive}" />
+        <controls:SettingsExpander
+            x:Name="SecretsExpander"
             Title="{DynamicResource Loc.SkipSecretsTitle}"
             Description="{DynamicResource Loc.SkipSecretsCaption}"
-            Icon="&#xE72E;">
-            <ui:ToggleSwitch x:Name="SkipSecretsToggle" />
-        </controls:SettingsCard>
+            Icon="&#xE8D7;">
+            <controls:SettingsExpander.Header>
+                <ui:ToggleSwitch x:Name="SkipSecretsToggle" />
+            </controls:SettingsExpander.Header>
+            <!-- so faz sentido enquanto os segredos estao sendo detectados -->
+            <controls:SettingsRow
+                x:Name="SecretKeepCard"
+                Title="{DynamicResource Loc.SecretKeepTitle}"
+                Description="{DynamicResource Loc.SecretKeepCaption}">
+                <ComboBox x:Name="SecretKeepCombo" MinWidth="160" Style="{StaticResource SettingsComboBox}" />
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
 
-        <!-- only means something while secrets are being detected -->
-        <controls:SettingsCard
-            x:Name="SecretKeepCard"
-            Title="{DynamicResource Loc.SecretKeepTitle}"
-            Description="{DynamicResource Loc.SecretKeepCaption}"
-            Icon="&#xE916;">
-            <ComboBox
-                x:Name="SecretKeepCombo"
-                Width="160"
-                Style="{StaticResource SettingsComboBox}" />
-        </controls:SettingsCard>
+        <!-- ================= Aplicativos ignorados ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionIgnoredApps}" />
+        <controls:SettingsExpander
+            x:Name="IgnoredAppsExpander"
+            Title="{DynamicResource Loc.ExcludedAppsTitle}"
+            Description="{DynamicResource Loc.ExcludedAppsCaption}"
+            Icon="&#xE8F8;">
+            <controls:SettingsRow>
+                <controls:SettingsRow.Footer>
+                    <StackPanel Margin="0,-12,0,0">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <ui:TextBox
+                                x:Name="ExcludeAppBox"
+                                PlaceholderText="{DynamicResource Loc.ExcludedAppsPlaceholder}"
+                                Style="{StaticResource SettingsTextBox}" />
+                            <ui:Button
+                                x:Name="AddExcludeButton"
+                                Grid.Column="1"
+                                Margin="8,0,0,0"
+                                MinHeight="32"
+                                Content="{DynamicResource Loc.AddApp}" />
+                        </Grid>
 
+                        <!-- virtualizacao de verdade: o ScrollViewer mora DENTRO do template (o
+                             painel e o IScrollInfo dele) e o MaxHeight da um viewport finito.
+                             A roda volta para a pagina em OnListPreviewMouseWheel. -->
+                        <ItemsControl
+                            x:Name="ExcludedAppsList"
+                            MaxHeight="216"
+                            Style="{StaticResource AppListStyle}"
+                            VirtualizingPanel.IsVirtualizing="True"
+                            VirtualizingPanel.VirtualizationMode="Recycling"
+                            ScrollViewer.CanContentScroll="True">
+                            <ItemsControl.Template>
+                                <ControlTemplate TargetType="{x:Type ItemsControl}">
+                                    <ScrollViewer
+                                        x:Name="PART_ListScroll"
+                                        Focusable="False"
+                                        CanContentScroll="{TemplateBinding ScrollViewer.CanContentScroll}"
+                                        HorizontalScrollBarVisibility="Disabled"
+                                        VerticalScrollBarVisibility="Auto">
+                                        <ItemsPresenter />
+                                    </ScrollViewer>
+                                </ControlTemplate>
+                            </ItemsControl.Template>
+                            <ItemsControl.ItemsPanel>
+                                <ItemsPanelTemplate>
+                                    <VirtualizingStackPanel />
+                                </ItemsPanelTemplate>
+                            </ItemsControl.ItemsPanel>
+                        </ItemsControl>
+                    </StackPanel>
+                </controls:SettingsRow.Footer>
+            </controls:SettingsRow>
+        </controls:SettingsExpander>
+
+        <!-- ================= Ao sair ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionOnExit}" />
         <controls:SettingsCard
             Title="{DynamicResource Loc.ClearOnExitTitle}"
             Description="{DynamicResource Loc.ClearOnExitCaption}"
             Icon="&#xE74D;">
             <ui:ToggleSwitch x:Name="ClearOnExitToggle" />
         </controls:SettingsCard>
-
-        <controls:SettingsCard
-            Title="{DynamicResource Loc.RestoreClipboardTitle}"
-            Description="{DynamicResource Loc.RestoreClipboardCaption}"
-            Icon="&#xE7A7;">
-            <ui:ToggleSwitch x:Name="RestoreClipboardToggle" />
-        </controls:SettingsCard>
-    </StackPanel>
+    </controls:SettingsPanel>
 </Page>

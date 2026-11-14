@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Globalization;
 using System.Windows.Threading;
 using Klip.App.Services;
+using Klip.Interop;
 
 namespace Klip.App.Diagnostics;
 
@@ -133,11 +134,12 @@ public sealed class UiThreadWatchdog : IDisposable
 
             owned = true;
             long start = Stopwatch.GetTimestamp();
+            NativeMethods.QueryUnbiasedInterruptTime(out var startUnbiased);
 
             // DispatcherPriority.Send e a maior prioridade da fila: o que se mede e
             // o tempo ate a UI thread conseguir ATENDER a fila, nao a espera atras
             // de trabalho de menor prioridade legitimamente enfileirado.
-            _uiDispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() => CompleteProbe(start)));
+            _uiDispatcher.BeginInvoke(DispatcherPriority.Send, new Action(() => CompleteProbe(start, startUnbiased)));
 
             // A partir daqui quem devolve o guard e CompleteProbe.
             owned = false;
@@ -157,14 +159,28 @@ public sealed class UiThreadWatchdog : IDisposable
     }
 
     /// <summary>Executa NA UI thread: o tempo ate chegar aqui e a latencia medida.</summary>
-    private void CompleteProbe(long startTimestamp)
+    private void CompleteProbe(long startTimestamp, ulong startUnbiased)
     {
         try
         {
             long elapsedTicks = Stopwatch.GetTimestamp() - startTimestamp;
-            RecordWorst(elapsedTicks);
-
             double elapsedMilliseconds = elapsedTicks * 1000.0 / Stopwatch.Frequency;
+
+            // the stopwatch keeps counting through a sleep, the unbiased clock does not:
+            // a probe queued right before suspend used to come back as a "stall" of hours
+            if (NativeMethods.QueryUnbiasedInterruptTime(out var nowUnbiased))
+            {
+                var awakeMilliseconds = (nowUnbiased - startUnbiased) / 10_000.0;
+                if (elapsedMilliseconds - awakeMilliseconds > _thresholdMilliseconds)
+                {
+                    StartupLog.WriteVerbose(string.Format(CultureInfo.InvariantCulture,
+                        "[watchdog] intervalo atravessou suspensao ({0:0} ms dormindo), descartado",
+                        elapsedMilliseconds - awakeMilliseconds));
+                    return;
+                }
+            }
+
+            RecordWorst(elapsedTicks);
             if (elapsedMilliseconds < _thresholdMilliseconds)
                 return;
 

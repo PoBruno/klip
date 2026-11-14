@@ -17,13 +17,13 @@ public static partial class NativeMethods
     [LibraryImport("gdi32.dll")]
     public static partial nint CreateCompatibleDC(nint hdc);
 
-    [LibraryImport("gdi32.dll")]
+    [LibraryImport("gdi32.dll", SetLastError = true)]
     public static partial nint CreateCompatibleBitmap(nint hdc, int cx, int cy);
 
     [LibraryImport("gdi32.dll")]
     public static partial nint SelectObject(nint hdc, nint h);
 
-    [LibraryImport("gdi32.dll")]
+    [LibraryImport("gdi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     public static partial bool BitBlt(nint hdc, int x, int y, int cx, int cy,
         nint hdcSrc, int x1, int y1, uint rop);
@@ -38,7 +38,9 @@ public static partial class NativeMethods
 
     /// <summary>
     /// Captures a screen region (physical virtual-screen coords) into an HBITMAP.
-    /// Caller must DeleteObject the returned handle.
+    /// Caller must DeleteObject the returned handle. Throws when GDI fails (out of GDI
+    /// memory, secure desktop, display going away) instead of handing back a black
+    /// bitmap that the overlay would show as a frozen black screen.
     /// </summary>
     public static nint CaptureScreenRegionToHBitmap(int x, int y, int width, int height)
     {
@@ -49,10 +51,20 @@ public static partial class NativeMethods
             try
             {
                 var bitmap = CreateCompatibleBitmap(screenDc, width, height);
+                if (bitmap == nint.Zero)
+                    throw new System.ComponentModel.Win32Exception(Marshal.GetLastPInvokeError(),
+                        $"CreateCompatibleBitmap {width}x{height} falhou");
                 var old = SelectObject(memDc, bitmap);
                 // CAPTUREBLT pra pegar tambem as janelas layered
-                BitBlt(memDc, 0, 0, width, height, screenDc, x, y, SRCCOPY | CAPTUREBLT);
+                var copied = BitBlt(memDc, 0, 0, width, height, screenDc, x, y, SRCCOPY | CAPTUREBLT);
+                var error = Marshal.GetLastPInvokeError();
                 SelectObject(memDc, old);
+                if (!copied)
+                {
+                    DeleteObject(bitmap);
+                    throw new System.ComponentModel.Win32Exception(error,
+                        $"BitBlt {width}x{height} em {x},{y} falhou");
+                }
                 return bitmap;
             }
             finally

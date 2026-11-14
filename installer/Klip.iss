@@ -4,7 +4,7 @@
 
 #define AppName "Klip"
 #ifndef AppVersion
-  #define AppVersion "1.5.0"
+  #define AppVersion "1.6.0"
 #endif
 #define AppPublisher "PoBruno"
 #define AppUrl "https://github.com/PoBruno/klip"
@@ -31,6 +31,11 @@ UninstallDisplayIcon={app}\{#AppExeName}
 Compression=lzma2/max
 SolidCompression=yes
 WizardStyle=modern
+; pixel key art at 100/150/200% so the wizard never stretches it blurry
+WizardImageFile=wizard-large.png,wizard-large-150.png,wizard-large-200.png
+WizardSmallImageFile=wizard-small.png,wizard-small-150.png,wizard-small-200.png
+WizardImageStretch=no
+WizardImageBackColor=$202020
 ArchitecturesAllowed=x64compatible
 ArchitecturesInstallIn64BitMode=x64compatible
 ; Fecha o app automaticamente se estiver rodando durante o update/desinstalacao

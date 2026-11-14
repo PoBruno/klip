@@ -1,7 +1,6 @@
 <div align="center">
 
-<img src="docs/demo.gif" alt="Klip em ação: histórico de clipboard, captura com rolagem e o editor de mídia" width="840">
-
+<img src="docs/klip-icon.png" alt="Ícone do Klip" width="128" height="128">
 
 # Klip
 
@@ -11,6 +10,8 @@
 [![Release](https://img.shields.io/github/v/release/PoBruno/klip?display_name=tag&sort=semver)](https://github.com/PoBruno/klip/releases/latest)
 [![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
 [![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white)](#)
+
+<img src="docs/demo.gif" alt="Klip em ação: histórico de clipboard, captura com rolagem e o editor de mídia" width="840">
 
 ### Instalar
 

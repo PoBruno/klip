@@ -214,59 +214,138 @@ public sealed partial class HistoryFlyoutViewModel
         _pasteService.PasteTogether(items);
     }
 
-    // ----- Paste together (picked cards) -----
+    // ----- Pick: paste together (Shift+click) or in sequence (Ctrl+click) -----
 
-    private readonly List<HistoryItemViewModel> _checked = [];
+    private readonly PickSelection<long> _pick = new();
+
+    // the summary row of every picked card, so the pick outlives a list reload
+    private readonly Dictionary<long, ClipboardItem> _pickRows = [];
 
     [ObservableProperty]
-    [NotifyPropertyChangedFor(nameof(CheckedBannerText))]
-    [NotifyPropertyChangedFor(nameof(HasChecks))]
-    private int _checkedCount;
+    [NotifyPropertyChangedFor(nameof(HasPick))]
+    [NotifyPropertyChangedFor(nameof(IsJoinPick))]
+    [NotifyPropertyChangedFor(nameof(PickTitle))]
+    [NotifyPropertyChangedFor(nameof(PickCountText))]
+    [NotifyPropertyChangedFor(nameof(PickHint))]
+    private PickMode _pickMode;
 
-    public bool HasChecks => CheckedCount > 0;
+    [ObservableProperty]
+    [NotifyPropertyChangedFor(nameof(HasPick))]
+    [NotifyPropertyChangedFor(nameof(PickCountText))]
+    private int _pickCount;
 
-    public string CheckedBannerText => string.Format(Localization.Loc.CheckedBanner, CheckedCount);
+    public bool HasPick => PickCount > 0;
 
-    public void ToggleCheck(HistoryItemViewModel item)
+    /// <summary>Join shows the link glyph in the footer, sequence the ticket.</summary>
+    public bool IsJoinPick => PickMode == PickMode.Join;
+
+    public string PickTitle => IsJoinPick ? Localization.Loc.PickJoinTitle : Localization.Loc.PickSequenceTitle;
+
+    public string PickCountText => IsJoinPick
+        ? (PickCount == 1 ? Localization.Loc.PickCountOne : string.Format(Localization.Loc.PickCountMany, PickCount))
+        : string.Format(Localization.Loc.PickSequenceCount, PickCount);
+
+    public string PickHint => IsJoinPick ? Localization.Loc.PickJoinHint : Localization.Loc.PickSequenceHint;
+
+    /// <summary>
+    /// A join with images or files can't sit on the clipboard as one thing: the panel has
+    /// to catch the Ctrl+V and paste the steps itself.
+    /// </summary>
+    public bool PickCatchesCtrlV => IsJoinPick && !PasteJoin.CanJoinAsText(PickedRows());
+
+    /// <summary>The pick changed (the window re-reads which keys its hook swallows).</summary>
+    public event Action? PickChanged;
+
+    /// <summary>Shift+click (join) or Ctrl+click (sequence). The other gesture converts the pick.</summary>
+    public void Pick(HistoryItemViewModel item, PickMode mode)
     {
-        if (!_checked.Remove(item))
-            _checked.Add(item);
-        item.CheckOrder = 0;
-        RenumberChecks();
+        switch (_pick.Toggle(item.Id, mode))
+        {
+            case PickChange.Added:
+                _pickRows[item.Id] = item.Item;
+                break;
+            case PickChange.Removed:
+                _pickRows.Remove(item.Id);
+                break;
+            case PickChange.Rejected:
+                _ = ShowStatusAsync(string.Format(Localization.Loc.PickLimit, _pick.Max));
+                break;
+        }
+        ApplyPick();
     }
 
-    public void SetCheck(HistoryItemViewModel item, bool on)
-    {
-        if (_checked.Contains(item) != on)
-            ToggleCheck(item);
-    }
+    /// <summary>A plain click while something is picked adds to (or drops from) the pick.</summary>
+    public void PickInCurrentMode(HistoryItemViewModel item) => Pick(item, _pick.Mode);
 
-    private void RenumberChecks()
+    /// <summary>Shift+arrows walk over cards and join them.</summary>
+    public void IncludeInJoin(HistoryItemViewModel item)
     {
-        for (var i = 0; i < _checked.Count; i++)
-            _checked[i].CheckOrder = i + 1;
-        CheckedCount = _checked.Count;
-    }
-
-    [RelayCommand]
-    public void ClearChecks()
-    {
-        if (_checked.Count == 0)
+        if (_pick.Include(item.Id, PickMode.Join) == PickChange.Rejected)
+        {
+            _ = ShowStatusAsync(string.Format(Localization.Loc.PickLimit, _pick.Max));
             return;
-        foreach (var vm in _checked)
-            vm.CheckOrder = 0;
-        _checked.Clear();
-        CheckedCount = 0;
+        }
+        _pickRows[item.Id] = item.Item;
+        ApplyPick();
     }
 
-    [RelayCommand]
-    private void PasteChecked()
+    /// <summary>Esc: drop the pick and put the clipboard from before it back.</summary>
+    public void ClearPick()
     {
-        if (_checked.Count == 0)
+        if (_pick.IsEmpty)
             return;
-        var items = _checked.Select(vm => vm.Item).ToList();
-        ClearChecks();
-        PasteMany(items);
+        ResetPick();
+        _pickPaste.Clear(restore: true);
+    }
+
+    /// <summary>
+    /// The panel is closing with a pick that was not cancelled (click outside, or the
+    /// user's Ctrl+V already went through): the clipboard stays ready.
+    /// </summary>
+    public void CommitPick()
+    {
+        if (_pick.IsEmpty)
+            return;
+        var (mode, rows) = (_pick.Mode, PickedRows());
+        ResetPick();
+        _pickPaste.Commit(mode, rows);
+    }
+
+    /// <summary>Enter, or a Ctrl+V the panel caught: paste the pick now and close.</summary>
+    public void PastePickNow()
+    {
+        if (_pick.IsEmpty)
+            return;
+        var (mode, rows) = (_pick.Mode, PickedRows());
+        ResetPick();
+        CloseRequested?.Invoke(false); // the paste flow handles focus and Ctrl+V
+        _pickPaste.PasteNow(mode, rows);
+    }
+
+    private List<ClipboardItem> PickedRows() => _pick.Keys.Select(id => _pickRows[id]).ToList();
+
+    private void ApplyPick()
+    {
+        RefreshPickBadges();
+        _pickPaste.Update(_pick.Mode, PickedRows());
+        PickChanged?.Invoke();
+    }
+
+    private void ResetPick()
+    {
+        _pick.Clear();
+        _pickRows.Clear();
+        RefreshPickBadges();
+        PickChanged?.Invoke();
+    }
+
+    private void RefreshPickBadges()
+    {
+        foreach (var vm in Items)
+            vm.SetPick(_pick.Mode, _pick.OrderOf(vm.Id));
+        PickMode = _pick.Mode;
+        PickCount = _pick.Count;
+        OnPropertyChanged(nameof(PickCatchesCtrlV));
     }
 
     // ----- Preview -----
@@ -530,8 +609,9 @@ public sealed partial class HistoryFlyoutViewModel
         var index = Items.IndexOf(item);
         if (index < 0)
             return;
-        if (_checked.Remove(item))
-            RenumberChecks();
+        // a deleted card leaves the pick too
+        if (_pick.OrderOf(item.Id) > 0)
+            Pick(item, _pick.Mode);
         // the section label moves down to the next card of the same section
         if (item.HeaderText is { } header && index + 1 < Items.Count &&
             Items[index + 1].HeaderText is null && Items[index + 1].Item.Pinned == item.Item.Pinned)
@@ -775,11 +855,11 @@ public sealed partial class HistoryFlyoutViewModel
         _ = ShowStatusAsync(Localization.Loc.SnippetCopied);
     }
 
-    /// <summary>Enter: the picked cards together, else the snippet the search typed (alias), else the selected card.</summary>
+    /// <summary>Enter: the pick, else the snippet the search typed (alias), else the selected card.</summary>
     public void ChooseCurrent(HistoryItemViewModel? selected)
     {
-        if (CheckedCount > 0)
-            PasteCheckedCommand.Execute(null);
+        if (HasPick)
+            PastePickNow();
         else if (AliasHit is { } hit)
             PasteSnippetCommand.Execute(hit);
         else

@@ -35,8 +35,8 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> PtHistory = new()
     {
-        [nameof(HistorySectionRetention)] = "Retenção",
-        [nameof(HistorySectionFlyout)] = "Painel Win+V",
+        [nameof(HistorySectionRetention)] = "Limpeza automática",
+        [nameof(HistorySectionFlyout)] = "Painel do histórico",
         [nameof(MaxImagesTitle)] = "Limite de imagens",
         [nameof(MaxImagesCaption)] = "Imagens ocupam muito mais espaço que texto. As mais antigas saem primeiro. 0 = sem limite.",
         [nameof(MaxMediaTitle)] = "Espaço máximo de mídia",
@@ -44,7 +44,7 @@ public static partial class Loc
         [nameof(MaxMediaUnit)] = "GB",
         [nameof(FlyoutOpenAtCaretTitle)] = "Abrir junto do cursor de texto",
         [nameof(FlyoutOpenAtCaretCaption)] = "O painel aparece perto de onde você está digitando. Sem cursor de texto, abre junto do mouse.",
-        [nameof(FlyoutRememberScrollTitle)] = "Lembrar posição da rolagem",
+        [nameof(FlyoutRememberScrollTitle)] = "Lembrar onde parei",
         [nameof(FlyoutRememberScrollCaption)] = "Ao reabrir, volta para onde você parou em vez de mostrar os itens mais recentes.",
         [nameof(FlyoutEnterActionTitle)] = "Ao escolher um item",
         [nameof(FlyoutEnterActionCaption)] = "O que Enter ou um clique fazem no item selecionado.",
@@ -63,8 +63,8 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> EnHistory = new()
     {
-        [nameof(HistorySectionRetention)] = "Retention",
-        [nameof(HistorySectionFlyout)] = "Win+V panel",
+        [nameof(HistorySectionRetention)] = "Automatic cleanup",
+        [nameof(HistorySectionFlyout)] = "History panel",
         [nameof(MaxImagesTitle)] = "Image limit",
         [nameof(MaxImagesCaption)] = "Images take far more space than text. The oldest go first. 0 = no limit.",
         [nameof(MaxMediaTitle)] = "Maximum media space",
@@ -72,7 +72,7 @@ public static partial class Loc
         [nameof(MaxMediaUnit)] = "GB",
         [nameof(FlyoutOpenAtCaretTitle)] = "Open next to the text cursor",
         [nameof(FlyoutOpenAtCaretCaption)] = "The panel shows up near where you are typing. With no text cursor, it opens next to the mouse.",
-        [nameof(FlyoutRememberScrollTitle)] = "Remember scroll position",
+        [nameof(FlyoutRememberScrollTitle)] = "Remember where I left off",
         [nameof(FlyoutRememberScrollCaption)] = "When reopened, goes back to where you left off instead of showing the newest items.",
         [nameof(FlyoutEnterActionTitle)] = "When you pick an item",
         [nameof(FlyoutEnterActionCaption)] = "What Enter or a click does with the selected item.",

@@ -15,7 +15,7 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> PtClipboard = new()
     {
-        [nameof(PasteAsFileSection)] = "Colar imagem como arquivo",
+        [nameof(PasteAsFileSection)] = "Imagens como arquivo",
         [nameof(PasteAsFileAttachTitle)] = "Anexar arquivo às imagens copiadas pelo Klip",
         [nameof(PasteAsFileAttachCaption)] = "Capturas e imagens do histórico podem ser coladas numa pasta do Explorer como arquivo PNG. Word, Paint e chats continuam recebendo a imagem.",
         [nameof(PasteAsFileExplorerTitle)] = "Ctrl+V no Explorer cria o arquivo PNG",
@@ -28,7 +28,7 @@ public static partial class Loc
 
     private static readonly Dictionary<string, string> EnClipboard = new()
     {
-        [nameof(PasteAsFileSection)] = "Paste image as file",
+        [nameof(PasteAsFileSection)] = "Images as files",
         [nameof(PasteAsFileAttachTitle)] = "Attach a file to images copied by Klip",
         [nameof(PasteAsFileAttachCaption)] = "Captures and history images can be pasted into a File Explorer folder as a PNG file. Word, Paint and chat apps still get the image.",
         [nameof(PasteAsFileExplorerTitle)] = "Ctrl+V in File Explorer creates the PNG file",

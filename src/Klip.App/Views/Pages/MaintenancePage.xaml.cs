@@ -66,9 +66,17 @@ public partial class MaintenancePage : ISettingsPage
         ImportButton.Click += async (_, _) => await OnImportAsync();
         CompactButton.Click += async (_, _) => await OnCompactAsync();
         OpenDataFolderButton.Click += (_, _) => OnOpenDataFolder();
-        DiagnosticsButton.Click += async (_, _) => await OnRunDiagnosticsAsync();
+        DiagnosticsButton.Click += async (_, _) =>
+        {
+            DiagnosticsExpander.IsExpanded = true; // o resultado aparece dentro do cartao
+            await OnRunDiagnosticsAsync();
+        };
         CopyDiagnosticsButton.Click += async (_, _) => await OnCopyDiagnosticsAsync();
-        ResourcesButton.Click += async (_, _) => await OnRefreshResourcesAsync();
+        ResourcesButton.Click += async (_, _) =>
+        {
+            ResourcesExpander.IsExpanded = true;
+            await OnRefreshResourcesAsync();
+        };
 
         RefreshState();
     }
@@ -94,6 +102,49 @@ public partial class MaintenancePage : ISettingsPage
     {
         ApplyMaintenanceBusy(_maintenanceBusy);
         ApplyDiagnosticsBusy(_diagnosticsBusy);
+        LoadUsage();
+    }
+
+    // ----- Uso de disco -----
+
+    private bool _usageLoading;
+
+    /// <summary>Item count and database size, read off the ui thread (was on the About page).</summary>
+    private void LoadUsage()
+    {
+        if (_usageLoading)
+            return;
+        _usageLoading = true;
+        UsageCard.Description = "...";
+        _ = Task.Run(() =>
+        {
+            long? count = null, bytes = null;
+            try
+            {
+                count = _repository.Count();
+                var db = AppPaths.DatabaseFile;
+                bytes = File.Exists(db) ? new FileInfo(db).Length : 0L;
+                if (Directory.Exists(AppPaths.MediaDir))
+                {
+                    foreach (var file in new DirectoryInfo(AppPaths.MediaDir).EnumerateFiles("*", SearchOption.AllDirectories))
+                        bytes += file.Length;
+                }
+            }
+            catch (Exception ex)
+            {
+                // banco em uso exclusivo, arquivo sumindo no meio: estatistica nao derruba a pagina
+                StartupLog.WriteException("MaintenancePage.LoadUsage", ex);
+            }
+            _ = Dispatcher.InvokeAsync(() =>
+            {
+                _usageLoading = false;
+                UsageCard.Description = count is null || bytes is null
+                    ? string.Empty
+                    : string.Format(System.Globalization.CultureInfo.CurrentCulture, Loc.UsageValue,
+                        count.Value.ToString("N0", System.Globalization.CultureInfo.CurrentCulture),
+                        (bytes.Value / 1024.0 / 1024.0).ToString("F1", System.Globalization.CultureInfo.CurrentCulture));
+            });
+        });
     }
 
     // ----- Backup e manutencao -----

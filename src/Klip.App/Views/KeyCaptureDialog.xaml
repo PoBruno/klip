@@ -1,0 +1,143 @@
+<ui:FluentWindow
+    x:Class="Klip.App.Views.KeyCaptureDialog"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:ui="http://schemas.lepo.co/wpfui/2022/xaml"
+    xmlns:controls="clr-namespace:Klip.App.Controls"
+    Width="500"
+    SizeToContent="Height"
+    ResizeMode="NoResize"
+    ShowInTaskbar="False"
+    WindowStartupLocation="CenterOwner"
+    FontFamily="{StaticResource KlipUiFont}"
+    ExtendsContentIntoTitleBar="True"
+    WindowBackdropType="Mica"
+    WindowCornerPreference="Round">
+
+    <!-- caixa de atalho, no modelo do PowerToys: captura a combinacao, valida e explica o
+         que acontece com o Windows antes de salvar -->
+    <Grid TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}" UseLayoutRounding="True">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <ui:TitleBar Grid.Row="0" ShowMaximize="False" ShowMinimize="False" />
+
+        <StackPanel Grid.Row="1" Margin="24,0,24,24">
+            <TextBlock x:Name="TitleText" FontSize="20" FontWeight="SemiBold" TextWrapping="Wrap" />
+            <TextBlock
+                Margin="0,8,0,0"
+                Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                Text="{DynamicResource Loc.KeyDialogPrompt}"
+                TextWrapping="Wrap" />
+
+            <!-- area que recebe as teclas -->
+            <Border
+                x:Name="CaptureBox"
+                MinHeight="96"
+                Margin="0,16,0,0"
+                Padding="16"
+                Background="{DynamicResource ControlFillColorDefaultBrush}"
+                BorderBrush="{DynamicResource AccentFillColorDefaultBrush}"
+                BorderThickness="2"
+                CornerRadius="6"
+                Focusable="True"
+                FocusVisualStyle="{x:Null}">
+                <Grid>
+                    <controls:KeyChord
+                        x:Name="PreviewChord"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        KeyStyle="Large" />
+                    <TextBlock
+                        x:Name="WaitingText"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        Text="{DynamicResource Loc.KeyDialogWaiting}" />
+                </Grid>
+            </Border>
+
+            <!-- resultado da validacao: disponivel, falta modificador, conflito, reservado -->
+            <StackPanel Margin="0,8,0,0" Orientation="Horizontal" MinHeight="20">
+                <TextBlock
+                    x:Name="MessageGlyph"
+                    Margin="0,0,6,0"
+                    VerticalAlignment="Center"
+                    FontFamily="{StaticResource KlipIconFont}"
+                    FontSize="12" />
+                <TextBlock x:Name="MessageText" VerticalAlignment="Center" FontSize="12" TextWrapping="Wrap" />
+            </StackPanel>
+
+            <!-- o que acontece com o Windows: assumir a tecla nova e/ou devolver a antiga -->
+            <Border
+                x:Name="SystemNote"
+                Margin="0,12,0,0"
+                Padding="14,12"
+                Background="{DynamicResource CardBackgroundFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1"
+                CornerRadius="6"
+                Visibility="Collapsed">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock
+                        Margin="0,1,10,0"
+                        FontFamily="{StaticResource KlipIconFont}"
+                        FontSize="14"
+                        Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                        Text="&#xE946;" />
+                    <TextBlock
+                        x:Name="SystemNoteText"
+                        Grid.Column="1"
+                        FontSize="12"
+                        LineHeight="18"
+                        Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                        TextWrapping="Wrap" />
+                </Grid>
+            </Border>
+
+            <WrapPanel x:Name="SuggestionsPanel" Margin="0,14,0,0" Orientation="Horizontal">
+                <TextBlock
+                    Margin="0,0,10,0"
+                    VerticalAlignment="Center"
+                    FontSize="12"
+                    Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                    Text="{DynamicResource Loc.KeyDialogSuggestions}" />
+            </WrapPanel>
+        </StackPanel>
+
+        <Border
+            Grid.Row="2"
+            Padding="24"
+            Background="{DynamicResource SolidBackgroundFillColorBaseBrush}"
+            BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
+            <UniformGrid x:Name="ButtonsGrid" Rows="1">
+                <ui:Button
+                    x:Name="SaveButton"
+                    Margin="0,0,4,0"
+                    HorizontalAlignment="Stretch"
+                    Appearance="Primary"
+                    Content="{DynamicResource Loc.Save}"
+                    IsEnabled="False" />
+                <ui:Button
+                    x:Name="RemoveButton"
+                    Margin="4,0,4,0"
+                    HorizontalAlignment="Stretch"
+                    Content="{DynamicResource Loc.Remove}" />
+                <ui:Button
+                    x:Name="CancelButton"
+                    Margin="4,0,0,0"
+                    HorizontalAlignment="Stretch"
+                    Content="{DynamicResource Loc.Cancel}"
+                    IsCancel="True" />
+            </UniformGrid>
+        </Border>
+    </Grid>
+</ui:FluentWindow>

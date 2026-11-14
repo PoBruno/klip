@@ -6,46 +6,90 @@
     xmlns:controls="clr-namespace:Klip.App.Controls"
     Style="{StaticResource SettingsPage}">
 
-    <!-- sem Background (mataria o Mica) e sem ScrollViewer - quem rola e o DynamicScrollViewer que o NavigationViewContentPresenter poe no proprio template, e o padding de 24 vem do NavigationView.Padding. Ver SettingsShell.xaml. -->
-    <StackPanel MaxWidth="680">
+    <Page.Resources>
+        <!-- botao de link no fim do cartao: so o glifo de "abrir fora" -->
+        <Style x:Key="OpenLinkButton" TargetType="Button">
+            <Setter Property="Width" Value="36" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="B" Background="Transparent" CornerRadius="4">
+                            <TextBlock
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"
+                                FontFamily="{StaticResource KlipIconFont}"
+                                FontSize="12"
+                                Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                Text="&#xE8A7;" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="B" Property="Background" Value="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+    </Page.Resources>
+
+    <!-- sem Background (mataria o Mica) e sem ScrollViewer. Ver SettingsShell.xaml. -->
+    <controls:SettingsPanel Style="{StaticResource SettingsContent}">
         <TextBlock Style="{StaticResource PageTitle}" Text="{DynamicResource Loc.SectionAbout}" />
 
-        <!-- Identidade. "Klip" e nome proprio do produto, nao string de UI: nao e
-             traduzido em nenhuma das 15 tabelas do Loc. A versao vem do assembly
-             (VersionText), formatada com Loc.AppVersion. -->
-        <controls:SettingsCard
-            Title="Klip"
-            Description="{DynamicResource Loc.AboutText}"
-            Icon="&#xE946;">
-            <TextBlock
-                x:Name="VersionText"
-                Style="{StaticResource CardCaption}"
-                VerticalAlignment="Center" />
-        </controls:SettingsCard>
-
-        <!-- a contagem de itens mora AQUI. Na tela antiga ela dividia o StatusText com outros 3 papeis e sobrescrevia as mensagens de resultado dos takeovers (MainWindow.xaml.cs:484) antes de o usuario conseguir le-las. a legenda e preenchida em background - ver o code-behind. -->
-        <controls:SettingsCard
-            x:Name="HistoryCard"
-            Title="{DynamicResource Loc.SectionClipboard}"
-            Icon="&#xE81C;" />
-
-        <!-- Tamanho do banco + caminho da pasta de dados como texto secundario.
-             O botao aqui e um segundo ponto de entrada, nao uma mudanca de lugar:
-             o de MainWindow.xaml:571 continua na secao de manutencao. -->
-        <controls:SettingsCard
-            x:Name="DatabaseCard"
-            Title="{DynamicResource Loc.DiagDbSize}"
-            Icon="&#xE8B7;">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock
-                    x:Name="DatabaseSizeText"
-                    Margin="0,0,12,0"
-                    Style="{StaticResource CardCaption}"
-                    VerticalAlignment="Center" />
+        <!-- identidade. "Klip" e nome proprio, nao entra nas tabelas de idioma -->
+        <Border
+            Padding="20"
+            Background="{DynamicResource CardBackgroundFillColorDefaultBrush}"
+            BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+            BorderThickness="1"
+            CornerRadius="4">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+                <!-- o icone do Klip: tecla em pixel art, pintada com a cor do texto (segue o tema).
+                     EdgeMode Aliased deixa os quadrados com borda reta, como pixel de verdade -->
+                <Viewbox Width="64" Height="64" RenderOptions.EdgeMode="Aliased" SnapsToDevicePixels="True">
+                    <Canvas Width="16" Height="16">
+                        <Path Data="{StaticResource KlipPixelInk}" Fill="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <Path Data="{StaticResource KlipPixelEdge}" Fill="{DynamicResource TextFillColorPrimaryBrush}" Opacity="0.55" />
+                    </Canvas>
+                </Viewbox>
+                <StackPanel Grid.Column="1" Margin="20,0,16,0" VerticalAlignment="Center">
+                    <TextBlock FontSize="20" FontWeight="SemiBold" Text="Klip" />
+                    <TextBlock Style="{StaticResource CardCaption}" Text="{DynamicResource Loc.AboutText}" />
+                    <TextBlock x:Name="VersionText" Margin="0,4,0,0" Style="{StaticResource CardCaption}" />
+                </StackPanel>
                 <ui:Button
-                    x:Name="OpenDataFolderButton"
-                    Content="{DynamicResource Loc.OpenDataFolder}" />
-            </StackPanel>
+                    x:Name="CopyVersionButton"
+                    Grid.Column="2"
+                    VerticalAlignment="Center"
+                    Content="{DynamicResource Loc.CopyVersion}" />
+            </Grid>
+        </Border>
+
+        <!-- ================= Links ================= -->
+        <TextBlock Style="{StaticResource SectionHeader}" Text="{DynamicResource Loc.SectionLinks}" />
+
+        <controls:SettingsCard Title="{DynamicResource Loc.LinkSource}" Description="github.com/PoBruno/klip" Icon="&#xE943;">
+            <Button Style="{StaticResource OpenLinkButton}" Tag="https://github.com/PoBruno/klip" ToolTip="{DynamicResource Loc.LinkSource}" />
         </controls:SettingsCard>
-    </StackPanel>
+        <controls:SettingsCard Title="{DynamicResource Loc.LinkIssue}" Description="github.com/PoBruno/klip/issues" Icon="&#xEBE8;">
+            <Button Style="{StaticResource OpenLinkButton}" Tag="https://github.com/PoBruno/klip/issues/new/choose" ToolTip="{DynamicResource Loc.LinkIssue}" />
+        </controls:SettingsCard>
+        <controls:SettingsCard Title="{DynamicResource Loc.LinkReleases}" Icon="&#xE789;">
+            <Button Style="{StaticResource OpenLinkButton}" Tag="https://github.com/PoBruno/klip/releases" ToolTip="{DynamicResource Loc.LinkReleases}" />
+        </controls:SettingsCard>
+        <controls:SettingsCard Title="{DynamicResource Loc.LinkLicense}" Description="GPL-3.0" Icon="&#xE8A5;">
+            <Button Style="{StaticResource OpenLinkButton}" Tag="https://github.com/PoBruno/klip/blob/main/LICENSE" ToolTip="{DynamicResource Loc.LinkLicense}" />
+        </controls:SettingsCard>
+        <controls:SettingsCard Title="{DynamicResource Loc.LinkThirdParty}" Description="Twemoji (CC-BY 4.0), CLDR, WPF-UI, H.NotifyIcon, NAudio" Icon="&#xE8F1;">
+            <Button Style="{StaticResource OpenLinkButton}" Tag="https://github.com/PoBruno/klip/blob/main/THIRD-PARTY-NOTICES.md" ToolTip="{DynamicResource Loc.LinkThirdParty}" />
+        </controls:SettingsCard>
+    </controls:SettingsPanel>
 </Page>
