@@ -930,24 +930,22 @@ public partial class HistoryFlyoutWindow
     }
 
     /// <summary>
-    /// Pays the same cost as <see cref="WarmUp"/> again after a working set trim (see
-    /// <see cref="Services.MemorySettler"/>): the startup warm-up only runs once, but a
-    /// trim hours later quietly undoes it by handing those pages back to the OS, and
-    /// nothing else repaid them since. Without this the next real Win+V after a long
-    /// stretch of real inactivity pays to fault that layout and the first query back
-    /// in live - which is exactly the "still slow if I don't touch it for a while"
-    /// people kept reporting even after the sync query on Show() was removed. Skipped
-    /// while the panel is actually open: there is nothing to warm, and showing it
-    /// again would steal the view from whatever is on screen.
+    /// Pays the same cost as <see cref="WarmUp"/> again after a sleep or modern standby
+    /// cycle: the startup warm-up only runs once, and a long freeze of the whole process
+    /// can leave those pages cold. Skipped while the panel is actually open: there is
+    /// nothing to warm, and showing it again would steal the view from whatever is on
+    /// screen.
     /// </summary>
     public void Rewarm()
     {
         if (!_warmedUp || IsVisible)
             return;
-        PayWarmUpCost();
+        // after a sleep the disk and the sqlite cache are cold: the query must not
+        // block the ui thread here, it is the moment the user is coming back
+        PayWarmUpCost(syncQuery: false);
     }
 
-    private void PayWarmUpCost()
+    private void PayWarmUpCost(bool syncQuery = true)
     {
         try
         {
@@ -962,7 +960,10 @@ public partial class HistoryFlyoutWindow
             Show();
             // warm the sqlite side too: first query pays connection + plan + page
             // cache, so we take that hit here instead of on the first real Win+V
-            _viewModel.LoadFirstPage();
+            if (syncQuery)
+                _viewModel.LoadFirstPage();
+            else
+                _ = _viewModel.ReloadAsync();
             UpdateLayout();
             Hide();
         }
