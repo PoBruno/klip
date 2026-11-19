@@ -1,77 +1,130 @@
-<div align="center">
+<p align="center">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.png">
+    <source media="(prefers-color-scheme: light)" srcset="docs/hero-light.png">
+    <img src="docs/hero-light.png" alt="Klip: free and open source, install with winget install PoBruno.Klip" width="616">
+  </picture>
+</p>
 
-<img src="docs/klip-icon.png" alt="Klip icon" width="128" height="128">
+<p align="center">
+<a href="https://github.com/PoBruno/klip/actions/workflows/ci.yml"><img src="https://github.com/PoBruno/klip/actions/workflows/ci.yml/badge.svg" alt="Build"></a>
+<a href="https://github.com/PoBruno/klip/releases/latest"><img src="https://img.shields.io/github/v/release/PoBruno/klip?display_name=tag&sort=semver" alt="Release"></a>
+<a href="LICENSE"><img src="https://img.shields.io/badge/license-GPLv3-blue.svg" alt="License: GPLv3"></a>
+<img src="https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white" alt="Windows 11">
+</p>
 
-# Klip
+<p align="center"><b>Clipboard history, screen capture and recording for Windows 11, without the native limits.</b></p>
 
-**Clipboard history, screen capture and recording for Windows 11, without the native limits.**
+<p align="center">
+<a href="#install">Install</a> · <a href="#highlights">Highlights</a> · <a href="docs/FEATURES.md">All features</a> · <a href="#build-from-source">Build from source</a>
+</p>
 
-[![Build](https://github.com/PoBruno/klip/actions/workflows/ci.yml/badge.svg)](https://github.com/PoBruno/klip/actions/workflows/ci.yml)
-[![Release](https://img.shields.io/github/v/release/PoBruno/klip?display_name=tag&sort=semver)](https://github.com/PoBruno/klip/releases/latest)
-[![License: GPLv3](https://img.shields.io/badge/license-GPLv3-blue.svg)](LICENSE)
-[![Windows 11](https://img.shields.io/badge/Windows-11-0078D4?logo=windows11&logoColor=white)](#)
-
-<img src="docs/demo.gif" alt="Klip in action: clipboard history, scrolling capture and the media editor" width="840">
-
-### Install
+## Install
 
 ```powershell
-winget install pobruno.Klip
+winget install PoBruno.Klip
 ```
 
 or **[download the installer](https://github.com/PoBruno/klip/releases/latest)** (or the portable exe) from the latest release.
 
-[Install](https://github.com/PoBruno/klip/releases/latest) - [Features](#features) - [Build from source](#build-from-source)
+## Why Klip
 
-</div>
+I have worked in IT for over ten years, most of them on Windows. The tools I use the most are the small ones: copy, paste, take a screenshot, grab some text off the screen, find that thing I copied an hour ago. Windows ships native versions of all of them, Win+V and the Snipping Tool, and I like how they look and feel. They just stop too early: a short history with no real search, a capture editor missing half the tools, no way to paste a screenshot as a file.
 
----
+Klip is the version I wanted Windows to ship. Same look, same shortcuts, and the whole flow in one place: copy, capture, record, edit, paste. Before writing it I went through open source tools like Ditto and ShareX and the Win32 docs to see how far a native app could go. I know .NET well, which made it possible.
 
-## What is Klip
+**How it stays instant**
+- Native WPF on .NET 10, compiled ReadyToRun. No Electron, no browser.
+- History in SQLite with FTS5: search runs off the UI thread and the list only reads a short preview of each item.
+- The Win+V panel is kept warm and never takes focus (`WS_EX_NOACTIVATE`), so the paste lands right where you were typing.
+- Keyboard hooks live on their own thread and only while needed, so typing never waits on Klip.
+- Clipboard through `AddClipboardFormatListener`, respecting the formats password managers use to stay out of history.
+- Recording through Media Foundation and Direct3D 11 with the hardware encoder.
+- Everything stays on your machine. No account, no telemetry.
 
-The native Win+V panel and Snipping Tool look great, but they hold you back: the clipboard history is short and has no real search, and the capture editor is missing half the tools you want.
+## Highlights
 
-Klip keeps that same native look and feel, and removes the limits. Two things, done well:
+<table>
+<tr>
+<td width="50%" valign="top">
 
-- **Clipboard history** like Win+V, but unlimited, with real search, date filters, favorites, tabs and a colored emoji picker.
-- **Screen capture** like Win+Shift+S, plus scrolling capture, GIF/MP4 screen recording and a proper editor.
+<h3>A clipboard history that keeps up</h3>
 
-Native WPF app, Fluent Design and Mica, lives in the tray. No Electron, no browser, no telemetry. It can take over the `Win+V` and `Win+Shift+S` shortcuts if you let it.
+<img src="docs/features/history.gif" alt="A clipboard history that keeps up" width="100%">
+
+Everything you copy, searchable as you type, with favorites pinned on top, date filters and tabs per type. It opens on Win+V, right at the text caret.
+
+</td>
+<td width="50%" valign="top">
+
+<h3>Paste in sequence</h3>
+
+<img src="docs/features/paste-sequence.gif" alt="Paste in sequence" width="100%">
+
+Copied a username and a password? Ctrl+click both in the panel and every Ctrl+V pastes the next one: username, Tab, password. Shift+click instead pastes them all at once, one per line.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<h3>Paste an image as a file</h3>
+
+<img src="docs/features/paste-as-file.gif" alt="Paste an image as a file" width="100%">
+
+Copy or capture an image, open any folder in Explorer (or the desktop) and press Ctrl+V: Klip saves it there as a png. Works with images from the browser and the Snipping Tool too.
+
+</td>
+<td width="50%" valign="top">
+
+<h3>Capture a whole page</h3>
+
+<img src="docs/features/capture-scroll.gif" alt="Capture a whole page" width="100%">
+
+Win+Shift+S with everything the Snipping Tool leaves out: scrolling capture for pages taller than the screen, text (OCR), color picker and pin to screen.
+
+</td>
+</tr>
+<tr>
+<td width="50%" valign="top">
+
+<h3>Mark up any image</h3>
+
+<img src="docs/features/image-editor.gif" alt="Mark up any image" width="100%">
+
+The image editor is a whiteboard: paste an image, highlight, draw arrows, add text and blur what is private. Every edit goes back to the clipboard.
+
+</td>
+<td width="50%" valign="top">
+
+<h3>Cut your recordings</h3>
+
+<img src="docs/features/video-editor.gif" alt="Cut your recordings" width="100%">
+
+Record a region to MP4 or GIF, then split, trim and reorder it in the video editor, across multiple tracks, and export again.
+
+</td>
+</tr>
+</table>
 
 ## Features
 
-**Clipboard history**
-- Unlimited, backed by local SQLite with full text search.
-- Search as you type, filter by date, pin favorites, tabs per type.
-- Keeps HTML/RTF formatting, or paste as plain text.
-- Colored emoji and symbol picker, searchable in several languages.
-- Built in secret detector so tokens and passwords do not linger.
+- **Clipboard history:** unlimited, full text search, favorites, tabs per type, snippets, collect mode, emoji picker, plain text paste.
+- **Multi paste:** Shift+click to paste several items together, Ctrl+click to paste them in sequence.
+- **Screen capture:** rectangle, window, full screen, free form, scrolling capture, text (OCR), color picker, pin to screen.
+- **Paste as file:** Ctrl+V an image into any Explorer folder or the desktop and it becomes a png.
+- **Recording:** any region to MP4 (up to 60 fps, system audio and mic) or straight to GIF.
+- **Image editor:** whiteboard canvas, annotations, blur and auto redact, background remove.
+- **Video editor:** split, trim, multiple tracks, export to MP4 or GIF.
+- **Native:** takes over Win+V and Win+Shift+S if you want, 15 languages, history backup as `.zip`.
 
-**Screen capture**
-- Faithful copy of the Win+Shift+S overlay.
-- Modes: rectangle, window, full screen, free form.
-- Scrolling capture to grab a whole page that does not fit on screen.
-- Hold Ctrl while selecting to open the capture straight in the editor.
-- Multi monitor aware, geometry in physical pixels.
+Every feature and shortcut: **[docs/FEATURES.md](docs/FEATURES.md)**
 
-**Screen recording**
-- Record any region to MP4 (H.264 + AAC, hardware encoder, screen-content tuning) with system audio and microphones, or straight to GIF with its own encoder.
-- Floating control hub during recording: drag it anywhere (any monitor), pause/resume, mute the mic or system audio, show/hide the cursor and the region border, all live.
-- Crash-safe fragmented MP4: even if the app dies, what was recorded stays playable.
+## Good to know
 
-**Media editor**
-- Timeline editing for recordings: split, trim, reorder and space out segments (gaps render as black), with undo/redo.
-- GIF tools: reduce fps, resize, frame-accurate scrubbing; export MP4 to GIF.
-- Exports through the built-in GIF encoder or `ffmpeg` when available.
-
-**Editor**
-- Pen, highlighter, shapes, arrow, free text, crop, rotate.
-- Blur/redact, plus auto redact of emails/phones/cards via on-device OCR.
-- Background remove, undo/redo, auto copy on every edit.
-
-**System**
-- Optional takeover of `Win+V` and `Win+Shift+S`, reverted cleanly on uninstall.
-- Single instance, starts with Windows (optional), import/export history as `.zip`.
+- **Default keys are `Ctrl+Shift+V` and `Ctrl+Shift+S`.** Klip asks before taking over `Win+V` or `Win+Shift+S`, and you can give them back any time in Settings > Shortcuts.
+- **Uninstalling gives the Windows keys back.** Your history stays in `%LOCALAPPDATA%\Klip` until you delete it.
+- **Installer or portable:** same app. The installer adds the Start menu entry and the uninstaller; with the portable exe, restore the default shortcuts in Settings before deleting it.
 
 ## Build from source
 
@@ -89,17 +142,11 @@ dotnet run --project src/Klip.App   # run the app (shows up in the tray)
 Packaging:
 
 ```powershell
-.\tools\build-exe.ps1          # single self contained exe -> publish\Klip.exe
-.\tools\build-installer.ps1    # Inno Setup installer -> dist\Klip-Setup-<version>.exe
+.\tools\build-installer.ps1    # installer + portable exe -> dist\
+.\tools\check-release.ps1      # the same checks the release workflow runs
 ```
 
 The installer script needs [Inno Setup 6](https://jrsoftware.org/isdl.php). Klip is not shipped as MSIX on purpose: the sandbox blocks the shortcut takeover and the global keyboard hook it relies on.
-
-## Tech
-
-- WPF on .NET 10 (`net10.0-windows`), C# 13, MVVM.
-- Clean split: `Klip.Core` (pure domain), `Klip.Interop` (Win32 P/Invoke), `Klip.App` (WPF).
-- SQLite with FTS5 for history and search.
 
 ## Contributing
 
@@ -109,14 +156,6 @@ Issues and pull requests are welcome. Planning something bigger? Open an issue f
 
 - Scrolling capture stitching inspired by [ShareX](https://github.com/ShareX/ShareX) (approach only, no reused code).
 - Emoji artwork from [Twemoji](https://github.com/jdecked/twemoji), [CC-BY 4.0](https://creativecommons.org/licenses/by/4.0/). Emoji names from the [Unicode CLDR](https://cldr.unicode.org/).
-
-## Code signing policy
-
-Free code signing provided by [SignPath.io](https://signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-
-- Committer, reviewer and approver: [PoBruno](https://github.com/PoBruno)
-
-Privacy: Klip runs fully on your machine and will not transfer any information to other networked systems unless specifically requested by the user. No telemetry.
 
 ## License
 

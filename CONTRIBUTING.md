@@ -47,8 +47,7 @@ linux or mac.
 
 - Keep them focused. One thing per PR is easier to review.
 - Explain what changed and why in the description.
-- Every change gets reviewed before it goes in. This matters because the repo is
-  code-signed, so the source and the signed binary have to match.
+- Every change gets reviewed before it goes in.
 
 ## Reporting bugs and ideas
 
